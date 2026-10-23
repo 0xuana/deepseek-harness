@@ -23,6 +23,12 @@ export function formatFatalDiagnostic(error: unknown): string {
     if (!(value instanceof Error) || seen.has(value)) return
     seen.add(value)
     if (value instanceof StartupError) {
+      if (value.startup !== undefined) {
+        sections.push(`Configuration file: ${value.startup.configurationPath}`)
+      }
+      sections.push('--- startup entries ---', inspect(value.entries, {
+        depth: 6, maxArrayLength: null, maxStringLength: 4096,
+      }))
       if (value.composition !== undefined) {
         const { plugins, services, omittedPlugins, omittedServices } = value.composition
         const sources = [...new Set(plugins.map(plugin => plugin.source))]
@@ -35,12 +41,6 @@ export function formatFatalDiagnostic(error: unknown): string {
           '--- plugins (inactive first) ---', ...plugins.map(({ source, ...plugin }) => JSON.stringify({ ...plugin, sourceIndex: sources.indexOf(source) })))
       } else {
         sections.push('Startup composition diagnostic unavailable.')
-      }
-      sections.push('--- startup entries ---', inspect(value.entries, {
-        depth: 6, maxArrayLength: null, maxStringLength: 4096,
-      }))
-      if (value.startup !== undefined) {
-        sections.push(`Configuration file: ${value.startup.configurationPath}`)
       }
     }
     visit(value.cause)

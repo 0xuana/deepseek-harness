@@ -145,7 +145,7 @@ Loader 结算后，app-boot 在仅 optional 条目未激活时输出警告。如
 
 启动错误还保留未激活条目的元数据和原始启动警告、错误记录，不保留 Loader tree。其 `entries`、`startup` 和 `composition` 字段不可枚举：直接访问和完整诊断报告保留这些字段，常规错误检查输出则省略它们。只有等待条目时没有 `cause`；存在已记录错误时，`AggregateError` 保留其原始值。收集器在 Loader 挂载前通过 logger 收集导入错误，因为这些导入尚无 failed Fiber。启动结算后会移除临时 exporter。
 
-释放前，`composition` 捕获最多 256 个配置插件条目和 256 个缺失服务观测，并记录省略数量。条目包含模块、可取得的包版本、状态和 Loader 来源 URL，不含配置值。已注册提供者包含其状态及作用域是否与消费者一致。提供者列表为空表示归属未知：被禁用或失败的插件可能从未注册服务。Loader 来源不代表最后修改该条目的 overlay。元数据查询失败时版本标为未知；快照失败保留原始启动错误。
+包导出 `StartupCompositionDiagnostic`、`StartupPluginState` 和 `StartupServiceState`，供消费者按名引用。释放前，`composition` 捕获最多 256 个配置插件条目和 256 个缺失服务观测，并记录省略数量。条目包含模块、可取得的包版本、状态和 Loader 来源 URL，不含配置值。已注册提供者包含其状态及作用域是否与消费者一致。提供者列表为空表示归属未知：被禁用或失败的插件可能从未注册服务。Loader 来源不代表最后修改该条目的 overlay。元数据查询失败时版本标为未知；快照失败保留原始启动错误。
 
 ### Helper 行为
 

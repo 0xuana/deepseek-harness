@@ -57,7 +57,11 @@ it('marks truncation within the complete IPC budget and preserves Unicode', () =
 })
 
 it('keeps missing-service evidence ahead of a truncated plugin inventory', () => {
-  const error = new StartupError('failure '.repeat(2000), [])
+  const error = new StartupError('failure '.repeat(2000), [{
+    id: 'waiting-entry', module: './waiting.mjs', required: true, fiberState: undefined,
+    outcome: { kind: 'pending', missing: ['agents'] },
+  }])
+  error.startup = { configurationPath: '/profile/critical-cordis.yml', messages: [] }
   error.composition = {
     services: [{ consumer: 'agent-loop', service: 'agents', providers: [] }],
     plugins: Array.from({ length: 256 }, (_, index) => ({
@@ -68,6 +72,8 @@ it('keeps missing-service evidence ahead of a truncated plugin inventory', () =>
   }
   const report = formatFatalDiagnostic(error)
   expect(report).toContain('original error truncated')
+  expect(report).toContain('Configuration file: /profile/critical-cordis.yml')
+  expect(report).toContain('waiting-entry')
   expect(report).toContain('"service":"agents","providers":[]')
   expect(report).toContain('Omitted plugin rows: 3; omitted missing-service observations: 2.')
   expect(report).toContain('"source":"/profile/cordis.yml"')

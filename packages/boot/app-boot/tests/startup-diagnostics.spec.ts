@@ -1,8 +1,8 @@
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
-import { boot, StartupError } from '../src/index.ts'
+import { afterEach, expect, expectTypeOf, it } from 'vitest'
+import { boot, StartupError, type StartupCompositionDiagnostic, type StartupPluginState, type StartupServiceState } from '../src/index.ts'
 import { captureStartupComposition } from '../src/startup-diagnostics.ts'
 
 const roots: string[] = []
@@ -106,4 +106,28 @@ it('retains the Loader disablement after disposal and reports missing source met
   } finally {
     await ctx.fiber.dispose()
   }
+})
+
+it.each(['same-scope', 'other-scope'] as const)('attributes a nested %s provider to its Loader entry', async (visibility) => {
+  const config = await configuration()
+  const parent = visibility === 'same-scope' ? 'ctx' : 'ctx.isolate("agents")'
+  await writeFile(join(roots.at(-1)!, 'consumer.mjs'), 'export const inject = ["agents", "unprovided"]; export function apply() {}\n')
+  await writeFile(join(roots.at(-1)!, 'provider.mjs'), `export async function apply(ctx) { await ${parent}.plugin({ name: "nested-provider", apply(child) { child.provide("agents", undefined) } }) }\n`)
+  await writeFile(config, '- id: agent\n  name: ./provider.mjs\n- id: agent-loop\n  name: ./consumer.mjs\n')
+  const failure: unknown = await boot('diagnostic-test', config).then(async (ctx) => {
+    await ctx.fiber.dispose()
+    throw new Error('Expected the missing service to prevent startup')
+  }, (error: unknown) => error)
+  if (!(failure instanceof StartupError)) throw failure
+  const owner = failure.composition?.plugins.find(plugin => plugin.module === './provider.mjs')
+  expect(owner).toBeDefined()
+  expect(failure.composition?.services[0]?.providers).toEqual([
+    { entry: owner!.id, state: 'active', visibility },
+  ])
+})
+
+it('exports the named types used by startup composition diagnostics', () => {
+  expectTypeOf<StartupError['composition']>().toEqualTypeOf<StartupCompositionDiagnostic | undefined>()
+  expectTypeOf<StartupCompositionDiagnostic['plugins'][number]>().toEqualTypeOf<StartupPluginState>()
+  expectTypeOf<StartupCompositionDiagnostic['services'][number]>().toEqualTypeOf<StartupServiceState>()
 })
