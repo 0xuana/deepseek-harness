@@ -22,7 +22,28 @@ export interface TextRefRange {
 
 /** Token matcher: a trigger char at line start or after whitespace, then a word-ish name (never crosses \n). */
 const TEXT_REF_RE = /(^|\s)([/@])([\w-]+)/g
-const FOLDER_REF_RE = /(^|\s)(@(?:"[^"\n]*\/|[^\s"]+\/))/g
+/** One `@` path token: a quoted path through its closing quote or line end, or an unquoted run. */
+const PATH_TOKEN_RE = /(^|\s)(@(?:"[^"\n]*"?|[^\s"]+))/g
+/** What may follow a folder token: the trailing punctuation the sent-message path rule strips, then whitespace or the draft end. */
+const FOLDER_END_RE = /[.,;:!?，。；：！？]*(?:\s|$)/y
+
+/**
+ * End of the whole `@dir/` folder token at `start`, so `@src/a.ts` and
+ * `@"a/b c.md"` never match their directory prefix. A closed quote must
+ * directly follow the slash; an unquoted or open-quoted token (a drill in
+ * progress) ends at its last slash.
+ * @param draft - draft text.
+ * @param start - offset of the token's `@`.
+ * @param token - the path token at `start`.
+ * @returns the folder token's end offset, or undefined for a non-folder token.
+ */
+function folderEnd(draft: string, start: number, token: string): number | undefined {
+  const closed = token.length > 2 && token.startsWith('@"') && token.endsWith('"')
+  const end = closed ? start + token.length : start + token.lastIndexOf('/') + 1
+  if (end === start || (closed && !token.endsWith('/"'))) return undefined
+  FOLDER_END_RE.lastIndex = end
+  return FOLDER_END_RE.test(draft) ? end : undefined
+}
 /**
  * What may follow a `/name` token: whitespace or the draft end, the boundary
  * the host skill gesture (`dsh-tool-skill`) requires, so `/nfs-hg/xxx`,
@@ -56,13 +77,12 @@ export function scanTextRefs(
       out.push({ start, end: start + 1 + name.length, trigger })
     }
   }
-  FOLDER_REF_RE.lastIndex = 0
-  let folder: RegExpExecArray | null
-  while ((folder = FOLDER_REF_RE.exec(draft)) !== null) {
-    const token = folder[2] ?? ''
-    const start = folder.index + (folder[1]?.length ?? 0)
-    const end = start + token.length
-    if (!out.some(range => range.start < end && range.end > start)) {
+  PATH_TOKEN_RE.lastIndex = 0
+  let path: RegExpExecArray | null
+  while ((path = PATH_TOKEN_RE.exec(draft)) !== null) {
+    const start = path.index + (path[1]?.length ?? 0)
+    const end = folderEnd(draft, start, path[2] ?? '')
+    if (end !== undefined && !out.some(range => range.start < end && range.end > start)) {
       out.push({ start, end, trigger: '@' })
     }
   }

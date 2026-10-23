@@ -811,4 +811,11 @@ describe('plain-text reference catalogs', () => {
       { start: 0, end: 14, trigger: '@' },
     ])
   })
+
+  it('matches whole folder tokens, never the directory prefix of a pasted file path', () => {
+    expect(scanTextRefs('@src/deep/file.txt @"/a/nv/SM100 ISA.html" 看 @"a/ b.md" @src/.env @src/de', new Map())).toEqual([])
+    const text = '@"dir a/" @src/deep/。 @dir/ @"open dir/ x'
+    expect(scanTextRefs(text, new Map()).map(range => text.slice(range.start, range.end)))
+      .toEqual(['@"dir a/"', '@src/deep/', '@dir/', '@"open dir/'])
+  })
 })
