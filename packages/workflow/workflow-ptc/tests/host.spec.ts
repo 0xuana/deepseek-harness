@@ -34,14 +34,14 @@ async function setup(execute?: (bindings: HostBindings, spec: PtcRunSpec) => Pro
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
   await ctx.plugin(SessionStore)
-  await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjections)
+  await ctx.plugin(AgentRegistry)
   await ctx.plugin(SandboxPolicy, { mode: 'read-only' })
   provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
   ctx.subagents.registerProvider({
     name: 'stub',
-    capabilities: { agentOptions: true, outputSchema: true, depthLimit: false, toolFilter: false, persona: false },
+    capabilities: { agentOptions: true, agentPreset: false, outputSchema: true, depthLimit: false },
     inheritsParentContext: false,
     start: async () => ({
       id: SessionId('host-child'),

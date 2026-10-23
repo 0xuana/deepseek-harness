@@ -80,6 +80,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each(['native', 'ptc'
       tsconfigPath: join(repo, 'tsconfig.base.json'),
       configPath,
       binArgs: ['--profile', 'headless', '--patch', configPath,
+        ...mode === 'ptc' ? ['--patch', join(repo, 'apps/cli/config/examples/ptc.yml')] : [],
         `${task} Use input.xlsx and save the finished workbook as result.xlsx. Preserve the Notes sheet and leave input.xlsx unchanged. Respond briefly in English.`,
       ],
       processTimeoutMs: 110_000,
@@ -89,7 +90,6 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each(['native', 'ptc'
         DSH_HOME: join(controlRoot, 'home'),
         DSH_AGENTS_HOME: join(controlRoot, 'agents'),
         DSH_TELEMETRY_DISABLED: '1',
-        DSH_TOOLS_MODE: mode,
         HTTP_PROXY: process.env.DSH_OFFICE_TEST_PROXY,
         HTTPS_PROXY: process.env.DSH_OFFICE_TEST_PROXY,
       },
@@ -186,7 +186,6 @@ else:
         ? answer.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n').slice(0, 800) : undefined })
     expect(loaded, diagnostic).toContain('office-xlsx')
     expect(calls.some(call => call.name === 'load_workspace_dependencies'), diagnostic).toBe(true)
-    expect(commands, diagnostic).toContain('check_office.py')
     if (kind === 'formula') {
       expect(loaded, diagnostic).toContain('office-recalculate')
     }

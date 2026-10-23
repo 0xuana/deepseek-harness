@@ -39,6 +39,18 @@ const readdirFailure = vi.hoisted(() => ({
   error: undefined as Error | undefined,
 }))
 
+/**
+ * While active, every `readdir` and `stat` waits `delayMs`, records how many
+ * such calls overlap, and fails with the error registered for its path.
+ */
+const listingProbe = vi.hoisted(() => ({
+  active: false,
+  delayMs: 0,
+  inFlight: 0,
+  maxInFlight: 0,
+  failures: new Map<string, Error>(),
+}))
+
 const readTally = vi.hoisted(() => ({
   /** Physical whole-file reads per path suffix; keyed by session id segment. */
   bySuffix: new Map<string, number>(),
@@ -62,9 +74,22 @@ const pausedRead = vi.hoisted(() => ({
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
+  const probeListingRead = async <T>(path: string, read: () => Promise<T>): Promise<T> => {
+    listingProbe.inFlight += 1
+    listingProbe.maxInFlight = Math.max(listingProbe.maxInFlight, listingProbe.inFlight)
+    try {
+      await new Promise(resolvePromise => setTimeout(resolvePromise, listingProbe.delayMs))
+      const failure = listingProbe.failures.get(path)
+      if (failure !== undefined) throw failure
+      return await read()
+    } finally {
+      listingProbe.inFlight -= 1
+    }
+  }
   return {
     ...actual,
     stat: (async (...args: Parameters<typeof actual.stat>) => {
+      if (listingProbe.active) return probeListingRead(String(args[0]), () => actual.stat(...args))
       if (String(args[0]) === statFailure.path && statFailure.error !== undefined) throw statFailure.error
       const identity = await actual.stat(...args)
       if (String(args[0]) !== statRace.path || !('mtimeNs' in identity)) return identity
@@ -95,6 +120,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       }
     }) as typeof actual.readFile,
     readdir: (async (...args: Parameters<typeof actual.readdir>) => {
+      if (listingProbe.active) return probeListingRead(String(args[0]), () => actual.readdir(...args))
       if (String(args[0]) === readdirFailure.path && readdirFailure.error !== undefined) {
         throw readdirFailure.error
       }
@@ -1197,11 +1223,35 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
       await writeFile(path, `${JSON.stringify(physical)}\n`)
       const formatStatus = version === SESSION_FORMAT_VERSION ? 'current' : 'migration-required'
       expect(await ctx.sessionPersistence.stat(header.id)).toMatchObject({
-        header: { version: SESSION_FORMAT_VERSION }, formatStatus,
+        header: { version: SESSION_FORMAT_VERSION },
+        formatStatus,
+        location: { kind: 'jsonl', path },
       })
       const [listed] = await ctx.sessionPersistence.list()
       expect(listed?.formatStatus).toBe(formatStatus)
+      expect(listed?.location).toEqual({ kind: 'jsonl', path })
       expect(readTally.bySuffix.size).toBe(0)
+    }
+  })
+
+
+  it('reports the selected compressed artifact path in stat and list metadata', async () => {
+    const compressedRoot = await freshRoot()
+    const compressed = new Context()
+    try {
+      await compressed.plugin(JsonlSessionPersistence, { root: compressedRoot, compression: 'zstd' })
+      const header = meta('zstd-location', '/work')
+      const handle = await compressed.sessionPersistence.create(header)
+      await handle.append(oneTurnLog())
+      await handle.flush()
+      await handle.close()
+      const path = logPath(compressedRoot, header.cwd, header.id, 'zstd')
+      expect((await compressed.sessionPersistence.stat(header.id))?.location)
+        .toEqual({ kind: 'jsonl', path })
+      const [listed] = await compressed.sessionPersistence.list()
+      expect(listed?.location).toEqual({ kind: 'jsonl', path })
+    } finally {
+      await compressed.fiber.dispose()
     }
   })
 
@@ -1395,13 +1445,21 @@ describe('JsonlSessionPersistence: durability and crash semantics', () => {
     expect(pendingRows.map(s => s.header.id)).toContain(m.id)
     expect(pending?.sizeBytes).toBeUndefined()
     expect(pending?.formatStatus).toBeUndefined()
+    expect(pending?.location).toBeUndefined()
     expect(pendingRows.find(s => s.header.id === m.id)?.formatStatus).toBeUndefined()
+    expect(pendingRows.find(s => s.header.id === m.id)?.location).toBeUndefined()
 
     await handle.append(oneTurnLog())
     expect((await stat(dir)).isDirectory()).toBe(true)
     expect((await stat(rawLogPath(root, '/work', m.id))).isFile()).toBe(true)
+    const materializedPath = rawLogPath(root, '/work', m.id)
     expect((await ctx.sessionPersistence.list()).map(s => s.header.id)).toContain(m.id)
-    expect((await ctx.sessionPersistence.stat(m.id))?.formatStatus).toBe('current')
+    expect(await ctx.sessionPersistence.stat(m.id)).toMatchObject({
+      formatStatus: 'current',
+      location: { kind: 'jsonl', path: materializedPath },
+    })
+    expect((await ctx.sessionPersistence.list()).find(s => s.header.id === m.id)?.location)
+      .toEqual({ kind: 'jsonl', path: materializedPath })
     await handle.close()
   })
 
@@ -2787,5 +2845,80 @@ describe('JsonlSessionPersistence: edge cases', () => {
     }, surfaceOp: 'append' }] as unknown as SessionEvent[]
     await writeLog(ctx.sessionPersistence, m, events)
     expect((await readAll(ctx.sessionPersistence, m.id)).events).toEqual(events)
+  })
+})
+
+describe('JsonlSessionPersistence listing concurrency', () => {
+  let listingRoot: string
+  let listingCtx: Context
+
+  beforeEach(async () => {
+    listingRoot = await mkdtemp(join(tmpdir(), 'dsh-jsonl-listing-'))
+    listingCtx = new Context()
+    await listingCtx.plugin(JsonlSessionPersistence, { root: listingRoot, compression: 'none', listConcurrency: 2 })
+  })
+
+  afterEach(async () => {
+    listingProbe.active = false
+    listingProbe.delayMs = 0
+    listingProbe.inFlight = 0
+    listingProbe.maxInFlight = 0
+    listingProbe.failures.clear()
+    await listingCtx.fiber.dispose()
+    await rm(listingRoot, { recursive: true, force: true })
+  })
+
+  /** Persist one-turn Sessions under one cwd. */
+  async function seed(cwd: string, ids: readonly string[]): Promise<void> {
+    for (const id of ids) await writeLog(listingCtx.sessionPersistence, meta(id, cwd), oneTurnLog())
+  }
+
+  /** Directory entries in the order the backend's listing reads them. */
+  async function directoriesOf(dir: string): Promise<string[]> {
+    return (await readdir(dir, { withFileTypes: true })).filter(entry => entry.isDirectory()).map(entry => join(dir, entry.name))
+  }
+
+  it('validates listConcurrency as a positive integer that defaults to 3', () => {
+    expect(JsonlSessionPersistence.Config({ root: listingRoot }).listConcurrency).toBe(3)
+    expect(JsonlSessionPersistence.Config({ root: listingRoot, listConcurrency: 1 }).listConcurrency).toBe(1)
+    expect(() => JsonlSessionPersistence.Config({ root: listingRoot, listConcurrency: 0 })).toThrow()
+    expect(() => JsonlSessionPersistence.Config({ root: listingRoot, listConcurrency: 1.5 })).toThrow()
+  })
+
+  it('bounds directory and stat reads across concurrent listings of one backend', async () => {
+    await seed('/work-a', ['bound-a1', 'bound-a2', 'bound-a3'])
+    await seed('/work-b', ['bound-b1', 'bound-b2', 'bound-b3'])
+    const expected = ['bound-a1', 'bound-a2', 'bound-a3', 'bound-b1', 'bound-b2', 'bound-b3']
+    expect((await listingCtx.sessionPersistence.list()).map(s => s.header.id).sort()).toEqual(expected)
+
+    listingProbe.delayMs = 5
+    listingProbe.active = true
+    const listings = await Promise.all([
+      listingCtx.sessionPersistence.list(),
+      listingCtx.sessionPersistence.list(),
+    ])
+    listingProbe.active = false
+
+    expect(listingProbe.maxInFlight).toBe(2)
+    for (const listing of listings) expect(listing.map(s => s.header.id).sort()).toEqual(expected)
+  })
+
+  it('reports the failure a sequential traversal would reach first', async () => {
+    await seed('/work-a', ['order-a1', 'order-a2'])
+    await seed('/work-b', ['order-b1', 'order-b2'])
+    await listingCtx.sessionPersistence.list()
+    const [earlierProject, laterProject] = await directoriesOf(listingRoot) as [string, string]
+    const [earlierSession, laterSession] = await directoriesOf(earlierProject) as [string, string]
+    const projectFailure = Object.assign(new Error('later project denied'), { code: 'EACCES' })
+    const laterSessionFailure = Object.assign(new Error('later session denied'), { code: 'EACCES' })
+    const earlierSessionFailure = Object.assign(new Error('earlier session denied'), { code: 'EACCES' })
+    listingProbe.active = true
+
+    listingProbe.failures.set(laterProject, projectFailure)
+    await expect(listingCtx.sessionPersistence.list()).rejects.toBe(projectFailure)
+    listingProbe.failures.set(laterSession, laterSessionFailure)
+    await expect(listingCtx.sessionPersistence.list()).rejects.toBe(laterSessionFailure)
+    listingProbe.failures.set(earlierSession, earlierSessionFailure)
+    await expect(listingCtx.sessionPersistence.list()).rejects.toBe(earlierSessionFailure)
   })
 })
