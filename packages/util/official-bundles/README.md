@@ -24,7 +24,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Edit this package when the installation's bundle selection changes; read it wherever code must agree with the launcher about that selection.
+Edit this package when the installation's bundle selection or the plugin manager's protected or presented packages change; read it wherever code must agree with the launcher about that selection.
 
 ### Profile templates
 
@@ -37,7 +37,7 @@ Edit this package when the installation's bundle selection changes; read it wher
 <a id="plugin-manager-lists"></a>
 ### Plugin manager lists
 
-`PROTECTED_PLUGINS` names the plugin packages the [plugin manager](../../boot/plugin-manager/README.md) keeps read-only because management needs them; a bundle that contains one is a management bundle. The [Web plugin page](../../client/ui-plugin-manager/README.md) hides the `HIDDEN_BUNDLES`, keeps the `EXTENSION_BUNDLES` on its main list in their order, holds the `MORE_BUNDLES` back on its More list until selected, and marks the `EXPERIMENTAL_BUNDLES` with the Experimental badge.
+`PROTECTED_PLUGINS` names the plugin packages the [plugin manager](../../boot/plugin-manager/README.md) keeps read-only because management needs them; a bundle that contains one is a management bundle. The [Web plugin page](../../client/ui-plugin-manager/README.md) hides the `HIDDEN_BUNDLES`, keeps the `EXTENSION_BUNDLES` on its main list in their order, keeps the `MORE_BUNDLES` off its main list until the profile enables them, and marks the `EXPERIMENTAL_BUNDLES` with the Experimental badge.
 
 ### On-demand bundles
 

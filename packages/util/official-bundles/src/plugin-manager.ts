@@ -35,7 +35,10 @@ export const EXTENSION_BUNDLES: readonly string[] = [
   '@deepseek-ai/dsh-experimental-auto-review',
 ]
 
-/** The optional bundles the plugin manager's main list holds back until selected, in More-list order. */
+/**
+ * The optional bundles the plugin manager's main list leaves out until the profile enables them; its More list,
+ * which includes every eligible bundle, ranks them last in this order.
+ */
 export const MORE_BUNDLES: readonly string[] = [
   '@deepseek-ai/dsh-experimental-inspector-profile',
   '@deepseek-ai/dsh-cua-bundle',

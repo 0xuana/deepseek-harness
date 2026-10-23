@@ -24,7 +24,7 @@ kind: "package-library"
 <a id="use-this-package"></a>
 ## 使用本包
 
-安装的组合包选择发生变化时编辑本包；凡是代码必须与启动器就该选择保持一致的地方，都读取本包。
+安装的组合包选择或插件管理器保护、展示的包发生变化时编辑本包；凡是代码必须与启动器就该选择保持一致的地方，都读取本包。
 
 ### Profile 模板
 
@@ -37,7 +37,7 @@ kind: "package-library"
 <a id="plugin-manager-lists"></a>
 ### 插件管理器列表
 
-`PROTECTED_PLUGINS` 列出[插件管理器](../../boot/plugin-manager/README.zh.md)因管理功能依赖而保持只读的插件包；包含其中任一插件的组合包是管理组合包。[Web 插件页](../../client/ui-plugin-manager/README.zh.md)隐藏 `HIDDEN_BUNDLES`，把 `EXTENSION_BUNDLES` 按顺序保留在主列表，把 `MORE_BUNDLES` 留在「更多」列表直到被选中，并为 `EXPERIMENTAL_BUNDLES` 显示实验性标记。
+`PROTECTED_PLUGINS` 列出[插件管理器](../../boot/plugin-manager/README.zh.md)因管理功能依赖而保持只读的插件包；包含其中任一插件的组合包是管理组合包。[Web 插件页](../../client/ui-plugin-manager/README.zh.md)隐藏 `HIDDEN_BUNDLES`，把 `EXTENSION_BUNDLES` 按顺序保留在主列表，在 profile 启用 `MORE_BUNDLES` 之前不把它们放上主列表，并为 `EXPERIMENTAL_BUNDLES` 显示实验性标记。
 
 ### 按需组合包
 
