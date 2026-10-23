@@ -6,6 +6,9 @@ import { StartupError } from '@deepseek-ai/dsh-app-boot'
 /** Maximum characters carried by one fatal diagnostic, including its truncation notice. */
 export const MAX_FATAL_DIAGNOSTIC_CHARS = 64 * 1024
 
+/** Original-error budget when startup metadata needs space in the same report. */
+const MAX_ORIGINAL_ERROR_CHARS = 8 * 1024
+
 /**
  * Render the original error and explicitly selected startup metadata.
  * Selected metadata excludes configuration values and arbitrary startup logger arguments.
@@ -44,10 +47,10 @@ export function formatFatalDiagnostic(error: unknown): string {
     if (value instanceof AggregateError) value.errors.forEach(visit)
   }
   visit(error)
-  sections.unshift(sections.length === 0 || original.length <= 8192 ? original
-    : `${original.slice(0, 8192).replace(/[\uD800-\uDBFF]$/u, '')}\n… (original error truncated at 8192 characters)`)
+  sections.unshift(sections.length === 0 || original.length <= MAX_ORIGINAL_ERROR_CHARS ? original
+    : `${original.slice(0, MAX_ORIGINAL_ERROR_CHARS).replace(/[\uD800-\uDBFF]$/u, '')}\n… (original error truncated at ${MAX_ORIGINAL_ERROR_CHARS} characters)`)
   const text = sections.join('\n')
   if (text.length <= MAX_FATAL_DIAGNOSTIC_CHARS) return text
-  const notice = '\n… (Host diagnostic truncated at 65536 characters)'
+  const notice = `\n… (Host diagnostic truncated at ${MAX_FATAL_DIAGNOSTIC_CHARS} characters)`
   return text.slice(0, MAX_FATAL_DIAGNOSTIC_CHARS - notice.length).replace(/[\uD800-\uDBFF]$/u, '') + notice
 }

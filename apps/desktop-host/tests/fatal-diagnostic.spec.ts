@@ -52,7 +52,7 @@ it('marks truncation within the complete IPC budget and preserves Unicode', () =
   const error = new Error('😀'.repeat(MAX_FATAL_DIAGNOSTIC_CHARS))
   const report = formatFatalDiagnostic(error)
   expect(report.length).toBeLessThanOrEqual(MAX_FATAL_DIAGNOSTIC_CHARS)
-  expect(report).toContain('Host diagnostic truncated')
+  expect(report).toContain(`Host diagnostic truncated at ${MAX_FATAL_DIAGNOSTIC_CHARS} characters`)
   expect(report.isWellFormed()).toBe(true)
 })
 
@@ -71,7 +71,7 @@ it('keeps missing-service evidence ahead of a truncated plugin inventory', () =>
   expect(report).toContain('"service":"agents","providers":[]')
   expect(report).toContain('Omitted plugin rows: 3; omitted missing-service observations: 2.')
   expect(report).toContain('"source":"/profile/cordis.yml"')
-  expect(report).toContain('Host diagnostic truncated')
+  expect(report).toContain(`Host diagnostic truncated at ${MAX_FATAL_DIAGNOSTIC_CHARS} characters`)
   expect(report.length).toBeLessThanOrEqual(MAX_FATAL_DIAGNOSTIC_CHARS)
 })
 
