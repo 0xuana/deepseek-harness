@@ -16,7 +16,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: the standard Session props the slot component receives.
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
-import { en, ja, NS, zh } from './locales.ts'
+import { de, en, es, fr, ja, NS, pt, ru, zh } from './locales.ts'
 import type { PerfSnapshot } from './perf-contract.ts'
 import { registerPerfDefinitions } from './perf-definition.ts'
 import { EMPTY_PERF_SNAPSHOT, registerPerfConversationView } from './perf-snapshot-builder.ts'
@@ -61,7 +61,7 @@ const HOOK = 'perf'
 export function apply(ctx: Context): void {
   // Per-plugin-instance source cache; unloading the plugin drops the map with it.
   const sources = new WeakMap<SessionBinding, ObservableSnapshot<PerfSnapshot>>()
-  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'client-ui-perf: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, de, es, fr, pt, ru }), 'client-ui-perf: dictionaries')
   // Registration-time text (the tab label) reads through the bound translate as
   // a thunk, so it follows the active locale without re-registration.
   const t = ctx.locale.bind(NS)
