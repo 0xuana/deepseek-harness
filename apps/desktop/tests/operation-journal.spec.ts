@@ -93,6 +93,10 @@ it('stops scheduling writes after a drain deadline without claiming the in-fligh
   expect(await draining).toBe(false)
   expect(journal.status()).toMatchObject({ disabled: true, queuedBytes: 16 })
   expect(journal.enqueue('{"operation":2}')).toBe(false)
+  let repeated: boolean | undefined
+  void journal.drain(500).then((result) => { repeated = result })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(repeated).toBe(false)
   release.resolve(undefined)
   await journal.close()
   expect(await readdir(directory)).toEqual([])

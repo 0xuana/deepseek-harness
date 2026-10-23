@@ -1667,6 +1667,8 @@ it.each(['live', 'startup'] as const)('requires exact risk acknowledgement and p
   expect(await manager.setVersionExemption('extra@1.0.0', runtime, true)).toMatchObject({ changed: false, application: 'failed' })
   expect(manager.listVersionExemptions()).toEqual({ exemptions: {}, warnings: [] })
   expect(existsSync(join(dir, 'compatibility.json'))).toBe(false)
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
   expect(await manager.setVersionExemption('extra@1.0.0', runtime, true, true)).toMatchObject({
     changed: true, application: mode === 'live' ? 'applied' : 'restart-required',
   })
@@ -1679,6 +1681,12 @@ it.each(['live', 'startup'] as const)('requires exact risk acknowledgement and p
   if (mode === 'live') expect(managed()?.fiber?.state).toBe(2)
   else expect(managed()).toBeUndefined()
   expect(await manager.setVersionExemption('extra@1.0.0', runtime, false)).toMatchObject({ changed: true })
+  expect(facts.map(({ phase, target, version }) => ({ phase, target, version }))).toEqual([
+    { phase: 'started', target: 'extra', version: '1.0.0' },
+    { phase: 'settled', target: 'extra', version: '1.0.0' },
+    { phase: 'started', target: 'extra', version: '1.0.0' },
+    { phase: 'settled', target: 'extra', version: '1.0.0' },
+  ])
   expect(manager.listVersionExemptions()).toEqual({ exemptions: {}, warnings: [] })
   expect(JSON.parse(readFileSync(join(dir, 'compatibility.json'), 'utf8'))).toEqual({})
   if (mode === 'live') expect(managed()).toBeUndefined()
@@ -2166,4 +2174,38 @@ it('installs over the running version without HMR and reports the restart', asyn
   })
   expect(steps).toEqual(['checking', 'installing'])
   expect(pnpm.mock.calls.map(call => call[1])).toEqual([['add', 'extra@1.2.0', '--save-exact']])
+})
+
+it.each(['extra@^1.0.0', ' extra@1.0.0 ', 'https://user:secret@example.com/pkg'])('omits invalid exemption identity for %s', async (input) => {
+  const { manager, ctx } = await fixture()
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  expect(await manager.setVersionExemption(input, getDshRuntimeVersion(), true, true)).toMatchObject({ application: 'failed' })
+  expect(facts).toHaveLength(2)
+  for (const fact of facts) {
+    expect(fact.target).toBeNull()
+    expect(fact.version).toBeUndefined()
+  }
+  expect(JSON.stringify(facts)).not.toContain(input)
+})
+
+it('retains exact uninstalled bundle names in operation records', async () => {
+  const { manager, ctx } = await fixture()
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  await manager.setBundleEnabled('absent', false)
+  expect(facts).toHaveLength(2)
+  for (const fact of facts) {
+    expect(fact.target).toBe('absent')
+    expect(fact.version).toBeUndefined()
+  }
+})
+
+it.each(['extra', '@scope/extra'])('records the exemption version independently of installed metadata for %s', async (name) => {
+  const { manager, ctx } = await fixture()
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  await manager.setVersionExemption(`${name}@2.0.0`, getDshRuntimeVersion(), false)
+  expect(facts).toHaveLength(2)
+  for (const fact of facts) expect(fact).toMatchObject({ target: name, version: '2.0.0', enabled: false })
 })

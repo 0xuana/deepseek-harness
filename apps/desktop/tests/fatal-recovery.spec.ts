@@ -322,6 +322,7 @@ it.each(['pending', 'failed'] as const)('keeps the recovery failure visible when
     const last = operations.show.mock.calls[2]![0]
     expect(last.message).toBe(operations.messages().recoveryOperationFailed)
     expect(last.detail).toContain('profile is read-only')
+    if (state === 'failed') expect(last.buttons).not.toContain(operations.messages().getDiagnosticReport)
     expect(last.detail).toContain(state === 'pending' ? operations.messages().reportPending : operations.messages().reportUnavailable)
     expect(operations.revealReport).not.toHaveBeenCalled()
     expect(operations.writeReport).toHaveBeenCalledOnce()
@@ -329,4 +330,22 @@ it.each(['pending', 'failed'] as const)('keeps the recovery failure visible when
     write.resolve(undefined)
     vi.useRealTimers()
   }
+})
+
+it.each([false, true])('keeps the original attachment when revealing after a recovery failure (reveal fails=%s)', async (revealFails) => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { operations, stopped, recovery } = fixture('en', async () => REPORT_PATH)
+  const original = new Error('original startup failure')
+  stopped.resolve(undefined)
+  operations.disablePlugins.mockRejectedValueOnce(new Error('profile is read-only'))
+  if (revealFails) operations.revealReport.mockRejectedValueOnce(new Error('file manager unavailable'))
+  operations.show.mockResolvedValueOnce({ response: 2, checkboxChecked: false })
+    .mockResolvedValueOnce({ response: 3, checkboxChecked: false })
+    .mockResolvedValueOnce({ response: 0, checkboxChecked: false })
+  await recovery.report(original, 'host')
+  const last = operations.show.mock.calls[2]![0]
+  expect(last.message).toBe(revealFails ? operations.messages().reportRevealFailed : operations.messages().reportShareHint)
+  expect(last.detail).toContain('profile is read-only')
+  expect(operations.writeReport).toHaveBeenCalledExactlyOnceWith(original, 'host')
+  expect(operations.revealReport).toHaveBeenCalledExactlyOnceWith(REPORT_PATH)
 })

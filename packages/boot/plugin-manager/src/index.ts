@@ -21,7 +21,7 @@ import {
   readPluginMeta, readProfileManifest, resolveBundleDir, loadOverlayPatches, composeEntries,
   readProfilePatches, bundlePatchPaths,
   evaluatePluginCompatibility, readProfileCompatibility, readProfileVersionExemptions,
-  setProfileVersionExemption, PROFILE_COMPATIBILITY_FILENAME,
+  setProfileVersionExemption, validatePluginVersionExemption, PROFILE_COMPATIBILITY_FILENAME,
   getDshRuntimeVersion, ResolutionRestartRequired,
 } from '@deepseek-ai/dsh-app-boot'
 import { OPTIONAL_BUNDLES, OFFICIAL_ON_DEMAND_CATALOG, PROTECTED_PLUGINS } from '@deepseek-ai/dsh-official-bundles'
@@ -285,6 +285,15 @@ function installOperationTarget(spec: string): string | null {
   return parsed.kind === 'registry' ? parsed.name : null
 }
 
+/** Exemption facts use canonical package identity, never the raw request or installed version. */
+function exemptionOperationIdentity(packageVersion: string, runtimeVersion: string): Pick<PluginOperation, 'target' | 'version'> {
+  try { validatePluginVersionExemption(packageVersion, runtimeVersion) }
+  catch (_error) { return { target: null } /* The operation still owns validation failure reporting. */ }
+  const separator = packageVersion.lastIndexOf('@')
+  return { target: installOperationTarget(packageVersion.slice(0, separator)),
+    version: diagnosticVersion(packageVersion.slice(separator + 1)) }
+}
+
 /** Unusable file metadata must not discard the rest of an operation record. */
 function diagnosticVersion(value: unknown): string | undefined {
   return typeof value === 'string' && value.length <= 128 ? value : undefined
@@ -444,7 +453,7 @@ export class PluginManager extends TypertRemoteService {
     return this.change(result => this.configure(async () => {
       await setProfileVersionExemption(this.profile.dir, packageVersion, runtimeVersion, enabled, acceptRisk === true)
       Object.assign(result, await this.reload())
-    }), { stage: 'enable', target: packageVersion, enabled }, 'bundle')
+    }), { stage: 'enable', target: packageVersion, enabled }, 'bundle', exemptionOperationIdentity(packageVersion, runtimeVersion))
   }
 
   /** Read current plugins, including why a row cannot be changed through the profile patch.
@@ -1227,10 +1236,11 @@ export class PluginManager extends TypertRemoteService {
     operation: (result: ChangeResult) => Promise<ChangeResult['application'] | void>,
     request: Pick<ChangeResult, 'stage' | 'target' | 'enabled'>,
     reason: PluginChange['reason'],
+    identity?: Pick<PluginOperation, 'target' | 'version'>,
   ): Promise<ChangeResult> {
     const id = randomUUID() as PluginOperationId
-    const target = this.operationTarget(reason, request.target)
-    const version = this.operationVersion(reason, reason === 'plugin' ? request.target : target)
+    const target = identity === undefined ? this.operationTarget(reason, request.target) : identity.target
+    const version = identity === undefined ? this.operationVersion(reason, reason === 'plugin' ? request.target : target) : identity.version
     const facts = { id, reason, stage: request.stage,
       target,
       ...version === undefined ? {} : { version },

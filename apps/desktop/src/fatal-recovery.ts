@@ -29,7 +29,9 @@ const DETAIL_BUDGET = 1200
 /** Tail lines of the error kept in the dialog; the report file holds the rest. */
 const DETAIL_TAIL_LINES = 8
 
-/** Error tail with a shortening notice when needed, report path or write status, and reinstall advice. */
+/** At most eight error-tail lines; status, advice and truncation notice share the detail character budget.
+ * The message heading has its own field.
+ */
 function dialogDetail(error: string, messages: DesktopMessages, reportState: ReportState): string {
   const advice = `\n\n${messages.startupReinstallAdvice}`
   const report = reportLine(messages, reportState)

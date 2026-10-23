@@ -9,6 +9,9 @@ export const MAX_FATAL_DIAGNOSTIC_CHARS = 64 * 1024
 /** Original-error budget when startup metadata needs space in the same report. */
 const MAX_ORIGINAL_ERROR_CHARS = 8 * 1024
 
+/** Startup entry details leave room for composition and provider observations. */
+const MAX_STARTUP_ENTRY_CHARS = 8 * 1024
+
 /**
  * Render the original error and explicitly selected startup metadata.
  * Selected metadata excludes configuration values and arbitrary startup logger arguments.
@@ -26,9 +29,9 @@ export function formatFatalDiagnostic(error: unknown): string {
       if (value.startup !== undefined) {
         sections.push(`Configuration file: ${value.startup.configurationPath}`)
       }
-      sections.push('--- startup entries ---', inspect(value.entries, {
-        depth: 6, maxArrayLength: null, maxStringLength: 4096,
-      }))
+      const entries = inspect(value.entries, { depth: 6, maxArrayLength: null, maxStringLength: 4096 })
+      sections.push('--- startup entries ---', entries.length <= MAX_STARTUP_ENTRY_CHARS ? entries
+        : `${entries.slice(0, MAX_STARTUP_ENTRY_CHARS).replace(/[\uD800-\uDBFF]$/u, '')}\n… (startup entries truncated at ${MAX_STARTUP_ENTRY_CHARS} characters)`)
       if (value.composition !== undefined) {
         const { plugins, services, omittedPlugins, omittedServices } = value.composition
         const sources = [...new Set(plugins.map(plugin => plugin.source))]

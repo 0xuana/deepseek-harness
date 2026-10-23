@@ -1,3 +1,7 @@
+---
+description: "Desktop failure recovery, diagnostic reports, and shutdown limits."
+---
+
 # Desktop recovery and diagnostics
 
 English | [中文](README.zh.md)
@@ -6,7 +10,7 @@ English | [中文](README.zh.md)
 
 This reference describes Desktop native failure recovery, diagnostic reports, recent plugin operation records, and collection and shutdown limits.
 
-## Contents
+## Table of Contents
 
 - [Recover from a failure](#recovery)
 - [Report contents](#report-contents)
@@ -17,7 +21,7 @@ This reference describes Desktop native failure recovery, diagnostic reports, re
 
 ## Recover from a failure
 
-Fatal main-window creation, main-document loading, preload, renderer, Web initialization, or backend failures open one native recovery dialog per application process. It shows a bounded tail of the first error, notes any truncation, and offers Exit, Restart, Disable third-party plugins, back up profile patch, and restart, and Get diagnostic report while report writing is pending or after it succeeds. Startup failures retain the Web loading page and spinner; runtime failures retain the current page. Expected shutdowns, cancelled navigation, and ordinary requests do not trigger recovery. The shared Web plugin manager reports package-operation errors; Host startup failures after plugin changes enter native recovery. There is no startup timeout heuristic. A listener failure containing `listen EADDRINUSE` replaces the diagnostics and reinstall advice with guidance to quit other running DSH instances, and offers Exit, Restart, and Get diagnostic report while report writing is pending or after it succeeds.
+Fatal main-window creation, main-document loading, preload, renderer, Web initialization, or backend failures open one native recovery dialog per application process. It shows a bounded tail of the first error, notes any truncation, and offers “Exit”, “Restart”, “Disable third-party plugins, back up profile patch, and restart”, and “Get diagnostic report” while report writing is pending or after it succeeds. Startup failures retain the Web loading page and spinner; runtime failures retain the current page. Expected shutdowns, cancelled navigation, and ordinary requests do not trigger recovery. The shared Web plugin manager reports package-operation errors; Host startup failures after plugin changes enter native recovery. There is no startup timeout heuristic. A listener failure containing `listen EADDRINUSE` replaces the diagnostics and reinstall advice with guidance to quit other running DSH instances, and offers “Exit”, “Restart”, and “Get diagnostic report” while report writing is pending or after it succeeds.
 
 Recovery uses the last confirmed Desktop language from the local cache before Host settings are available; an absent or invalid cache falls back to system languages.
 
@@ -29,9 +33,9 @@ Recovery waits for Host shutdown before changing plugin activation. The native r
 
 Native dialog details include at most 1,200 UTF-16 code units and eight diagnostic lines, plus the crash report path or its pending/unavailable status. Retrieving a pending or unavailable report preserves any recovery-operation failure headline and details. Configuration paths and startup entries precede the composition inventory so plugin rows cannot displace them when output is truncated. Host error diagnostics retain only the last 64 Ki characters written to stderr. Earlier output is discarded so a long-running Host does not grow the shell’s diagnostic buffer indefinitely.
 
-Before the first fatal dialog opens, Electron writes a crash report to the platform logs directory (`app.getPath('logs')`: `~/Library/Logs/DeepSeek Harness` on macOS, `logs` under the application’s `userData` directory on Windows and Linux), waiting at most one second for the write; a slow or failed write shows the dialog with an explicit pending or unavailable status. Get diagnostic report checks the same write and reveals a saved file in the system file manager without restarting or stopping the Host; a write that completes after the initial deadline remains available. The user attaches that file to a support ticket. If writing fails, the dialog hides Get diagnostic report and suggests providing a screenshot.
+Before the first fatal dialog opens, Electron writes a crash report to the platform logs directory (`app.getPath('logs')`: `~/Library/Logs/DeepSeek Harness` on macOS, `logs` under the application’s `userData` directory on Windows and Linux), waiting at most one second for the write; a slow or failed write shows the dialog with an explicit pending or unavailable status. Get diagnostic report checks the same write and reveals a saved file in the system file manager without restarting or stopping the Host; a write that completes after the initial deadline remains available. The user attaches that file to a support ticket. The attachment contains the original failure; later recovery-operation errors remain in the dialog and require a separate screenshot. Retrieving a saved report shows its sharing or reveal-failure heading while retaining the recovery error details. If writing fails, the dialog hides Get diagnostic report and suggests providing a screenshot.
 
-The file `crash-<UTC time>-<source>.log` records the source (`host` for a Host exit, `web-boot` for a renderer boot failure, `renderer` for a renderer or document failure, `main` for a shell error), whether the backend had reached ready, application and runtime versions, the error with its enumerable properties and cause chain (cut at 256 KiB), the Host’s own error and explicitly selected startup metadata (at most 64 Ki characters, including a truncation notice; startup errors reserve space for metadata by limiting the original error to 8 Ki characters) when the Host reported a startup failure over IPC before exiting, and the primary window’s recent error-level console output (at most 64 KiB).
+The file `crash-<UTC time>-<source>.log` records the source (`host` for a Host exit, `web-boot` for a renderer boot failure, `renderer` for a renderer or document failure, `main` for a shell error), whether the backend had reached ready, application and runtime versions, the error with its enumerable properties and cause chain (cut at 256 KiB), the Host’s own error and explicitly selected startup metadata (at most 64 Ki characters, including a truncation notice; startup errors reserve space for metadata by limiting the original error and startup-entry details to 8 Ki characters each, with explicit truncation notices) when the Host reported a startup failure over IPC before exiting, and the primary window’s recent error-level console output (at most 64 KiB).
 
 A Host exit report therefore contains the retained stderr tail, which may include plugin output. A fatal failure during shutdown writes a report without opening a dialog. Files are owner-only where the platform supports it; startup keeps the ten newest reports and removes older ones without touching other files in the directory.
 
@@ -45,7 +49,7 @@ Host `transportDropped` is a lower bound as of the last successful delivery; Des
 
 The journal retains two 256 KiB segments, accepts records up to 4 KiB, and bounds queued writes to 64 KiB.
 
-Exit, recovery restart and installer preparation wait at most 500 ms for queued writes; a timeout disables further writes, while an already-issued OS request may still settle.
+Exit, recovery restart and installer preparation wait at most 500 ms for queued writes; a timeout disables further writes and later drains return immediately without another wait, while an already-issued OS request may still settle.
 
 Records cover manager operations observed after Host startup, not direct CLI commands or manual file changes. Package-manager output remains in its existing detailed logs and is not copied into this summary. Missing records, a start without an end, and damaged history do not establish a successful operation. This collection does not diagnose kernel hangs, OOM or native crashes.
 

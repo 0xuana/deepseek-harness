@@ -2,24 +2,27 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write apps/desktop/docs/diagnostics/README.md
+/:
+  en: ca7ea022a5be1df2
+  zh: ca7ea022a5be1df2
 /desktop-recovery-and-diagnostics:
   en: 4d4fd8a92047e5c6
   zh: 15ec51d703ccd70b
 /desktop-recovery-and-diagnostics/summary:
   en: e61d0f55e426aa6f
   zh: dc13c7e054eac9d1
-/desktop-recovery-and-diagnostics/contents:
-  en: bd20ab7e73c7a170
+/desktop-recovery-and-diagnostics/table-of-contents:
+  en: 8f3a2a84eaf575af
   zh: 3087306f10e7c2cf
 /desktop-recovery-and-diagnostics/recover-from-a-failure:
-  en: 1e7d530e4e4e23d2
-  zh: 27055f1d0e597609
+  en: 9d0645dba352979d
+  zh: e1556207a04d9a71
 /desktop-recovery-and-diagnostics/report-contents:
-  en: b1d48255932c903c
-  zh: 7f84b4d141adc80b
+  en: 1a2eb71ac2dccf63
+  zh: 5cf59639d3e49591
 /desktop-recovery-and-diagnostics/recent-operation-records:
-  en: 6be041c1187e78de
-  zh: 52ef5c179a4bb337
+  en: 8f4db0caa4b329f6
+  zh: 952ae7d48896cb39
 /desktop-recovery-and-diagnostics/collection-and-shutdown:
   en: bac4a49f63d4aaf8
   zh: df1ae908ee2148e1

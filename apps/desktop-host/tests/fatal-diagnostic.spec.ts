@@ -52,7 +52,7 @@ it('marks truncation within the complete IPC budget and preserves Unicode', () =
   const error = new Error('😀'.repeat(MAX_FATAL_DIAGNOSTIC_CHARS))
   const report = formatFatalDiagnostic(error)
   expect(report.length).toBeLessThanOrEqual(MAX_FATAL_DIAGNOSTIC_CHARS)
-  expect(report).toContain(`Host diagnostic truncated at ${MAX_FATAL_DIAGNOSTIC_CHARS} characters`)
+  expect(report).toContain('Host diagnostic truncated at 65536 characters')
   expect(report.isWellFormed()).toBe(true)
 })
 
@@ -71,13 +71,13 @@ it('keeps missing-service evidence ahead of a truncated plugin inventory', () =>
     omittedPlugins: 3, omittedServices: 2,
   }
   const report = formatFatalDiagnostic(error)
-  expect(report).toContain('original error truncated')
+  expect(report).toContain('original error truncated at 8192 characters')
   expect(report).toContain('Configuration file: /profile/critical-cordis.yml')
   expect(report).toContain('waiting-entry')
   expect(report).toContain('"service":"agents","providers":[]')
   expect(report).toContain('Omitted plugin rows: 3; omitted missing-service observations: 2.')
   expect(report).toContain('"source":"/profile/cordis.yml"')
-  expect(report).toContain(`Host diagnostic truncated at ${MAX_FATAL_DIAGNOSTIC_CHARS} characters`)
+  expect(report).toContain('Host diagnostic truncated at 65536 characters')
   expect(report.length).toBeLessThanOrEqual(MAX_FATAL_DIAGNOSTIC_CHARS)
 })
 
@@ -86,4 +86,20 @@ it('terminates traversal through cyclic and aggregate causes', () => {
   error.errors.push(error)
   error.cause = error
   expect(formatFatalDiagnostic(error)).toContain('cycle')
+})
+
+it.each(['many entries', 'long stack'])('retains composition evidence after %s', (scenario) => {
+  const failure = new Error('startup failure')
+  failure.stack = 'x'.repeat(70000)
+  const error = new StartupError('startup failed', scenario === 'long stack'
+    ? [{ id: 'failed', module: './failed.mjs', required: true, fiberState: undefined, outcome: { kind: 'failed', error: failure } }]
+    : Array.from({ length: 256 }, (_, index) => ({ id: `pending-${index}`, module: 'module'.repeat(60), required: true, fiberState: undefined, outcome: { kind: 'pending' as const, missing: ['agents'] } })))
+  error.startup = { configurationPath: '/profile/cordis.yml', messages: [] }
+  error.composition = { plugins: [{ id: 'provider', module: 'example', version: '1.0.0', state: 'active', source: '/profile/cordis.yml', missing: [] }], services: [{ consumer: 'consumer', service: 'agents', providers: [] }], omittedPlugins: 0, omittedServices: 0 }
+  const report = formatFatalDiagnostic(error)
+  expect(report).toContain('Configuration file: /profile/cordis.yml')
+  expect(report).toContain('startup entries truncated')
+  expect(report).toContain('"service":"agents"')
+  expect(report).toContain('"version":"1.0.0"')
+  expect(report.length).toBeLessThanOrEqual(65536)
 })
