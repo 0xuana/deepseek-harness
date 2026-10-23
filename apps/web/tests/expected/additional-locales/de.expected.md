@@ -1,5 +1,5 @@
 - listitem:
   - button "Siehe Automatische Autorisierungsüberprüfung": Automatische Autorisierungsüberprüfung
-  - text: "Experimentell Fügt den Zugriffsmodus „Auto review“ hinzu: Vor jedem Tool-Aufruf prüft eine Modellanfrage den Aufruf anhand Ihrer Anforderung; zugelassene Aufrufe laufen sofort mit vollem Zugriff und ohne Sandbox, abgelehnte Aufrufe warten auf Ihre Genehmigung. Die Prüfung kann eine unsichere Aktion zulassen oder nützliche Arbeit ablehnen."
+  - text: "Experimentell Fügt den Zugriffsmodus „Auto review“ hinzu, der im Zugriffsmodus-Menü oder mit /permission auto für die aktuelle Sitzung gewählt wird: Vor jedem Tool-Aufruf prüft eine Modellanfrage den Aufruf anhand Ihrer Anforderung; zugelassene Aufrufe laufen sofort mit vollem Zugriff und ohne Sandbox, abgelehnte Aufrufe warten auf Ihre Genehmigung. Die Prüfung kann eine unsichere Aktion zulassen oder nützliche Arbeit ablehnen, und wenn Sie das Plugin deaktivieren, wechseln diese Sitzungen zu „Voller Zugriff“."
   - status
   - switch "Aktivieren Sie Automatische Autorisierungsüberprüfung"

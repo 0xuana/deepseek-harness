@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Traducción automática de razonamiento",
-    "description": "Traduce las filas “pensar” expandidas al idioma de su interfaz mientras el agente las escribe, y “Ver original” vuelve al texto original; elija el servicio de traducción y el idioma de destino en esta página. El razonamiento, que puede incluir su código y su conversación, se envía al servicio seleccionado.",
+    "description": "Traduce las filas “pensar” expandidas al idioma de su interfaz mientras el agente las escribe, y “Ver original” vuelve al texto original; elija el servicio de traducción y el idioma de destino en la configuración de este complemento. El razonamiento, que puede incluir su código y su conversación, se envía al servicio seleccionado.",
     "detail": "docs/DETAIL.md"
   }
 }

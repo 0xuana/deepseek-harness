@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Tradução automática de raciocínio",
-    "description": "Traduz as linhas “Pense” expandidas para o idioma da sua interface enquanto o agente as escreve, e “Ver original” volta ao texto original; escolha o serviço de tradução e o idioma de destino nesta página. O raciocínio, que pode incluir seu código e sua conversa, é enviado ao serviço selecionado.",
+    "description": "Traduz as linhas “Pense” expandidas para o idioma da sua interface enquanto o agente as escreve, e “Ver original” volta ao texto original; escolha o serviço de tradução e o idioma de destino nas configurações deste plug-in. O raciocínio, que pode incluir seu código e sua conversa, é enviado ao serviço selecionado.",
     "detail": "docs/DETAIL.md"
   }
 }

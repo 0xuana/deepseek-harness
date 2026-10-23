@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Auto authorization review",
-    "description": "Adds an Auto review access mode: before each tool call, a model request checks the call against what you asked for; allowed calls run at once with full access and no sandbox, and denied calls wait for your approval. The review can allow an unsafe action or deny useful work.",
+    "description": "Adds an Auto review access mode, chosen in the access mode menu or with /permission auto for the current session: before each tool call, a model request checks the call against what you asked for; allowed calls run at once with full access and no sandbox, and denied calls wait for your approval. The review can allow an unsafe action or deny useful work, and turning the plugin off switches those sessions to Full access.",
     "detail": "docs/DETAIL.md"
   }
 }

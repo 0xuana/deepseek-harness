@@ -1,5 +1,5 @@
 - listitem:
   - button "Ver Revisión de autorización automática": Revisión de autorización automática
-  - text: "Experimental Añade el modo de acceso “Auto review”: antes de cada llamada a una herramienta, una solicitud al modelo comprueba la llamada frente a lo que usted pidió; las llamadas permitidas se ejecutan de inmediato con acceso completo y sin zona de pruebas, y las denegadas esperan su aprobación. La revisión puede permitir una acción insegura o denegar trabajo útil."
+  - text: "Experimental Añade el modo de acceso “Auto review”, que se elige en el menú de modo de acceso o con /permission auto para la sesión actual: antes de cada llamada a una herramienta, una solicitud al modelo comprueba la llamada frente a lo que usted pidió; las llamadas permitidas se ejecutan de inmediato con acceso completo y sin zona de pruebas, y las denegadas esperan su aprobación. La revisión puede permitir una acción insegura o denegar trabajo útil, y al desactivar el complemento esas sesiones cambian a “Acceso completo”."
   - status
   - switch "Habilitar Revisión de autorización automática"

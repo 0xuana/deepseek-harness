@@ -1,5 +1,5 @@
 - listitem:
   - button "Ver Revisão de autorização automática": Revisão de autorização automática
-  - text: "Experimental Adiciona o modo de acesso “Auto review”: antes de cada chamada de ferramenta, uma solicitação ao modelo verifica a chamada em relação ao que você pediu; as chamadas permitidas são executadas imediatamente com acesso total e sem sandbox, e as negadas aguardam sua aprovação. A revisão pode permitir uma ação insegura ou negar um trabalho útil."
+  - text: "Experimental Adiciona o modo de acesso “Auto review”, escolhido no menu de modo de acesso ou com /permission auto para a sessão atual: antes de cada chamada de ferramenta, uma solicitação ao modelo verifica a chamada em relação ao que você pediu; as chamadas permitidas são executadas imediatamente com acesso total e sem sandbox, e as negadas aguardam sua aprovação. A revisão pode permitir uma ação insegura ou negar um trabalho útil, e desativar o plug-in muda essas sessões para “Acesso total”."
   - status
   - switch "Ativar Revisão de autorização automática"

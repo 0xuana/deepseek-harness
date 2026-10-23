@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Entwicklertools",
-    "description": "Zur Fehlersuche: Öffnen Sie „Sitzungsprotokoll“ über „Neuer Tab“ in der Seitenleiste, um zu sehen, was DSH für eine Sitzung aufgezeichnet hat, und drücken Sie Ctrl+Shift+. (Cmd+Shift+. unter macOS), um die mit dem DSH-Backend verbundenen Chrome DevTools zu öffnen. Solange es aktiviert ist, behält DSH die Netzwerkanfragen des Backends im Speicher, ohne API-Schlüssel auszublenden, und jedes Programm auf diesem Computer kann sich mit seinem Debugging-Endpunkt verbinden und Code in DSH ausführen.",
+    "description": "Zur Fehlersuche: Öffnen Sie „Sitzungsprotokoll“ über „Neuer Tab“ in der Seitenleiste, um zu sehen, was DSH für eine Sitzung aufgezeichnet hat, und drücken Sie Ctrl+Shift+. (Cmd+Shift+. unter macOS), um die mit dem DSH-Backend verbundenen Chrome DevTools zu öffnen. Solange es aktiviert ist, behält DSH die Netzwerkanfragen des Backends im Speicher, ohne API-Schlüssel oder Cookies auszublenden, und jedes Programm auf diesem Computer kann sich mit seinem Debugging-Endpunkt verbinden und Code in DSH ausführen; deaktivieren Sie es daher, wenn Sie nicht debuggen.",
     "detail": "docs/DETAIL.md"
   }
 }

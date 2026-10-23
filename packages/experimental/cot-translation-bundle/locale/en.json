@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Machine translation of reasoning",
-    "description": "Translates expanded Think rows into your interface language as the agent writes them, and View original switches back; choose the translation service and target language on this page. The reasoning, which can include your code and conversation, is sent to the selected service.",
+    "description": "Translates expanded Think rows into your interface language as the agent writes them, and View original switches back; choose the translation service and target language in this plugin's settings. The reasoning, which can include your code and conversation, is sent to the selected service.",
     "detail": "docs/DETAIL.md"
   }
 }

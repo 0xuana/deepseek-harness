@@ -1,5 +1,5 @@
 - listitem:
   - button "Voir Examen des autorisations automatiques": Examen des autorisations automatiques
-  - text: "Expérimental Ajoute le mode d'accès « Auto review » : avant chaque appel d'outil, une requête au modèle vérifie l'appel par rapport à ce que vous avez demandé ; les appels autorisés s'exécutent immédiatement avec un accès complet et sans bac à sable, et les appels refusés attendent votre approbation. La vérification peut autoriser une action dangereuse ou refuser un travail utile."
+  - text: "Expérimental Ajoute le mode d'accès « Auto review », à choisir dans le menu Mode d'accès ou avec /permission auto pour la session en cours : avant chaque appel d'outil, une requête au modèle vérifie l'appel par rapport à ce que vous avez demandé ; les appels autorisés s'exécutent immédiatement avec un accès complet et sans bac à sable, et les appels refusés attendent votre approbation. La vérification peut autoriser une action dangereuse ou refuser un travail utile, et la désactivation du plugin fait passer ces sessions en « Accès complet »."
   - status
   - switch "Activer Examen des autorisations automatiques"

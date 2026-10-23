@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Outils de développement",
-    "description": "Pour le dépannage : ouvrez « Journal de session » depuis « Nouvel onglet » dans la barre latérale pour voir ce que DSH a enregistré pour une session, et appuyez sur Ctrl+Shift+. (Cmd+Shift+. sous macOS) pour ouvrir Chrome DevTools connecté au backend de DSH. Tant qu'il est activé, DSH conserve en mémoire les requêtes réseau du backend sans masquer les clés API, et n'importe quel programme de cet ordinateur peut se connecter à son point de terminaison de débogage et exécuter du code dans DSH.",
+    "description": "Pour le dépannage : ouvrez « Journal de session » depuis « Nouvel onglet » dans la barre latérale pour voir ce que DSH a enregistré pour une session, et appuyez sur Ctrl+Shift+. (Cmd+Shift+. sous macOS) pour ouvrir Chrome DevTools connecté au backend de DSH. Tant qu'il est activé, DSH conserve en mémoire les requêtes réseau du backend sans masquer les clés API ni les cookies, et n'importe quel programme de cet ordinateur peut se connecter à son point de terminaison de débogage et exécuter du code dans DSH ; désactivez-le donc lorsque vous ne déboguez pas.",
     "detail": "docs/DETAIL.md"
   }
 }
