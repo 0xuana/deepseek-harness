@@ -122,7 +122,7 @@ const EXTENSION_BUNDLES = [
 /** The optional bundles the main list holds back until selected; the More list includes eligible entries. */
 const MORE_BUNDLES = [
   '@deepseek-ai/dsh-creation-recommendations',
-  '@deepseek-ai/dsh-experimental-plugin-recommendations',
+  '@deepseek-ai/dsh-plugin-recommendations',
   '@deepseek-ai/dsh-experimental-inspector-profile',
   '@deepseek-ai/dsh-cua-bundle',
   '@deepseek-ai/dsh-experimental-tool-worktree',

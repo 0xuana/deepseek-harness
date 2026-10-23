@@ -3,7 +3,7 @@ description: "Recommend built-in official plugins for explicit user needs and en
 kind: "package-bundle"
 ---
 
-# @deepseek-ai/dsh-experimental-plugin-recommendations
+# @deepseek-ai/dsh-plugin-recommendations
 
 English | [中文](README.zh.md)
 

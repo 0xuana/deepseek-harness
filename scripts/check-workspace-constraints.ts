@@ -220,7 +220,7 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // Personalized pages ship the location guidance used by their Creator.
   '@deepseek-ai/dsh-creation-recommendations': ['references/*.md', 'skills/*.md'],
   // Official-plugin recommendations ship the skill text their provider loads.
-  '@deepseek-ai/dsh-experimental-plugin-recommendations': ['skills/*.md'],
+  '@deepseek-ai/dsh-plugin-recommendations': ['skills/*.md'],
   // The Web Host mounts the default-off settings owner independently of the
   // delegation-tool instances.
   '@deepseek-ai/dsh-tool-subagent': ['lib/model-selection-settings.js'],

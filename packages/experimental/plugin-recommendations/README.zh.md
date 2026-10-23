@@ -3,7 +3,7 @@ description: "针对用户明确表达的需求推荐内置官方插件，并通
 kind: "package-bundle"
 ---
 
-# @deepseek-ai/dsh-experimental-plugin-recommendations
+# @deepseek-ai/dsh-plugin-recommendations
 
 [English](README.md) | 中文
 

@@ -4,6 +4,6 @@
     - id: client-ui-action-cards
       name: '@deepseek-ai/dsh-client-ui-action-cards'
     - id: plugin-recommendations
-      name: '@deepseek-ai/dsh-experimental-plugin-recommendations'
+      name: '@deepseek-ai/dsh-plugin-recommendations'
     - id: client-ui-plugin-recommendations
-      name: '@deepseek-ai/dsh-experimental-client-ui-plugin-recommendations'
+      name: '@deepseek-ai/dsh-client-ui-plugin-recommendations'

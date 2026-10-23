@@ -3,7 +3,7 @@ description: "Show official plugin recommendation cards after completed answers.
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-experimental-client-ui-plugin-recommendations
+# @deepseek-ai/dsh-client-ui-plugin-recommendations
 
 English | [中文](README.zh.md)
 

@@ -10,7 +10,7 @@ import { FoldedText } from '@deepseek-ai/dsh-client-ui-action-cards/src/client/C
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { mountRecommendations, inject } from '../src/client/mount.ts'
 import { apply as hostApply } from '../src/index.ts'
-const apply = (ctx: Context) => mountRecommendations(ctx, { package: '@deepseek-ai/dsh-experimental-plugin-recommendations', descriptors: [] })
+const apply = (ctx: Context) => mountRecommendations(ctx, { package: '@deepseek-ai/dsh-plugin-recommendations', descriptors: [] })
 
 afterEach(cleanup)
 

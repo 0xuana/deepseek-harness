@@ -8,7 +8,7 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import { FoldedText } from '@deepseek-ai/dsh-client-ui-action-cards/src/client/Card.tsx'
 import type { ActionCardFields, ActionCardResult } from '@deepseek-ai/dsh-action-cards/types'
-import type { RecommendationDetails } from '@deepseek-ai/dsh-experimental-plugin-recommendations/types'
+import type { RecommendationDetails } from '@deepseek-ai/dsh-plugin-recommendations/types'
 import { PluginCardBody, type CatalogDetails, type PluginCardProps } from '../src/client/Card.tsx'
 import { en, ja, zh } from '../src/client/locales.ts'
 

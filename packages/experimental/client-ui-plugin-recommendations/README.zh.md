@@ -3,7 +3,7 @@ description: "在完整回答之后显示官方插件推荐卡片。"
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-experimental-client-ui-plugin-recommendations
+# @deepseek-ai/dsh-client-ui-plugin-recommendations
 
 [English](README.md) | 中文
 

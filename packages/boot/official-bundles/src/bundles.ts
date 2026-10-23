@@ -54,7 +54,7 @@ export const DEFAULT_PROFILE_BUNDLES: readonly string[] = ['@deepseek-ai/dsh-bas
  */
 export const OPTIONAL_BUNDLES: readonly string[] = [
   '@deepseek-ai/dsh-creation-recommendations',
-  '@deepseek-ai/dsh-experimental-plugin-recommendations',
+  '@deepseek-ai/dsh-plugin-recommendations',
   '@deepseek-ai/dsh-cua-bundle',
   '@deepseek-ai/dsh-experimental-session-search',
   '@deepseek-ai/dsh-experimental-ralph-bundle',

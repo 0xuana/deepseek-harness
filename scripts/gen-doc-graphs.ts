@@ -117,10 +117,10 @@ const SERVICE_ROLES: ServiceRole[] = [
   },
   {
     key: 'pluginRecommendations',
-    pkg: 'experimental-plugin-recommendations',
+    pkg: 'plugin-recommendations',
     title: 'Explicit-need plugin recommendations',
     mode: 'service',
-    consumers: ['experimental-client-ui-plugin-recommendations'],
+    consumers: ['client-ui-plugin-recommendations'],
     note: 'Reads the current catalog text of an official plugin card and enables the plugin through the profile plugin manager after a click.',
   },
   {
