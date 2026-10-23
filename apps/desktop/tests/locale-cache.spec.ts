@@ -1,3 +1,4 @@
+import { SHIPPED_LOCALE_IDS } from '../../../scripts/shipped-locales.ts'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -31,7 +32,16 @@ it('uses the confirmed Japanese language for recovery before Host settings are a
   expect(locale.messages.getDiagnosticReport).toBe('診断レポートを取得')
 })
 
-it.each(['', 'fr', '{invalid'])('falls back to system language for an invalid cache: %s', (value) => {
+it.each(SHIPPED_LOCALE_IDS)('restores the confirmed shipped language %s before Host settings are available', (id) => {
+  const directory = fixture()
+  const selected = resolveDesktopLocale(id)
+  writeDesktopLocaleCache(directory, selected.id)
+  const cached = readDesktopLocaleCache(directory)
+  expect(cached).toBe(selected.id)
+  expect(resolveDesktopLocale(cached!).messages.getDiagnosticReport).toBe(selected.messages.getDiagnosticReport)
+})
+
+it.each(['', 'it', '{invalid'])('falls back to system language for an invalid cache: %s', (value) => {
   const directory = fixture()
   writeDesktopLocaleCache(directory, 'en')
   writeFileSync(join(directory, 'desktop', 'locale-cache'), value)

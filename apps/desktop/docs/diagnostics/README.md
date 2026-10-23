@@ -19,6 +19,8 @@ This reference describes Desktop native failure recovery, diagnostic reports, re
 
 Fatal main-window creation, main-document loading, preload, renderer, Web initialization, or backend failures open one native recovery dialog per application process. It shows a bounded tail of the first error, notes any truncation, and offers Exit, Restart, Disable third-party plugins, back up profile patch, and restart, and Get diagnostic report while report writing is pending or after it succeeds. Startup failures retain the Web loading page and spinner; runtime failures retain the current page. Expected shutdowns, cancelled navigation, and ordinary requests do not trigger recovery. The shared Web plugin manager reports package-operation errors; Host startup failures after plugin changes enter native recovery. There is no startup timeout heuristic. A listener failure containing `listen EADDRINUSE` replaces the diagnostics and reinstall advice with guidance to quit other running DSH instances, and offers Exit, Restart, and Get diagnostic report while report writing is pending or after it succeeds.
 
+Recovery uses the last confirmed Desktop language from the local cache before Host settings are available; an absent or invalid cache falls back to system languages.
+
 Recovery waits for Host shutdown before changing plugin activation. The native recovery action calls the shared app-boot recovery function under the profile transaction lock. It disables third-party bundles and renames the profile’s `cordis.patch.yml` to `cordis.patch.yml.bak-<timestamp>` (with an ordinal on collisions) without parsing it; the next startup creates an empty patch. Installed packages and earlier backups remain. The home-level patch is unchanged. The Electron console records the backup path (or its absence) and the unchanged home-level patch. Invalid profile data, rename failures, or write failures are reported as recovery-operation errors; completed changes remain, and Desktop does not restart as though recovery succeeded. Desktop has no profile-reset action or emergency HTML document.
 
 <a id="report-contents"></a>
@@ -37,7 +39,7 @@ A Host exit report therefore contains the retained stderr tail, which may includ
 
 ## Recent operation records
 
-Operation records and the application single-instance lock are isolated by `userData`; the shared platform logs directory does not store operation records. History from older test builds under `logs/plugin-operations` is not imported automatically because it may contain other profiles. Repairing an unfinished append preserves complete lines in the current segment and the previous segment.
+Operation records and the application single-instance lock are isolated by `userData`; the shared platform logs directory does not store operation records. The reader only reads the two operation files under `userData/plugin-operations`. Repairing an unfinished append preserves complete lines in the current segment and the previous segment.
 
 Host `transportDropped` is a lower bound as of the last successful delivery; Desktop rejects malformed or mismatched-run records without adding them to that counter.
 
