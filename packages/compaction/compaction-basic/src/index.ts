@@ -304,7 +304,7 @@ export class BasicCompactionEngine extends CompactionEngine {
         const measurement = this.ctx.tokenMeter.measure(agent.session)
         const range = selectCompactableRange(agent.session, measurement, 0)
         if (range === null) return null
-        return this.compactAutomaticRegion(range.start, range.end, agent, signal)
+        return this.compactRegion(range.start, range.end, agent, signal)
       }
       /* v8 ignore next -- closed-union exhaustiveness guard */
       default:
@@ -359,7 +359,7 @@ export class BasicCompactionEngine extends CompactionEngine {
           + `(${measurement.totalTokens} estimated tokens >= threshold ${spec.thresholdTokens})`,
         )
       }
-      result = await this.compactAutomaticRegion(range.start, range.end, agent, signal)
+      result = await this.compactRegion(range.start, range.end, agent, signal)
       measurement = meter.measure(agent.session, header)
       if (measurement.totalTokens < spec.thresholdTokens) return result
     }
@@ -370,26 +370,8 @@ export class BasicCompactionEngine extends CompactionEngine {
     )
   }
 
-  /** Compact an automatically selected prefix, allowing smaller balanced prefixes on summary overflow. */
-  private compactAutomaticRegion(
-    start: SessionSeq,
-    end: SessionSeq,
-    agent: Agent,
-    signal: AbortSignal,
-  ): Promise<CompactionResult> {
-    return compactSurfaceRegion(
-      this.regionDependencies(),
-      agent.session,
-      start,
-      end,
-      agent,
-      { owner: 'current-turn', stability: 'whole-surface', allowSmallerPrefix: true },
-      signal,
-    )
-  }
-
   /**
-   * Compact one exact inclusive positional range from the agent-owned surface using
+   * Compact one inclusive positional range from the agent-owned surface using
    * the effective token meter for all retention and shrink pricing.
    * @param start - inclusive first surface-node seq.
    * @param end - inclusive last surface-node seq.
@@ -448,7 +430,6 @@ export class BasicCompactionEngine extends CompactionEngine {
             {
               owner: null,
               stability: 'selected-span',
-              allowSmallerPrefix: true,
               ...sourceCommandId === undefined ? {} : { sourceCommandId },
               flush: async () => {
                 await this.ctx.sessions.flush(agent.session)
