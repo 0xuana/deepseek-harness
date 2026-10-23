@@ -271,19 +271,32 @@ it('keeps a superseding gesture marker when an older follower detaches', () => {
   expect(element.dataset.dockkitPointer).toBeUndefined()
 })
 
-it('continues a selected tab\'s strip from its pane\'s last offset and jumps on a first placement', () => {
-  let scrollLeft = 0
-  // Each assignment with the inline `scroll-behavior` it ran under: `auto` jumps, empty leaves the stylesheet's glide.
+/**
+ * Give each element its own `scrollLeft`, starting at 0, and log every
+ * assignment with the inline `scroll-behavior` it ran under: `auto` jumps,
+ * empty leaves the stylesheet's glide.
+ */
+function stubScrollLeft() {
+  const offsets = new WeakMap<Element, number>()
   const writes: (readonly [number, string])[] = []
   const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollLeft')
   Object.defineProperty(Element.prototype, 'scrollLeft', {
     configurable: true,
-    get() { return scrollLeft },
+    get(this: Element) { return offsets.get(this) ?? 0 },
     set(this: HTMLElement, value: number) {
-      scrollLeft = value
+      offsets.set(this, value)
       writes.push([value, this.style.scrollBehavior])
     },
   })
+  const restore = (): void => {
+    if (descriptor === undefined) Reflect.deleteProperty(Element.prototype, 'scrollLeft')
+    else Object.defineProperty(Element.prototype, 'scrollLeft', descriptor)
+  }
+  return { offsets, writes, restore }
+}
+
+it('continues a selected tab\'s strip from its pane\'s last offset and jumps on a first placement', () => {
+  const { writes, restore } = stubScrollLeft()
   const rect = (left: number, width: number): DOMRect => ({
     left, right: left + width, top: 0, bottom: 28, x: left, y: 0, width, height: 28, toJSON: () => ({}),
   })
@@ -301,39 +314,23 @@ it('continues a selected tab\'s strip from its pane\'s last offset and jumps on 
   })
   try {
     const h = mounted(controller)
-    const scrolled = (): void => { fireEvent.scroll(h.node('[data-dockkit-strip-tabs]')) }
     // The first strip has no recorded offset: it jumps to the chip.
     expect(writes).toEqual([[164, 'auto']])
-    scrolled()
-    // The seeded tab's strip starts where the previous one stood, where its chip is in view.
-    scrollLeft = 0
+    // The seeded tab's new strip starts where the previous one stood, where its chip is in view.
     fireEvent.click(h.node(`[data-dockkit-tab="${seeded}"]`))
     expect(writes.slice(1)).toEqual([[164, 'auto']])
-    scrolled()
     // Back on the opened tab, now 30 past the left edge: restored, then glided the rest.
     openedAt = -30
-    scrollLeft = 0
     fireEvent.click(h.node(`[data-dockkit-tab="${opened}"]`))
     expect(writes.slice(2)).toEqual([[164, 'auto'], [164 - 30 - 24, '']])
   } finally {
-    if (descriptor === undefined) Reflect.deleteProperty(Element.prototype, 'scrollLeft')
-    else Object.defineProperty(Element.prototype, 'scrollLeft', descriptor)
+    restore()
   }
 })
 
 it('places a selected tab\'s strip moved to another pane from that pane\'s last offset', () => {
-  // Offsets per chip box, with the inline `scroll-behavior` of each assignment.
-  const offsets = new WeakMap<Element, number>()
-  const writes: (readonly [string | undefined, number, string])[] = []
-  const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollLeft')
-  Object.defineProperty(Element.prototype, 'scrollLeft', {
-    configurable: true,
-    get(this: Element) { return offsets.get(this) ?? 0 },
-    set(this: HTMLElement, value: number) {
-      offsets.set(this, value)
-      writes.push([this.dataset.dockkitStripTabs, value, this.style.scrollBehavior])
-    },
-  })
+  // jsdom lays every chip and box out at 0x0, so only restores write offsets here.
+  const { offsets, writes, restore } = stubScrollLeft()
   try {
     const controller = seededController()
     controller.setExpanded(true)
@@ -346,15 +343,13 @@ it('places a selected tab\'s strip moved to another pane from that pane\'s last 
     if (split.kind !== 'split') throw new Error('expected a split')
     const target = getPane(state, split.children[1]!).id
     act(() => { controller.focusTab(moved); h.redraw() })
-    const strip = h.node(`[data-dockkit-strip-tabs="${target}"]`)
-    offsets.set(strip, 70)
-    fireEvent.scroll(strip)
+    offsets.set(h.node(`[data-dockkit-strip-tabs="${target}"]`), 70)
     writes.length = 0
     act(() => { controller.placeTab(moved, target, 0); h.redraw() })
     expect(h.node(`[data-dockkit-strip-tabs="${target}"] [data-dockkit-tab="${moved}"]`).getAttribute('aria-selected')).toBe('true')
-    expect(writes).toEqual([[target, 70, 'auto']])
+    // The moved strip takes the target pane's 70; the source pane's next strip restores the 0 the moved one left there.
+    expect([...writes].sort((x, y) => x[0] - y[0])).toEqual([[0, 'auto'], [70, 'auto']])
   } finally {
-    if (descriptor === undefined) Reflect.deleteProperty(Element.prototype, 'scrollLeft')
-    else Object.defineProperty(Element.prototype, 'scrollLeft', descriptor)
+    restore()
   }
 })

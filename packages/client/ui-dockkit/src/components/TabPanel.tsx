@@ -194,9 +194,9 @@ function jumpTo(element: HTMLElement, left: number): void {
  * A box newly mounted, or newly showing another pane, first jumps to that
  * pane's offset in `offsets`, so a strip that replaces another for the same
  * pane continues from where that one stood and glides only the remaining
- * distance. With no recorded offset the
- * first placement jumps rather than glides from the row's start. The box
- * records its offset in `offsets` on every scroll.
+ * distance. With no recorded offset the first placement jumps rather than
+ * glides from the row's start. The box records its offset in `offsets` when
+ * it unmounts or leaves its pane.
  */
 function useActiveChipInView(
   box: RefObject<HTMLDivElement | null>,
@@ -213,9 +213,8 @@ function useActiveChipInView(
     const element = box.current
     /* v8 ignore next -- the box is rendered unconditionally with the strip. */
     if (element === null) return undefined
-    const record = (): void => { offsets.set(paneId, element.scrollLeft) }
-    element.addEventListener('scroll', record, { passive: true })
-    return () => { element.removeEventListener('scroll', record) }
+    // Layout cleanup runs before React detaches the box, so it still reads the live offset.
+    return () => { offsets.set(paneId, element.scrollLeft) }
   }, [box, paneId, offsets])
   useLayoutEffect(() => {
     const element = box.current
@@ -252,7 +251,9 @@ function splitBlockedTitle(labels: PaneCallbacks['labels'], block: SplitBlock): 
 interface TabStripProps extends TabPanelProps {
   /**
    * Chip-box offsets by pane, shared by the strips that replace one another
-   * as a pane's selected tab changes; omitted for a strip that stays mounted.
+   * as a pane's selected tab changes. Keys are valid within one layout only,
+   * and entries outlive their panes. Omitted where no strip continues from
+   * another's position.
    */
   readonly offsets?: Map<PaneId, number>
 }
