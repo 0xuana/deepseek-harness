@@ -18,7 +18,8 @@ import type {
   PerfToolCount, PerfTurnMetrics,
 } from './perf-contract.ts'
 import {
-  DASH, barShare, formatChars, formatClock, formatDateTime, formatDateTimeShort, formatMs, formatPercent,
+  DASH, barShare, formatChars, formatClock, formatDateTime, formatDateTimeShort, formatDateTimeMs, formatMs,
+  formatPercent, formatStepClock,
   formatTokens, formatTokensDelta, formatTokensShort, formatTps,
 } from './perf-format.ts'
 import { aggregateTotals, turnContext, type ContextMode, type PerfTotals } from './perf-aggregate.ts'
@@ -1683,7 +1684,7 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
           className={cx(css.promptCell, css.stepWhen)}
           title={isNumber(step.startTime)
             ? [
-              t('step.started.title', { time: formatDateTime(step.startTime) }),
+              t('step.started.title', { time: formatDateTimeMs(step.startTime) }),
               ...visibleGap === undefined ? [] : [t('bar.gap', { value: formatMs(visibleGap) })],
             ].join('\n')
             : undefined}
@@ -1691,7 +1692,7 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
           {isNumber(step.startTime)
             ? (
               <>
-                <span className={css.stepClock}>{formatClock(step.startTime)}</span>
+                <span className={css.stepClock}>{formatStepClock(step.startTime)}</span>
                 {visibleGap === undefined
                   ? null
                   : (

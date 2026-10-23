@@ -104,6 +104,34 @@ export function formatDateTimeShort(value: number | null): string {
 }
 
 /**
+ * Full timestamp with milliseconds for tooltips.
+ * @param value - epoch milliseconds.
+ * @returns `YYYY-MM-DD HH:MM:SS.mmm`, or the dash placeholder.
+ */
+export function formatDateTimeMs(value: number | null): string {
+  if (!isNumber(value)) return DASH
+  const date = new Date(value)
+  const pad = (part: number, width = 2): string => String(part).padStart(width, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} `
+    + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+    + `.${pad(date.getMilliseconds(), 3)}`
+}
+
+/**
+ * Step start timestamp with date and milliseconds for the trigger column.
+ * @param value - epoch milliseconds.
+ * @returns `MM-DD HH:MM:SS.mmm`, or the dash placeholder.
+ */
+export function formatStepClock(value: number | null): string {
+  if (!isNumber(value)) return DASH
+  const date = new Date(value)
+  const pad = (part: number, width = 2): string => String(part).padStart(width, '0')
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} `
+    + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+    + `.${pad(date.getMilliseconds(), 3)}`
+}
+
+/**
  * Date and time of day: the table shows the clock, tooltips add the date.
  * @param value - epoch milliseconds.
  * @returns `YYYY-MM-DD HH:MM:SS`, or the dash placeholder.

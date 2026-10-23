@@ -29,7 +29,8 @@ import {
   CALL_LIMIT, fallbackState, foldEvent, isCodeMode, newState, promptOf, stepMetrics, toolSpanUnion, triggerSenderOf,
 } from '../src/client/perf-fold.ts'
 import {
-  DASH, barShare, formatChars, formatClock, formatDateTime, formatDateTimeShort, formatMs, formatPercent,
+  DASH, barShare, formatChars, formatClock, formatDateTime, formatDateTimeMs, formatDateTimeShort,
+  formatMs, formatPercent, formatStepClock,
   formatTokens, formatTokensDelta, formatTokensShort, formatTps,
 } from '../src/client/perf-format.ts'
 import type { PerfCall, PerfStepMetrics, PerfStepState } from '../src/client/perf-contract.ts'
@@ -342,11 +343,15 @@ describe('display formatting boundaries', () => {
     expect(formatClock(time)).toBe('03:04:05')
     expect(formatDateTime(time)).toBe('2026-10-20 03:04:05')
     expect(formatDateTimeShort(time)).toBe('10-20 03:04')
+    expect(formatDateTimeMs(time)).toBe('2026-10-20 03:04:05.000')
+    expect(formatStepClock(time)).toBe('10-20 03:04:05.000')
     expect(formatClock(null)).toBe(DASH)
     expect(formatClock(Number.NaN)).toBe(DASH)
     expect(formatDateTime(null)).toBe(DASH)
     expect(formatDateTime(Number.POSITIVE_INFINITY)).toBe(DASH)
     expect(formatDateTimeShort(Number.NaN)).toBe(DASH)
+    expect(formatDateTimeMs(null)).toBe(DASH)
+    expect(formatStepClock(Number.POSITIVE_INFINITY)).toBe(DASH)
   })
 
   it('scales a bar by the square root of its comparison group', () => {

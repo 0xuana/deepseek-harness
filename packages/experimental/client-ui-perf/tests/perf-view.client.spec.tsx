@@ -18,7 +18,8 @@ import { PerfView } from '../src/client/PerfView.tsx'
 import { zh } from '../src/client/locales.ts'
 import css from '../src/client/perf.module.css'
 import {
-  barShare, formatChars, formatClock, formatTokensDelta, formatDateTime, formatDateTimeShort, formatMs, formatPercent, formatTokens,
+  barShare, formatChars, formatClock, formatDateTime, formatDateTimeMs, formatDateTimeShort, formatMs, formatPercent,
+  formatStepClock, formatTokens, formatTokensDelta,
   formatTokensShort, formatTps,
 } from '../src/client/perf-format.ts'
 import type {
@@ -888,20 +889,20 @@ describe('turn rows', () => {
       step({ step: 5, startTime: BASE + 7_001, endTime: BASE + 8_000 }),
     ]))
     const first = cellsOf(stepRow(1))
-    expect(first[1]?.textContent).toContain(formatClock(BASE))
-    expect(first[1]?.getAttribute('title')).toBe(say('step.started.title', { time: formatDateTime(BASE) }))
+    expect(first[1]?.textContent).toContain(formatStepClock(BASE))
+    expect(first[1]?.getAttribute('title')).toBe(say('step.started.title', { time: formatDateTimeMs(BASE) }))
     const second = cellsOf(stepRow(2))
-    expect(second[1]?.textContent).toContain(formatClock(BASE + 4_000))
+    expect(second[1]?.textContent).toContain(formatStepClock(BASE + 4_000))
     expect(second[1]?.textContent).toContain(say('bar.gap', { value: formatMs(3_000) }))
     expect(second[1]?.getAttribute('title')).toBe([
-      say('step.started.title', { time: formatDateTime(BASE + 4_000) }),
+      say('step.started.title', { time: formatDateTimeMs(BASE + 4_000) }),
       say('bar.gap', { value: formatMs(3_000) }),
     ].join('\n'))
     const partial = cellsOf(stepRow(4))
     expect(partial[1]?.textContent).toBe('')
     expect(partial[1]?.getAttribute('title')).toBeNull()
     const tiny = cellsOf(stepRow(5))
-    expect(tiny[1]?.textContent).toContain(formatClock(BASE + 7_001))
+    expect(tiny[1]?.textContent).toContain(formatStepClock(BASE + 7_001))
     expect(tiny[1]?.textContent).not.toContain(say('bar.gap', { value: formatMs(1) }))
   })
 
