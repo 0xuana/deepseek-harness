@@ -213,7 +213,7 @@ export interface RunOptions {
   workspaceParent?: string
   /**
    * Exact JSON-quoted cwd length for fixtures that persist path-dependent token prices.
-   * Pads a canonical temporary path while retaining mkdtemp's random suffix;
+   * Pads a natively resolved temporary path while retaining mkdtemp's random suffix;
    * an insufficient or non-integer length rejects before directory allocation.
    */
   workspaceCwdTextLength?: number
@@ -247,7 +247,8 @@ function workspaceTemporaryPrefix(options: RunOptions): string {
   const parent = options.workspaceParent ?? tmpdir()
   const length = options.workspaceCwdTextLength
   if (length === undefined) return join(parent, 'acp-snap-cwd-')
-  const prefix = join(realpathSync(parent), 'acp-snap-cwd-')
+  // Native resolution expands Windows short names before their characters are priced.
+  const prefix = join(realpathSync.native(parent), 'acp-snap-cwd-')
   // mkdtemp contributes six characters; runtime-context renders the JSON-quoted cwd.
   const minimum = JSON.stringify(`${prefix}XXXXXX`).length
   if (!Number.isSafeInteger(length) || length < minimum) {

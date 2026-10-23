@@ -1,5 +1,6 @@
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import * as fsPromises from 'node:fs/promises'
+import { realpathSync } from 'node:fs'
 import { once } from 'node:events'
 import { tmpdir } from 'node:os'
 import { delimiter, join, relative, sep } from 'node:path'
@@ -12,7 +13,19 @@ import { launchAcpTestAgent } from '../src/launcher.ts'
 const fsControl = vi.hoisted(() => ({
   cleanupFailure: undefined as Error | undefined,
   spillAllocationFailure: undefined as { error: Error; allocated: string[] } | undefined,
+  legacyRealpathParent: undefined as string | undefined,
 }))
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  const realpathSync = Object.assign((...args: Parameters<typeof actual.realpathSync>) => {
+    const parent = fsControl.legacyRealpathParent
+    return parent !== undefined && args[0] === parent && args[1] === undefined
+      ? parent
+      : actual.realpathSync(...args)
+  }, { native: actual.realpathSync.native })
+  return { ...actual, realpathSync }
+})
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
@@ -723,6 +736,38 @@ describe('runScenario', () => {
       expect(allocate).not.toHaveBeenCalled()
     } finally {
       allocate.mockRestore()
+    }
+  })
+
+  it('prices the native long parent path when legacy resolution retains a short alias', async () => {
+    const { fixtureFile } = await scenario({})
+    const allocatedRoot = await mkdtemp(join(tmpdir(), 'acp-snap-native-parent-'))
+    tempDirs.push(allocatedRoot)
+    const root = await realpath(allocatedRoot)
+    const longParent = join(root, 'long-parent-directory')
+    const shortParent = join(root, 'PARENT~1')
+    await mkdir(longParent)
+    // The junction keeps allocation and subprocess I/O real while the one parent lookup models Windows 8.3 names.
+    await symlink(longParent, shortParent, 'junction')
+    fsControl.legacyRealpathParent = shortParent
+    try {
+      expect(realpathSync(shortParent)).toBe(shortParent)
+      expect(realpathSync.native(shortParent)).toBe(await realpath(longParent))
+      const result = await runScenario(
+        { steps: boot },
+        {
+          agent: AGENT, mode: 'replay', fixtureFile, workspaceParent: shortParent, workspaceCwdTextLength: 192,
+          prepareWorkspace: async (cwd) => {
+            expect(cwd).toBe(await realpath(cwd))
+            expect(JSON.stringify(cwd).length).toBe(192)
+          },
+        },
+      )
+      expect(JSON.stringify(result.cwd).length).toBe(192)
+      expect(await readdir(longParent)).toEqual([])
+      await expect(readdir(result.cwd)).rejects.toMatchObject({ code: 'ENOENT' })
+    } finally {
+      fsControl.legacyRealpathParent = undefined
     }
   })
 
