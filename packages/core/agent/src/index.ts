@@ -181,7 +181,10 @@ export interface AgentFactory {
    * rollback-covered, but notifications delivered before a later listener
    * failure remain observable; every agent or session creation announcement
    * that began is paired by `agent/disposed` or `session/disposed` during
-   * rollback. The owner disposes the resolved handle to stop/drain,
+   * rollback. Once Agent initialization begins, failures reject after its
+   * scope and acquired write handle finish cleanup. Cancellation during
+   * persistence acquisition may reject before a late handle is available to close.
+   * The owner disposes the resolved handle to stop/drain,
    * unregister, remove the session, and unwind the scope.
    * The registry passes a context carrying the `create()` caller's fiber and
    * scope as `ownerCtx`. The implementation attaches the unpublished
@@ -197,7 +200,7 @@ export interface AgentFactory {
    * persisted session for write, reads and repairs the log, publishes it, and
    * awaits the optional unpublished setup transaction; must be called after
    * `ctx.sessionPersistence` exists (consumers inject `sessionPersistence`).
-   * Publication follows the same setup-commit and ordered boundary as
+   * Initialization cleanup and publication follow the same timing as
    * {@link createAgent}.
    * @param ownerCtx - caller-bound context that owns load, setup, and the live handle.
    * @param options - persisted identity, configuration, optional live parent, and setup.
