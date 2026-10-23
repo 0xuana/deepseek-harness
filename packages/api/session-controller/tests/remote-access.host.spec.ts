@@ -118,7 +118,7 @@ describe('Session Controller access', () => {
     if (resource === undefined || !('resolve' in resource)) throw new Error('Session resource resolver is missing')
     for (const method of ['page', 'follow']) {
       const reader = remoteMethods(controller).find(marker => marker.method === method)?.resources?.['session']
-        ?? resource.resolve
+        ?? ((...args: readonly unknown[]) => resource.resolve(...args))
       expect(reader?.({ address: { kind: 'session', sessionId: SHARED } })).toBe(SHARED)
       // A subagent address reads the child transcript; whether the parent's access covers it is the policy's rule.
       expect(reader?.({ address: { kind: 'subagent', parentSessionId: SHARED, childSessionId: PRIVATE } })).toBe(PRIVATE)
