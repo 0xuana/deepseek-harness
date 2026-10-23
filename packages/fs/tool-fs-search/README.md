@@ -109,6 +109,20 @@ Without an explicit `path`, `glob` narrows traversal for patterns such as `packa
 
 Each call resolves the packaged binary (`@vscode/ripgrep`, or the executable's `-rg` sidecar in a pkg single-file runtime), prepends `--no-config` so a host `RIPGREP_CONFIG_PATH` cannot inject a `--pre` preprocessor into the unconfined spawn, and passes every model-controlled value as a plain argv element — no shell layer exists, so no quoting applies. Collect-mode budgets bound complete stdout and a stderr tail; a lossy stdout read fails as `SEARCH_RAW_OUTPUT_OVERFLOW` rather than parsing a silently-partial stream. The tools never read a raw spill path.
 
+### Native-mode benchmark
+
+After `pnpm run build`, compile the package-local diagnostic with external runtime dependencies, then run it under plain Node:
+
+```sh
+node --input-type=module <<'JS'
+import { build } from 'tsdown';
+await build({ config: false, tsconfig: false, dts: false, entry: 'packages/fs/tool-fs-search/tests/glob-native.perf.ts', outDir: 'packages/fs/tool-fs-search/tests/.dsh-build', clean: false, deps: { neverBundle: [/^[^./]/] } });
+JS
+node packages/fs/tool-fs-search/tests/.dsh-build/glob-native.perf.mjs
+```
+
+The diagnostic creates 20,000 unrelated files and six matches, then measures five `ctx.tools.execute()` calls through the Native executor with a real Agent, working-directory service, and local subprocess backend. It reports raw timings, the median, and a hash of the complete value, text, and presentation metadata. `--plugin <built-module>` selects another search-package revision; `--workspace <directory>` opts into a read-only existing workspace instead of the synthetic tree. Setup, model generation, UI, and Session persistence are excluded; there is no timing threshold.
+
 ### Two budgets, two artifacts
 
 Raw stdout and stderr are internal transport details; the tools always collect the complete result in memory, and only the inline page is capped. When a call yields more logical results than the inline cap, a best-effort spill saves the complete formatted preview to the spill store and the page carries its locator, while dispatches whose full value never enters model context skip the spill. Missing or failed spill keeps the inline page and reports that the complete result could not be saved — never an error. The collection and spill handoff live in `src/search-core.ts` and `src/presentation.ts`.
