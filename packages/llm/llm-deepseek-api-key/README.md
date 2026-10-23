@@ -86,6 +86,7 @@ Credentials and catalog availability do not enter model input; the protocol tran
 - A configured catalog is configuration metadata, not remote validation that a model is accepted; actual calls can still fail.
 - The Models page shows the built-in catalog while the route follows the listing, so a model only the listing offers appears only in model selectors. Editing that catalog on the page stores the rows the page shows, which drops such a model until **Restore defaults**.
 - A customized catalog does not receive models the listing adds later.
+- Customization is judged against the running version's built-in catalog, so a saved `models` list equal to an earlier version's built-in catalog counts as customized once the built-in catalog changes and stops following the listing until **Restore defaults**.
 - The listing cache lives in memory; a start without network serves the built-in catalog until a listing loads.
 - A listing change during a running process reaches the Web model picker at its next catalog refresh; the plugin does not announce it.
 - When the current version can serve no listed model, the route offers no models.

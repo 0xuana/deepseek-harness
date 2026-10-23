@@ -23,11 +23,10 @@ it('records the prompt and fails the request when the official endpoint has a ma
   const fetch = vi.spyOn(globalThis, 'fetch')
   const ctx = new Context()
   contexts.push(ctx)
-  for (const plugin of [
-    LlmRuntime, SessionStore, SessionProjectionRegistry, SystemPrompt, ToolRuntime, NativeToolExecutor, AgentRegistry,
-  ]) {
+  for (const plugin of [LlmRuntime, SessionStore, SessionProjectionRegistry, SystemPrompt, ToolRuntime, AgentRegistry]) {
     await ctx.plugin(plugin)
   }
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(DeepSeek, {})
   const agent = await ctx.agentLoop.create(SessionId('malformed-official-key'), { provider: 'deepseek-official', model: 'deepseek-flash' })

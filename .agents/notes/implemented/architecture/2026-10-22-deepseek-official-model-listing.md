@@ -31,6 +31,6 @@ The `deepseek-official` route offered whatever its `models` setting held, and th
 ## Consequences
 
 - API-key users on the official endpoint receive listed models without a release, and an older build hides or refuses a model that needs a newer client, as account users' builds do.
-- A customized catalog receives no later listed models until Restore defaults, and a `models` list identical to the built-in catalog counts as uncustomized.
+- A customized catalog receives no later listed models until Restore defaults, and a `models` list identical to the built-in catalog counts as uncustomized. The comparison uses the running version's built-in catalog, so a saved list equal to an earlier version's built-in catalog counts as customized once the built-in catalog changes.
 - The Models page shows the built-in rows while the listing is followed, so a model only the listing offers appears only in model selectors, and editing the page's catalog drops it.
 - The first catalog access on the official endpoint can wait up to `modelsTimeoutMs`, and a suite that boots the route there must answer the listing itself to stay off the network.

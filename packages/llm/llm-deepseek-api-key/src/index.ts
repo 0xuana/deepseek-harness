@@ -98,8 +98,9 @@ export function apply(ctx: Context, config: Config): void {
       try { view = await listings.view(connection.listing, signal) }
       catch (error) {
         if (signal?.aborted === true) throw error
-        // A credential lookup failure is reported by `resolveAuth` on the model request, after the turn records the prompt.
-        view = listings.current()
+        // The cache keeps the previous credential's listing when this lookup fails, so gate nothing;
+        // `resolveAuth` reports the failure on the model request, after the turn records the prompt.
+        return connectionOf(connection, undefined)
       }
       return connectionOf(connection, view)
     },
