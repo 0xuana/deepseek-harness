@@ -27,7 +27,6 @@ const controllerCases: readonly {
   readonly name: string
   readonly hasModelTurn: boolean
   readonly configPath?: string
-  readonly workspaceCwdTextLength?: number
 }[] = [
   { name: 'handshake', hasModelTurn: false },
   { name: 'reject-extra-dirs', hasModelTurn: false },
@@ -41,13 +40,6 @@ const controllerCases: readonly {
     name: 'image-compaction',
     hasModelTurn: true,
     configPath: join(corpusDir, 'image-compaction', 'cordis.yml'),
-  },
-  {
-    name: 'summary-overflow',
-    hasModelTurn: true,
-    configPath: join(corpusDir, 'summary-overflow', 'cordis.yml'),
-    // Pins the runtime-context token price recorded in summary-overflow/session.v4.jsonl.
-    workspaceCwdTextLength: 192,
   },
 ] as const
 

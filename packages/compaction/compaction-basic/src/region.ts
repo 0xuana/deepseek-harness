@@ -16,7 +16,7 @@ import {
 } from '@deepseek-ai/dsh-compaction'
 import type { CompactionResult } from '@deepseek-ai/dsh-compaction'
 import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
-import { CONTEXT_WINDOW_EXCEEDED_CODE, createUserMessage, errorChain, LlmError } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
 import type { Message, UserMessage } from '@deepseek-ai/dsh-llm'
 import type { TokenMeasurement, TokenMeter } from '@deepseek-ai/dsh-token-meter'
 import { SessionSeq, type Session, type SessionEvent } from '@deepseek-ai/dsh-session'
@@ -61,8 +61,6 @@ interface CompactionTransactionOptions {
   readonly flush?: () => Promise<void>
   /** Manual command that initiated this transaction, when present. */
   readonly sourceCommandId?: CommandId
-  /** Allow a self-selected range to shrink after summary overflow; absent keeps the exact range. */
-  readonly allowSmallerPrefix?: true
 }
 
 interface CompactionEntryState {
@@ -168,8 +166,7 @@ export function selectCompactableRange(
  * @param start - inclusive first surface-node seq.
  * @param end - inclusive last surface-node seq.
  * @param agent - agent used by the summarizer.
- * @param options - bracket owner, stability rule, self-selected prefix shrink policy,
- * optional source-command correlation, and optional durability checkpoint.
+ * @param options - bracket owner, stability rule, and optional durability checkpoint.
  * @param signal - optional summarization cancellation signal.
  * @returns the successful durable compaction result.
  */
@@ -230,7 +227,6 @@ export async function compactSurfaceRegion(
       compactionId,
       options.sourceCommandId,
       assertStable,
-      options.allowSmallerPrefix === true,
       signal,
     )
     if (options.owner === null) signal?.throwIfAborted()
@@ -395,7 +391,6 @@ async function summarizeCompaction(
   compactionId: CompactionResult['compactionId'],
   sourceCommandId: CommandId | undefined,
   assertStable: StabilityCheck,
-  allowSmallerPrefix: boolean,
   signal?: AbortSignal,
 ): Promise<SummarizedCompaction> {
   let summaryResult: SummaryResult
@@ -407,16 +402,9 @@ async function summarizeCompaction(
     } catch (error: unknown) {
       if (signal?.aborted === true) throw error
       assertStable(dependencies, agent.session, prepared)
-      let selection: SurfaceSelection
-      if (dependencies.recover(error, agent, prepared.shadowedSeqs, signal)) {
-        selection = validateSurfaceRegion(agent.session, prepared.start, prepared.end)
-      } else {
-        if (!allowSmallerPrefix || !(error instanceof LlmError) || error.code !== CONTEXT_WINDOW_EXCEEDED_CODE) throw error
-        const smaller = smallerBalancedPrefix(agent.session, prepared)
-        if (smaller === null) throw error
-        selection = smaller
-      }
-      prepared = prepareCompaction(dependencies, agent.session, selection)
+      if (!dependencies.recover(error, agent, prepared.shadowedSeqs, signal)) throw error
+      prepared = prepareCompaction(dependencies, agent.session,
+        validateSurfaceRegion(agent.session, prepared.start, prepared.end))
     }
   }
   const checkpointMessage = createUserMessage({
@@ -437,16 +425,6 @@ async function summarizeCompaction(
     ...summaryResult,
     checkpointMessage,
   }
-}
-
-/** Halve complete tool-balanced units; one remaining unit cannot be shortened safely. */
-function smallerBalancedPrefix(session: Session, selection: SurfaceSelection): SurfaceSelection | null {
-  const ends = selection.shadowedSeqs.filter(seq => toolPairingBalancedAfter(session, seq))
-  if (ends.length < 2) return null
-  // A validated span ends balanced; two or more units leave a nonempty proper prefix.
-  // oxlint-disable-next-line typescript/no-non-null-assertion
-  const end = ends[Math.ceil(ends.length / 2) - 1]!
-  return validateSurfaceRegion(session, selection.start, end)
 }
 
 /** Reject a summary prepared against any earlier surface generation. */

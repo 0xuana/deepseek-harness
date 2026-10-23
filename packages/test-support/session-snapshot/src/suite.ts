@@ -183,8 +183,6 @@ export interface Scenario {
    * test and the scenario needs an independent project location.
    */
   workspaceParent?: string
-  /** Exact JSON-quoted cwd length forwarded to the harness for path-priced fixtures. */
-  workspaceCwdTextLength?: number
   /**
    * Optional final workspace preparation after the committed fixture is
    * copied. Reserve this for paths that Git cannot represent portably; normal
@@ -1339,7 +1337,6 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
           ...existsSync(workspaceDir) ? { workspaceDir } : {},
           ...scenario.prepareWorkspace !== undefined ? { prepareWorkspace: scenario.prepareWorkspace } : {},
           ...scenario.workspaceParent !== undefined ? { workspaceParent: scenario.workspaceParent } : {},
-          ...scenario.workspaceCwdTextLength === undefined ? {} : { workspaceCwdTextLength: scenario.workspaceCwdTextLength },
           // A scenario passes its live profile patch; the launcher derives
           // the sibling `*cordis.snapshot.yml` for replay.
           ...scenario.configPath !== undefined ? { configPath: scenario.configPath } : {},

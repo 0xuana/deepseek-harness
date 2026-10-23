@@ -8,11 +8,9 @@ import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic'
 import { CompactionId, isCompactCheckpointSource, ManualCompactionError } from '@deepseek-ai/dsh-compaction'
 import type { CompactionResult } from '@deepseek-ai/dsh-compaction'
 import {
-  CONTEXT_WINDOW_EXCEEDED_CODE,
   createAssistantMessage,
   createUserMessage,
   LlmAdapter,
-  LlmError,
 } from '@deepseek-ai/dsh-llm'
 import type {
   ContentBlock,
@@ -241,54 +239,6 @@ function compactEvents(session: Session): SessionEvent[] {
 }
 
 describe('compactNow through the real loop', () => {
-  it('recovers an idle summary overflow and flushes before releasing a queued prompt', async () => {
-    const harness = await loopHarness()
-    const { ctx, agent, compact, adapter, log } = harness
-    const retryEntered = deferred()
-    const gate = deferred()
-    let running: Promise<CompactionResult | null> | undefined
-    try {
-      for (let turn = 0; turn < 3; turn += 1) await seedHistory(harness)
-      const originalNodes = [...agent.session.surface.nodes]
-      const originalMessages = agent.session.deriveMessages()
-      const flush = vi.spyOn(ctx.sessions, 'flush')
-      compact.duringSummary = () => {
-        if (compact.calls.length === 1) throw new LlmError('summary input exceeds the model context', CONTEXT_WINDOW_EXCEEDED_CODE)
-        compact.gate = gate.promise
-        retryEntered.resolve()
-      }
-
-      running = compact.compactNow(agent, SIGNAL)
-      await Promise.race([retryEntered.promise, running])
-      expect(compact.calls.map(input => input.messages.length)).toEqual([6, 4])
-      expect(log).toEqual(['compaction/start:null'])
-      agent.followup(createUserMessage({
-        content: [{ type: 'text', text: 'Continue after the smaller checkpoint.' }], source: { kind: 'user' },
-      }))
-      expect(adapter.requests).toHaveLength(3)
-
-      gate.resolve()
-      const result = await running
-      expect(result?.shadowedSeqs).toEqual(originalNodes.slice(1, 4))
-      expect(flush).toHaveBeenCalledWith(agent.session)
-      await agent.whenIdle()
-
-      const events = compactEvents(agent.session)
-      expect(events.map(event => event.type)).toEqual(['compaction/start', 'compaction/summary', 'compaction/end'])
-      expect(events[0]?.data).toMatchObject({ turn: null })
-      expect(events[2]?.data).toMatchObject({ turn: null })
-      expect(log.indexOf('compaction/end:null')).toBeLessThan(log.indexOf('flush'))
-      expect(log.indexOf('flush')).toBeLessThan(log.indexOf('turn/start'))
-      expect(adapter.requests).toHaveLength(4)
-      expect(adapter.requests[3]?.slice(2, -1)).toEqual(originalMessages.slice(4))
-      expect(adapter.requests[3]?.at(-1)?.content).toEqual([{ type: 'text', text: 'Continue after the smaller checkpoint.' }])
-    } finally {
-      gate.resolve()
-      if (running !== undefined) await Promise.allSettled([running])
-      await ctx.fiber.dispose()
-    }
-  })
-
   it('passes logged image omissions to the summarizer without changing the original message', async () => {
     const { ctx, agent, compact } = await loopHarness()
     try {
