@@ -107,7 +107,11 @@ export function buildGlobCommand(input: GlobInput): string[] {
   return parts
 }
 
-/** Exact directory entries keep prefix narrowing case-sensitive, skip links, and preserve the logical search root. */
+/**
+ * Exact directory entries keep prefix narrowing case-sensitive, skip links, and
+ * preserve the logical search root. Inspection requires the co-located local
+ * workspace used by ripgrep; pending filesystem reads are not abortable.
+ */
 async function scopedGlobCommand(input: GlobInput, workdir: string): Promise<string[]> {
   const command = buildGlobCommand(input)
   const slash = input.pattern.lastIndexOf('/')
@@ -125,9 +129,10 @@ async function scopedGlobCommand(input: GlobInput, workdir: string): Promise<str
       return command
     }
     if (!directory) return command
-    prefix = prefix.length === 0 ? part : `${prefix}/${part}`
+    prefix = join(prefix, part)
   }
-  return [...command, '--', prefix]
+  // ripgrep treats a bare '-' as stdin even after '--'.
+  return prefix === '-' ? command : [...command, '--', prefix]
 }
 
 /**

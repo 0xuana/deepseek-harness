@@ -105,7 +105,7 @@ Local workspace discovery is naturally a process-backed `rg` workflow, and putti
 
 ### How a search runs
 
-Without an explicit `path`, `glob` narrows traversal for patterns such as `packages/core/src/*.ts` when every directory component is a simple relative name and an existing non-symlink directory. Other patterns retain workspace traversal; matching, modification-time ordering, and the logical result root stay unchanged.
+Without an explicit `path`, `glob` narrows traversal for patterns such as `packages/core/src/*.ts` when every directory component is a plain relative name that exactly matches an existing non-symlink directory outside VCS metadata. A prefix consisting only of `-` retains workspace traversal because ripgrep interprets that argument as standard input. Other patterns retain workspace traversal; matching, modification-time ordering, and the logical result root stay unchanged.
 
 Each call resolves the packaged binary (`@vscode/ripgrep`, or the executable's `-rg` sidecar in a pkg single-file runtime), prepends `--no-config` so a host `RIPGREP_CONFIG_PATH` cannot inject a `--pre` preprocessor into the unconfined spawn, and passes every model-controlled value as a plain argv element — no shell layer exists, so no quoting applies. Collect-mode budgets bound complete stdout and a stderr tail; a lossy stdout read fails as `SEARCH_RAW_OUTPUT_OVERFLOW` rather than parsing a silently-partial stream. The tools never read a raw spill path.
 
@@ -225,6 +225,7 @@ These limits define when the search tools are a poor fit or need special operati
 
 - **Search and file access have no shared-workspace proof** — returned paths are follow-up-readable only when the workdir and filesystem root denote the same workspace; the package performs no runtime cross-service validation.
 - **The packaged binary is fixed at dependency version** — Node deployments use the version selected by `@vscode/ripgrep`; Python single-file runtimes copy that target-native version into the required `-rg` sidecar. An unsupported platform or a corrupted installation fails with `SEARCH_FAILED`, while the Python runtime package rejects a missing sidecar before launch. Remote or virtual filesystems need a co-located workspace or another search consumer.
+- **Directory wildcards retain workspace traversal** — patterns such as `src/**/*.ts` do not narrow the traversal root automatically; supply an explicit `path` to constrain them.
 - **The schemas expose one bounded page** — offset pagination, case-mode switches, alternate output modes, and provider-backed discovery remain outside this package; capped complete output requires a spill backend.
 - **Sampling, when enabled, groups by first path segment beneath the search root only** — an over-cap `glob` page balances across those top-level entries, so a result concentrated deeper is still shown unevenly below that level; recursive balancing is deferred.
 

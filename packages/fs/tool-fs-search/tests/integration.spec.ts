@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, symlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -95,7 +95,7 @@ describe('search tools over the real subprocess service + the packaged rg', () =
         join('packages', 'core', 'src', 'old.ts'),
         join('packages', 'core', 'src', '.hidden.ts'),
       ] })
-      expect(spawn.mock.calls[0]?.[0].argv.slice(-2)).toEqual(['--', 'packages/core/src'])
+      expect(spawn.mock.calls[0]?.[0].argv.slice(-2)).toEqual(['--', join('packages', 'core', 'src')])
     })
 
     it.each(['*.ts', '**/*.ts', 'src/**/*.ts', '!src/*.ts', './src/*.ts', 'src/../src/*.ts', 'missing/*.ts', 'notes.md/*.ts', '.git/*.ts'])(
@@ -107,8 +107,10 @@ describe('search tools over the real subprocess service + the packaged rg', () =
       },
     )
 
-    it('preserves case-sensitive glob matching on case-insensitive filesystems', async () => {
+    it('keeps the original traversal when directory entry casing differs', async () => {
+      const spawn = vi.spyOn(ctx.subprocess, 'spawn')
       expect(text(await call('glob', { pattern: 'SRC/*.ts' }, agent()))).toBe('No files found')
+      expect(spawn.mock.calls[0]?.[0].argv).not.toContain('--')
     })
 
     it('does not follow a directory link when narrowing a literal prefix', async () => {
@@ -134,6 +136,26 @@ describe('search tools over the real subprocess service + the packaged rg', () =
     it('scopes to a directory search root (path arg)', async () => {
       const result = await call('glob', { pattern: '*.ts', path: 'src' }, agent())
       expect(text(result).split('\n').sort()).toEqual([join('src', 'alpha.ts'), join('src', 'beta.ts')])
+    })
+
+    it('keeps an explicit path as the only search root when the pattern has a literal prefix', async () => {
+      const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+      const result = await call('glob', { pattern: 'src/*.ts', path: '.' }, agent())
+      expect(result.isError).toBe(false)
+      expect(text(result).split('\n')).toEqual(['alpha.ts', 'beta.ts'].map(name => `.${sep}${join('src', name)}`))
+      const argv = spawn.mock.calls[0]?.[0].argv
+      expect(argv?.filter(part => part === '--')).toHaveLength(1)
+      expect(argv?.slice(-2)).toEqual(['--', '.'])
+    })
+
+    it('discovers files in a directory named dash without treating it as stdin', async () => {
+      await mkdir(join(dir, '-'))
+      await writeFile(join(dir, '-', 'file.ts'), '')
+      const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+      const result = await call('glob', { pattern: '-/*.ts' }, agent())
+      expect(result.isError).toBe(false)
+      expect(text(result)).toBe(join('-', 'file.ts'))
+      expect(spawn.mock.calls[0]?.[0].argv).not.toContain('--')
     })
 
     it('reports zero discoveries as No files found', async () => {
