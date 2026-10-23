@@ -13,9 +13,9 @@
  * repository.
  * @module @deepseek-ai/dsh-client-test-runtime/src/assembly/bundle-roster
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { evaluate, isJsExpr, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { applyEntryPatches, entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
@@ -23,7 +23,10 @@ import { exactPackageSpecifier, parseDshClient } from '@deepseek-ai/dsh-client-m
 import * as yaml from 'js-yaml'
 import { ClientRoster, type ClientRosterRow } from './roster.ts'
 
-/** The `web` profile's bundle layers, in the order `dsh --profile web` applies them (app-boot `PROFILE_TEMPLATES.web`). */
+/**
+ * The `web` profile's bundle layers, in the order `dsh --profile web` applies them
+ * (`PROFILE_TEMPLATES.web` in `@deepseek-ai/dsh-official-bundles`).
+ */
 export const WEB_PROFILE_BUNDLES: readonly string[] = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app']
 
 interface PackageManifest {
@@ -130,12 +133,21 @@ function readManifest(path: string): PackageManifest {
   return JSON.parse(readFileSync(path, 'utf8')) as PackageManifest
 }
 
-/** Locate `<name>/package.json` on the resolution paths of any anchor, without requiring a `./package.json` export. */
+/**
+ * Prefer an anchor manifest with the requested package name, then search dependencies by depth and anchor order.
+ * Return real paths so linked bundles use their own dependency directories.
+ */
 function locateManifest(anchors: readonly string[], name: string): string | undefined {
   for (const anchor of anchors) {
-    for (const searchPath of createRequire(anchor).resolve.paths(name) ?? []) {
-      const candidate = join(searchPath, name, 'package.json')
-      if (existsSync(candidate)) return candidate
+    if (basename(anchor) === 'package.json' && readManifest(anchor).name === name) return realpathSync(anchor)
+  }
+  const paths = anchors.map(anchor => createRequire(anchor).resolve.paths(name) ?? [])
+  for (let depth = 0; depth < Math.max(...paths.map(search => search.length)); depth++) {
+    for (const search of paths) {
+      const directory = search[depth]
+      if (directory === undefined) continue
+      const candidate = join(directory, name, 'package.json')
+      if (existsSync(candidate)) return realpathSync(candidate)
     }
   }
   return undefined

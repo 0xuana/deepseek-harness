@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useDisclosure } from '@deepseek-ai/dsh-client-ui-chat/src/client/chat/use-disclosure.ts'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { RunningToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { StartedToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -13,6 +14,7 @@ import { CHAT_DIFF_MAX_LINES, diffCardModel } from '../src/client/tool/models/di
 import { GenericToolCard, type GenericToolCardProps } from '../src/client/tool/toolviews/GenericToolCard.tsx'
 import { FileMutationRow, fileMutationToolview } from '../src/client/tool/toolviews/file-mutation-row.tsx'
 import { zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
+import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 
 afterEach(cleanup)
 
@@ -26,20 +28,32 @@ const ARGS = '{"file_path":"notes/demo.txt","old_string":"hello","new_string":"h
 
 const DIFFS = [{ path: 'notes/demo.txt', oldText: 'hello', newText: 'hello fixture' }]
 
-const running = (over?: Partial<RunningToolCall>): RunningToolCall => ({
-  callId: 'c1', name: 'edit', argsRaw: ARGS,
-  turn: 1, step: 1, time: 1_000, subCalls: [], ...over,
-})
+const running = (over?: Partial<StartedToolCall>): StartedToolCall => {
+  const argsRaw = over?.argsRaw ?? ARGS
+  return {
+    phase: 'start' as const, args: PartialArguments.fromText(argsRaw), callId: 'c1', name: 'edit', argsRaw,
+    turn: 1, step: 1, time: 1_000, subCalls: [], ...over,
+  }
+}
 
-const settled = (over?: Partial<ToolResultNode>): ToolResultNode => ({
-  kind: 'tool-result', seq: 10, time: 2_000, callId: 'c1',
-  call: { name: 'edit', argsRaw: ARGS },
-  callTime: 1_000,
-  content: [{ type: 'text', text: 'The file notes/demo.txt has been updated successfully.' }], isError: false,
-  meta: { diffs: DIFFS }, subCalls: [], ...over,
-})
+const settled = (over?: Partial<ToolResultNode>): ToolResultNode => {
+  const call = over?.call === undefined ? { name: 'edit', argsRaw: ARGS } : over.call
+  return {
+    kind: 'tool-result', seq: 10, time: 2_000, callId: 'c1',
+    name: call?.name ?? '', args: call === null ? PartialArguments.EMPTY : PartialArguments.fromText(call.argsRaw),
+    call,
+    callTime: 1_000,
+    content: [{ type: 'text', text: 'The file notes/demo.txt has been updated successfully.' }], isError: false,
+    meta: { diffs: DIFFS }, subCalls: [], ...over,
+  }
+}
 
 describe('diffCardModel', () => {
+  it('retains the authored file label when navigation metadata identifies an absolute target', () => {
+    expect(diffCardModel(settled({
+      meta: { path: '/b/notes/demo.txt', diffs: [{ ...DIFFS[0]!, path: '/b/notes/demo.txt' }] },
+    }))).toEqual({ card: { diffs: DIFFS } })
+  })
   it('derives a running card from raw edit arguments', () => {
     expect(diffCardModel(running())).toEqual({
       card: { diffs: [{ path: 'notes/demo.txt', oldText: 'hello', newText: 'hello fixture' }] },
@@ -147,38 +161,19 @@ describe('diffCardModel', () => {
     })
   })
 
-  it.each([undefined, 'workspace-write', 'danger-full-access'])('keeps file diffs with permission %j and absent or blank reasons', (permission) => {
-    for (const justification of [undefined, '', ' \t\n']) {
-      for (const name of ['write', 'edit']) {
-        const argsRaw = JSON.stringify({
-          file_path: 'notes/demo.txt', content: 'hello fixture', old_string: 'hello', new_string: 'hello fixture',
-          ...permission === undefined ? {} : { sandbox_permissions: permission },
-          ...justification === undefined ? {} : { justification },
-        })
-        expect(diffCardModel(running({ name, argsRaw }))).not.toBeNull()
-        expect(diffCardModel(settled({ call: { name, argsRaw } }))).toEqual({ card: { diffs: DIFFS } })
-        expect(diffCardModel(settled({ call: { name, argsRaw }, isError: true }))).toBeNull()
-      }
-    }
-  })
-
-  it('validates mutation escalation fields but accepts unrelated open-root fields', () => {
+  it('leaves escalation fields to the Host and accepts unrelated open-root fields', () => {
     const args = (fields: Record<string, unknown>) => JSON.stringify({
       file_path: 'notes/demo.txt', old_string: 'hello', new_string: 'hello fixture', ...fields,
     })
-    expect(diffCardModel(running({ argsRaw: args({ sandbox_permissions: 7, justification: 'Need access' }) }))).toBeNull()
-    for (const justification of [null, 7, {}]) {
-      expect(diffCardModel(running({ argsRaw: args({ sandbox_permissions: 'workspace-write', justification }) }))).toBeNull()
-    }
-    expect(diffCardModel(running({ argsRaw: args({ justification: 'Need access' }) }))).toBeNull()
+    expect(diffCardModel(running({ argsRaw: args({ sandbox_permissions: 'workspace-write', justification: '' }) }))).not.toBeNull()
     expect(diffCardModel(running({ argsRaw: args({ extension: { version: 1 } }) }))).not.toBeNull()
   })
 })
 
 describe('chat row diff body', () => {
-  const ownerProps = (block: RunningToolCall | ToolResultNode): GenericToolCardProps => ({
+  const ownerProps = (block: StartedToolCall | ToolResultNode): GenericToolCardProps => ({
     loadImage: vi.fn(() => Promise.reject(new Error('not used'))),
-    callId: 'c1', toolName: 'edit', block, openFile: vi.fn(), t,
+    useDisclosure, callId: 'c1', toolName: 'edit', ...('kind' in block ? { phase: 'result' as const, block: block } : { phase: block.phase, block: block }), openFile: vi.fn(), t,
   })
 
   it('the expanded body is the applied diff, capped tighter than the panel', () => {
@@ -202,9 +197,9 @@ describe('chat row diff body', () => {
     // A non-file tool name so the row is not single-file (no path link), and its
     // args body is the fallback the diff card must not have replaced.
     const view = render(<GenericToolCard {...{
-      callId: 'c1', toolName: 'some_tool', openFile: vi.fn(),
+      useDisclosure, callId: 'c1', toolName: 'some_tool', openFile: vi.fn(),
       loadImage: vi.fn(() => Promise.reject(new Error('not used'))), t,
-      block: settled({
+      phase: 'result' as const, block: settled({
         call: { name: 'some_tool', argsRaw: '{"foo":"bar"}' },
         meta: undefined,
       }),
@@ -223,11 +218,11 @@ describe('FileMutationRow diff card', () => {
     projectionsBySession: {},
   })
 
-  const rowProps = (block: RunningToolCall | ToolResultNode, toolName = 'edit'): FileMutationRowProps => ({
-    callId: 'c1', toolName, block, openFile: vi.fn(), cwd: '/w/app',
+  const rowProps = (block: StartedToolCall | ToolResultNode, toolName = 'edit'): FileMutationRowProps => ({
+    useDisclosure, callId: 'c1', toolName, ...('kind' in block ? { phase: 'result' as const, block: block } : { phase: block.phase, block: block }), openFile: vi.fn(), cwd: '/w/app',
     sessionId: SID, useSessions: bindSnapshotSelector(list()),
     t,
-  } as unknown as FileMutationRowProps)
+  } as FileMutationRowProps)
 
   /** The whole summary row is the expand toggle (ToolRow's unified interaction). */
   const toggleRow = (view: { container: HTMLElement }) => {
@@ -242,7 +237,7 @@ describe('FileMutationRow diff card', () => {
     toggleRow(view)
     expect(view.container.querySelector('[data-diff]')).not.toBeNull()
     expect(view.getByText('hello fixture')).toBeTruthy()
-    expect(view.getByText('复制')).toBeTruthy()
+    expect(view.getByRole('button', { name: '复制' })).toBeTruthy()
   })
 
   it('the summary is a path link that opens the tool path through the host', () => {
@@ -262,10 +257,11 @@ describe('FileMutationRow diff card', () => {
       meta: { diffs: [] },
     }), 'write')} />)
     // The collapsed row already carries the card's +/- totals beside the path.
-    expect(view.getByText('+1 -0')).toBeTruthy()
-    // The footer counts live inside the collapsed diff card.
+    expect(view.container.querySelector('[data-disclosure-row]')?.textContent).toContain('+1 -0')
     toggleRow(view)
-    expect(view.getByText('└ +1 -0 · 1 个文件')).toBeTruthy()
+    expect(view.getAllByText('+1')).toHaveLength(1)
+    expect(view.getAllByText('-0')).toHaveLength(1)
+    expect(view.getByText('hello fixture')).toBeTruthy()
   })
 
   it('reflects the run state on its leading slot', () => {

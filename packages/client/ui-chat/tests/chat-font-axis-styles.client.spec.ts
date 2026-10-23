@@ -155,6 +155,16 @@ describe('chat flow font-size axis', () => {
     expect(css).toContain('):focus-within .actions')
   })
 
+  it('keeps empty outer Seats in flow without adding height or sibling gaps', () => {
+    const css = read('ChatView.module.css')
+    const emptySelector = '.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))'
+    const empty = declarationsFrom(css, emptySelector)
+    expect(empty).toContain('height: 0')
+    expect(empty).not.toContain('display: none')
+    expect(css).toContain(`:is(.column, :global([data-slot="conversation.chat.flow"])) > :not([hidden]):not(.textInteraction):not(${emptySelector})`)
+    expect(css).toContain(`~ :not([hidden]):not(.textInteraction):not(${emptySelector})`)
+  })
+
   it('the interrupted-turn tag stays fixed like the dense token variants', () => {
     // 11px would fall to an illegible 9px at the 12px floor; the tag is
     // exempt from the axis the same way small/code tokens are.

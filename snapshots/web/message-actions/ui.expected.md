@@ -5,6 +5,7 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - navigation "Turn navigation":
   - button "Jump to turn 1"
   - button "Jump to turn 2"
@@ -12,21 +13,19 @@
 - text: "Use the read tool twice in one assistant message: read a.txt and b.txt. Then reply with the single word DONE and stop. {{clock}}"
 - button "Copy"
 - tooltip "Copy"
-- button "Think"
+- status: Stopped
+- button "Stopped" [disabled] [expanded]
+- button "Analysis completed"
 - paragraph: I will read both files before answering.
+- button "Read files"
 - button "Copy"
 - button "Good response"
 - button "Bad response"
 - button "Branch into a new conversation" [disabled]
-- text: Available only on the last message of a completed turn {{clock}}
-- button "Read a.txt":
-  - text: Read
-  - button "a.txt"
-- button "Read b.txt":
-  - text: Read
-  - button "b.txt"
-- text: Now give the final answer. {{clock}}
+- text: Available only on the last message of a completed turn {{clock}} Now give the final answer. {{clock}}
 - button "Copy"
+- status: Completed
+- button "Completed in {{duration}}" [disabled]
 - paragraph: DONE
 - button "Copy"
 - button "Good response"
@@ -34,6 +33,8 @@
 - button "Branch into a new conversation"
 - text: {{clock}} Keep this later input in the original conversation. {{clock}}
 - button "Copy"
+- status: Completed
+- button "Completed in {{duration}}" [disabled]
 - paragraph: ORIGINAL ONLY
 - button "Copy"
 - button "Good response"

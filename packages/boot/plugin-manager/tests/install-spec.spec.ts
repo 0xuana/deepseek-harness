@@ -56,10 +56,15 @@ describe('parseInstallSpec', () => {
 })
 
 describe('classifyInstallFailure', () => {
+  it.each([401, 403, 404])('leaves Git HTTP %s responses out of connection recovery', (status) => {
+    expect(classifyInstallFailure({ log: `fatal: unable to access 'https://github.com/acme/private.git/': The requested URL returned error: ${String(status)}` })).toBe('unknown')
+  })
+
   it('names the run\'s end before reading its output, then the most specific code in the output', () => {
     expect(classifyInstallFailure({ log: 'ENOSPC', timedOut: true })).toBe('timeout')
     expect(classifyInstallFailure({ log: '', cause: Object.assign(new Error('spawn pnpm ENOENT'), { code: 'ENOENT' }) })).toBe('pnpm-missing')
     expect(classifyInstallFailure({ log: 'ERR_PNPM_IGNORED_BUILDS  Ignored build scripts: node-pty' })).toBe('build-blocked')
+    expect(classifyInstallFailure({ log: '[ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED] Failed to prepare git-hosted package' })).toBe('build-blocked')
     expect(classifyInstallFailure({ log: 'npm error code E404\nnpm error 404 Not Found - GET https://registry/x' })).toBe('not-found')
     expect(classifyInstallFailure({ log: 'ERR_PNPM_NO_MATCHING_VERSION  No matching version found for x@9' })).toBe('no-matching-version')
     expect(classifyInstallFailure({ log: 'npm error code ETARGET' })).toBe('no-matching-version')

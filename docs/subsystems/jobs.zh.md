@@ -2,11 +2,11 @@
 
 [English](jobs.md) | 中文
 
-长时间运行的生产方、`ctx.jobs` 与任务控制命令共用的类型。[seam 收敛 Agent Note](../../.agents/notes/implemented/architecture/2026-09-03-jobs-seam-consolidation.zh.md) 负责当前设计，[运行时 Agent Note](../../.agents/notes/implemented/architecture/2026-06-20-generic-long-running-tool-runtime.zh.md) 记录其起源；本页记录 [`packages/jobs/jobs/src/types.ts`](../../packages/jobs/jobs/src/types.ts) 与客户端安全叶子 [`view.ts`](../../packages/jobs/jobs/src/view.ts) 中的确切字段与变体。
+长时间运行的生产方、`ctx.jobs` 与任务控制命令共用的类型。[seam 收敛 Agent Note](../../.agents/notes/implemented/architecture/2026-09-03-jobs-seam-consolidation.zh.md) 负责当前设计，[运行时 reference](../../packages/jobs/jobs/README.zh.md) 记录其起源；本页记录 [`packages/jobs/jobs/src/types.ts`](../../packages/jobs/jobs/src/types.ts) 与客户端安全叶子 [`view.ts`](../../packages/jobs/jobs/src/view.ts) 中的确切字段与变体。
 
 ## ID 与状态
 
-`JobId` 是按 `<kind>-N` 生成的[品牌化 id](core.zh.md#branded-ids)。访问控制依赖拥有者授权，而非 id 的保密性。`JobKind` 派生自可合并扩展的 map；注册表将各个 kind 视为不透明的 id 命名空间。
+`JobId` 是按 `<kind>-<short-uuid>` 生成的[品牌化 id](core.zh.md#branded-ids)，kind 后是 UUID 的 16 位小写十六进制字符。访问控制依赖拥有者授权，而非 id 的保密性。`JobKind` 派生自可合并扩展的 map；注册表将各个 kind 视为不透明的 id 命名空间。
 
 ```ts type-equiv
 /**
@@ -15,15 +15,68 @@
  */
 interface JobKindMap {
   bash: 'bash'
-  subagent: 'subagent'
 }
 ```
 
 `JobStatus` 为 `'running' | 'stopping' | 'completed' | 'killed' | 'failed'`；生产方特有的事实在运行期间归入 `JobView.progress`，结算后归入 `JobView.detail`。
 
+<a id="session-lifecycle-records"></a>
+
+## Session 生命周期记录
+
+有所有者的 job 在原始所有者 Session 中发布 `job/registered` 与 `job/settled`。全局唯一的 `jobId` 同时配对这两条记录并控制运行中的 job。SDK 通过 `session.event` 转发这些仅日志记录，不依赖输出读取。时间戳描述注册表提交时刻，不是 CPU 时间或精确的 OS 进程边界；缺少结算时保持不完整。`producerReported` 表示生产方通过兑现 `done` 报告了终态；强制销毁或 promise 拒绝时为 false，不独立确认资源已释放。
+
+`job/settled` 可能出现在 `turn/end` 之后。SDK run 结果只覆盖自身观测窗口；需要较晚结算的消费方应保留 Session 订阅或读取持久化历史。轮次完成不表示所有有主 job 都已停止。
+
+应用销毁可能在有主 job 的最后一条结算写入存储前停止 Session 事件路由或关闭写句柄。正常的一次性运行结束、信号关停和进程硬退出都可能出现这种情况。即使运行期注册表报告了终止，缺少 `job/settled` 的区间仍不完整；消费方不得虚构结束时间戳。
+
+```ts type-equiv
+/** Durable identity and registration time of one owned job execution. */
+interface JobRegisteredData {
+  /** Unique execution id accepted by job controls and retained in Session history. */
+  readonly jobId: JobId
+  /** Original owner; copied history does not transfer execution ownership. */
+  readonly owner: SessionId
+  /** Producer kind. */
+  readonly kind: string
+  /** Producer-supplied label. */
+  readonly label: string
+  /** Unix epoch milliseconds when registration committed. */
+  readonly startedAt: number
+  /** Creating tool invocation, when the producer was called through a tool. */
+  readonly toolCall?: JobToolCall
+}
+```
+
+```ts type-equiv
+/** Registry settlement, including whether the producer reported a terminal outcome. */
+interface JobSettledData extends JobRegisteredData {
+  /** Unix epoch milliseconds when the registry committed the terminal record. */
+  readonly finishedAt: number
+  /** Recorded terminal outcome. */
+  readonly status: JobOutcome['status']
+  /** Source of the termination request, or producer completion. */
+  readonly cause: JobSettleCause
+  /** True when done fulfilled; false for rejection or forced failure. Does not certify resource release. */
+  readonly producerReported: boolean
+  /** Terminal reason, including a recorded kill reason when applicable. */
+  readonly detail?: string
+}
+```
+
 ## 生产方约定
 
 `JobSpec` 声明身份、拥有者会话、可选的拉取式 `output` 源与启动器。运行时会在完成预检后携带该 job 的 `JobHandle` 调用 `run()`，随后提交注册，不再执行可能失败的步骤。生产方拥有执行资源；运行时拥有身份、访问、生命周期状态与输出环。
+
+```ts type-equiv
+/** Tool dispatch that created a job; nested calls retain their root invocation. */
+interface JobToolCall {
+  /** Exact invocation, including a PTC sub-call when applicable. */
+  readonly callId: SessionEventMap['tool/call']['callId']
+  /** Root model-requested invocation owning this execution. */
+  readonly rootCallId: SessionEventMap['tool/call']['callId']
+}
+```
 
 ```ts type-equiv
 /**
@@ -33,7 +86,7 @@ interface JobKindMap {
  * the output ring.
  */
 interface JobSpec {
-  /** Producer kind — also the id prefix (`bash`, `subagent`, …). */
+  /** Producer kind — also the id prefix (`bash`, …). */
   kind: JobKind
   /** One-line model-facing label (the command; the delegation description). */
   label: string
@@ -44,6 +97,8 @@ interface JobSpec {
    * caller until service disposal.
    */
   owner?: SessionId
+  /** Creating tool invocation, retained in the durable lifecycle records. */
+  toolCall?: JobToolCall
   /**
    * Optional UTF-8 byte cap for each complete model-facing completion notice or
    * output read, including controller status metadata. Independent of ring
@@ -77,7 +132,7 @@ interface JobSpec {
  * throwing, so a producer's trailing flush cannot break its own teardown path.
  */
 interface JobHandle {
-  /** The registry-issued id (`<kind>-N`). */
+  /** The registry-issued id (`<kind>-<short-uuid>`). */
   readonly id: JobId
   /**
    * Append one chunk to the output ring. Offsets advance by the chunk's UTF-8
@@ -95,7 +150,7 @@ interface JobHandle {
 }
 ```
 
-`JobHooks.done` 会在生产方释放其资源后 resolve，而不是仅在工作完成时 resolve。结果是一个值而非流的 job——subagent 的报告、workflow 渲染出的结果——把它作为 `JobOutcome.result` 返回；模型在结算后的第一次读取携带它一次。
+`JobHooks.done` 会在生产方释放其资源后 resolve，而不是仅在工作完成时 resolve。结果是一个值而非流的 job——workflow 渲染出的结果——把它作为 `JobOutcome.result` 返回；模型在结算后的第一次读取携带它一次。
 
 ```ts type-equiv
 /** Hooks through which the runtime controls and observes producer work. */
@@ -220,7 +275,7 @@ interface JobOutputRead {
  * stream all consume this one shape.
  */
 interface JobView {
-  /** The registry-issued id (`<kind>-N`). */
+  /** The registry-issued id (`<kind>-<short-uuid>`). */
   readonly id: JobId
   /**
    * The producer kind the job was registered with: a Host-registered
@@ -294,6 +349,14 @@ type JobEvent =
     readonly type: 'settled'
     readonly job: JobView
     readonly cause: JobSettleCause
+    /**
+     * Whether this settlement released a live {@link JobRegistry.wait}. That
+     * waiter's caller receives the terminal projection as its own result, so
+     * a completion reporter treats an awaited settlement as already delivered
+     * and reports only the unawaited ones. A wait that timed out or was
+     * aborted before the settlement does not count.
+     */
+    readonly awaited: boolean
   }
   | {
     readonly type: 'output'
@@ -358,6 +421,19 @@ Host service backing the generated `ctx.remote.job` namespace.
  * @returns anchor, coalesced output frames, and the terminal status.
  */
 @Remote({ mode: 'stream' }) follow(request: JobFollowRequest, signal: AbortSignal): AsyncIterable<JobFollowFrame>
+
+/**
+ * Kill one background job on a human's behalf. The request's session is
+ * the fenced read's caller, so the job must be one that session can see:
+ * the registry's owner fence is the only access rule, and a child session's
+ * own jobs are killable from its list like any other. The kill records
+ * `cancelled by the user` as its reason; it is not one the model requested,
+ * so the owning agent still receives the completion notice, and a shell
+ * tool waiting on that job reads the reason in its own result.
+ * @param request - Session whose job list carries the job, and the job id.
+ * @returns the registry's admission of the kill request.
+ */
+@Remote('kill') kill(request: JobKillRequest): JobKillValue
 ```
 
 Source: [`packages/api/job-controller/src/index.ts`](../../packages/api/job-controller/src/index.ts)
@@ -372,7 +448,8 @@ Implementations must honor these semantics:
 
 - Registrations outlive producer and controller fibers. Owner and service disposal cancel live work and await compliant producers; a throwing teardown cancel force-fails only the record. Such settlements announce `cause: 'teardown'`, because a job whose owner is being destroyed has no reader left.
 - Owned-job access is fenced by the owner's session id. Ids are predictable, so authorization — not secrecy — is the boundary.
-- Settlement is first-wins: one terminal record, released waiters, then one round of contained event delivery, even against a late producer outcome. The `settled` event follows every released waiter, so a consumer that claims a settlement while waiting always claims before the event.
+- Settlement is first-wins: one terminal record, released waiters, then one round of contained event delivery, even against a late producer outcome. The `settled` event follows every released waiter and reports whether it released one (`awaited`), so a completion reporter can skip settlements a waiting caller already collected.
+- A settled record stays listed until its owner's disposal, service disposal, or an explicit remove by a caller that collected the terminal state itself and never handed the id out.
 - start refuses work while no attached job controller serves the spec's owner, so a producer cannot start work that owner cannot collect or stop. One registry serves every composition in the process, so this question — and event delivery under `{ owners: 'scope' }` — is owner-relative rather than process-wide: registrations made from an unscoped context serve every owner, and registrations made under an agent composition's scope serve exactly the agents composed under it.
 - Every job owns one output ring. Pull sources named by the spec are pumped by the registry and drained once more before settlement; pushed appends land whole. The model's consuming cursor and observers' absolute offsets read the same bytes and never disturb each other.
 - Ring retention is bounded. Appends past the live cap drop the oldest retained bytes; a reader below the retained window gets a lossy read, never an error. Settlement trims retention to the settled cap and ends the stream; the ring has no separate lifecycle.
@@ -384,7 +461,7 @@ Implementations must honor these semantics:
  * rejection leaves no job id or execution resource. A throwing starter
  * leaves nothing registered; after it returns, registration cannot fail.
  * @param spec - job identity, owner, output sources, and synchronous starter.
- * @returns the registry-issued `<kind>-N` id.
+ * @returns the registry-issued `<kind>-<short-uuid>` id.
  */
 abstract start(spec: JobSpec): JobId
 
@@ -450,6 +527,16 @@ abstract kill(id: JobId, caller?: SessionId, reason?: string): 'requested' | 'al
  * @returns projection at settlement or timeout.
  */
 abstract wait(id: JobId, timeoutMs: number, caller?: SessionId, signal?: AbortSignal): Promise<JobView>
+
+/**
+ * Drop one settled job's record from the visible set and announce
+ * `removed`. For a caller that collected the terminal state through its own
+ * {@link wait} and never handed the id to the model, such as a shell tool's
+ * foreground call. Throws for a job that is still live, unknown, or foreign.
+ * @param id - settled job to drop.
+ * @param caller - removing session checked against the owner.
+ */
+abstract remove(id: JobId, caller?: SessionId): void
 
 /**
  * Attach an effect-scoped controller that can read and stop jobs. It serves the

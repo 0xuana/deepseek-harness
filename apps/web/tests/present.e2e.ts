@@ -14,7 +14,7 @@ import {
   compareOrRefreshGolden, fixtureUserPrompts, launchWebScaffold, recordFixture,
   watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage } from './support.ts'
+import { connectFreshWorkspace, expandTurnProcesses, newEnglishPage, scrollIntoView } from './support.ts'
 
 const DIR = fileURLToPath(new URL('../../../snapshots/web/present', import.meta.url))
 const FIXTURE = join(DIR, 'session.v3.jsonl')
@@ -56,7 +56,7 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
     scaffold = await launchWebScaffold({
       openInAppEnvironment: createLaunchEnvironmentSnapshot([{ source: 'process', values: { SSH_CONNECTION: '10.0.0.2 55000 10.0.0.9 22' } }]),
       extraOverlayPath: fileURLToPath(new URL('./present.overlay.yml', import.meta.url)),
-      agentPresets: { roots: [], default: 'ptc' }, compareReplaySession: true,
+      agentPresets: { default: 'ptc' }, compareReplaySession: true,
       ...(MODE === 'record' ? {} : { replayFixture: FIXTURE }),
     })
     // File associations belong to the desktop rather than the recorded Session.
@@ -105,12 +105,12 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
     await page.getByText(/^PRESENT_DONE\.?$/).waitFor({ timeout: 30_000 })
     await assertFinalWorkspaceSnapshot(DIR, cwd)
     expect(events.filter(event => event.type === 'deliverables/presented').flatMap(event => event.data.files.map(file => file.path)))
-      .toEqual(['report.txt', '说明.txt'])
+      .toEqual([join(cwd, 'report.txt'), join(cwd, '说明.txt')])
     for (const event of events) {
       if (event.type === 'deliverables/presented') {
         expect(event.data.files).toEqual([
-          { path: 'report.txt', description: 'delivered report' },
-          { path: '说明.txt', description: 'delivered note' },
+          { path: join(cwd, 'report.txt'), description: 'delivered report' },
+          { path: join(cwd, '说明.txt'), description: 'delivered note' },
         ])
       }
     }
@@ -147,7 +147,7 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
       const beforePreview = (await opened()).length
       const column = page.locator('[data-rightbar-col]')
       for (const [name, content] of [['report.txt', 'EDITED_REPORT'], ['说明.txt', 'EDITED_NOTE']] as const) {
-        const mention = page.locator('code').getByRole('button', { name: `Open ${name} in sidebar`, exact: true })
+        const mention = page.locator('code').getByRole('button', { name: `Open ${join(cwd, name)} in sidebar`, exact: true })
         await mention.click()
         const preview = column.locator('[data-document-preview]')
         await expect.poll(() => preview.getAttribute('data-textpreview-url'))
@@ -175,6 +175,31 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
         expect(await opened()).toHaveLength(count + 1)
         expect((await opened()).at(-1)).toEqual({ action: 'open', path: await realpath(join(cwd, name)), content: bytes })
       }
+      const success = row.locator('[data-presented-file]').filter({ hasText: '说明.txt' }).locator('[data-success]')
+      await success.waitFor()
+      const animation = await success.evaluate((element) => {
+        const style = getComputedStyle(element)
+        const fade = element.getAnimations()[0]
+        if (fade === undefined) throw new Error('Successful file feedback has no fade animation')
+        // Seek the CSS animation so the 200 ms fade does not race the assertion.
+        fade.pause()
+        fade.currentTime = 5100
+        return {
+          delay: style.animationDelay, duration: style.animationDuration,
+          fill: style.animationFillMode, opacity: Number(getComputedStyle(element).opacity),
+        }
+      })
+      expect(animation.delay).toBe('5s')
+      expect(animation.duration).toBe('0.2s')
+      expect(animation.fill).toBe('forwards')
+      expect(animation.opacity).toBeGreaterThan(0)
+      expect(animation.opacity).toBeLessThan(1)
+      try {
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        expect(await success.evaluate(element => getComputedStyle(element).animationName)).toBe('none')
+      } finally {
+        await page.emulateMedia({ reducedMotion: 'no-preference' })
+      }
     }
     expect(downloads).toEqual([])
     const response = await page.request.get(new URL(`/api/session.export?sessionId=${sessionId}`, scaffold.authenticatedUrl).href)
@@ -187,15 +212,15 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
       .filter(event => event.type === 'deliverables/presented')
     expect(declarations).toHaveLength(1)
     expect(declarations[0]!.data.files).toEqual([
-      { path: 'report.txt', description: 'delivered report' },
-      { path: '说明.txt', description: 'delivered note' },
+      { path: join(cwd, 'report.txt'), description: 'delivered report' },
+      { path: join(cwd, '说明.txt'), description: 'delivered note' },
     ])
     expect(exported).not.toContain('EDITED_REPORT')
     if (MODE !== 'record') {
       await expect.poll(() => page.locator('[data-presented-file] [role="status"]').count(), { timeout: 10_000 }).toBe(0)
       const aria = await captureExpandedTurnProcessAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
       await compareOrRefreshGolden(join(DIR, 'ui.expected.md'), aria, MODE)
-      await page.locator('[data-turn-process]').click()
+      await expandTurnProcesses(page)
       const failed = page.locator('[data-tool="present"][data-state="error"]')
       const delivered = page.locator('[data-tool="present"][data-state="ok"]')
       expect(await failed.count()).toBe(1)
@@ -260,7 +285,7 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
           openFontSize: getComputedStyle(open).fontSize,
         }
       })
-      expect(geometry.answerToPresented).toBeCloseTo(20, 1)
+      expect(geometry.answerToPresented).toBeCloseTo(16, 1)
       expect(geometry.presentedToActions).toBeCloseTo(20, 1)
       expect(geometry.cardHeight).toBeCloseTo(60, 1)
       expect(geometry.cardColumnGap).toBeCloseTo(10, 1)
@@ -271,8 +296,9 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
       expect(geometry.descriptionFontSize).toBe('10px')
       expect(geometry.openFontSize).toBe('11px')
       await page.setViewportSize({ width: 480, height: 900 })
+      await page.locator('[data-sidebar-collapsed="true"]').waitFor({ state: 'attached' })
       const row = page.locator('[data-presented-files-row]')
-      await row.scrollIntoViewIfNeeded()
+      await scrollIntoView(row)
       for (const card of await row.getByRole('button').all()) {
         const bounds = await card.boundingBox()
         expect(bounds).not.toBeNull()

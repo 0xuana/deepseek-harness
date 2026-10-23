@@ -8,17 +8,23 @@ import type {} from '@deepseek-ai/dsh-office-to-pdf/remote'
 import { makeTranslate, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import { DocumentPreviewRegistry } from '../src/client/document/registry.ts'
 import { apply } from '../src/client/office/index.ts'
+import { officeFace } from '../src/client/office/face.ts'
 import { Config } from '../src/config.ts'
 import { OfficeBody, type OfficeBodyInjected } from '../src/client/office/OfficeBody.tsx'
 import type { OfficeStore } from '../src/client/office/store.ts'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
-import { en, zh } from '../src/client/office/locales.ts'
+import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/office/locales.ts'
 import { en as documentEn } from '../src/client/locales.ts'
+
+vi.mock('../src/client/office/face.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/client/office/face.ts')>()
+  return { ...actual, officeFace: vi.fn(actual.officeFace) }
+})
 
 const file = { sessionId: 's1' as SessionId, path: 'report.DOCX' }
 const generation = ('renderer' as OfficeToPdfGeneration)
-const source = { absolutePath: '/report.docx', version: 'v1', offset: 0, eof: true, bytes: 4, data: 'JVBERg==' }
 const pdf = new Uint8Array([37, 80, 68, 70])
+const source = { absolutePath: '/report.docx', version: 'v1', offset: 0, eof: true, bytes: 4, data: pdf }
 const converted = { ok: true as const, value: { ...source, generation, missingFonts: ['Missing Serif'] } }
 
 it('retains Office view state across remounts and releases it on tab close or plugin disposal', async () => {
@@ -40,8 +46,8 @@ it('retains Office view state across remounts and releases it on tab close or pl
     h.instance.actions.loading(second, 1)
     h.injected.retainTab(second, retained.signal)
     const message = documentEn['error.unavailable'].replace('{message}', 'conversion stopped')
-    expect(h.injected.describeFailure(new RemoteError('gateway/internal', 'conversion stopped', {}))).toBe(message)
-    expect(h.injected.describeFailure({ message: 'conversion stopped' })).toBe(message)
+    expect(h.describeFailure(new RemoteError('gateway/internal', 'conversion stopped', {}))).toBe(message)
+    expect(h.describeFailure({ message: 'conversion stopped' })).toBe(message)
     await h.close()
     expect(h.instance.getSnapshot().byTab[second]).toBeUndefined()
   } finally { closed.abort(); retained.abort(); await h.close() }
@@ -74,9 +80,10 @@ async function harness(config: Partial<Config['office']> = {}, missing?: 'remote
   const entry = recorded.find(entry => entry.component === OfficeBody)!.options
   const instance = entry.store.create()
   const injected = entry.inject(file.sessionId, instance.actions)
-  return { ctx, registry, instance, injected, recorded, locale, removeLocale, render, rendererGeneration,
+  const [read, describeFailure] = vi.mocked(officeFace).mock.calls.at(-1)!
+  return { ctx, registry, instance, injected, describeFailure, recorded, locale, removeLocale, render, rendererGeneration,
     stat, readBytes, register, removeNotice,
-    read: (signal = new AbortController().signal, path = file.path) => injected.read({ ...file, path }, signal),
+    read: (signal = new AbortController().signal, path = file.path) => read({ ...file, path }, signal),
     close: () => fiber.dispose(),
   }
 }
@@ -84,7 +91,7 @@ async function harness(config: Partial<Config['office']> = {}, missing?: 'remote
 it.each(['remote', 'render', 'files'] as const)('keeps Word and PowerPoint registration and guidance when %s is absent', async (missing) => {
   const h = await harness(undefined, missing)
   try {
-    expect(h.locale.register).toHaveBeenCalledWith('sidebarOffice', { zh, en })
+    expect(h.locale.register).toHaveBeenCalledWith('sidebarOffice', { zh, en, ja, es, fr, de, ru, pt })
     for (const path of ['a.DOC', 'b.DOCX', 'c.PPT', 'd.pptx']) {
       expect(h.registry.candidates(path)[0]!.binaryExtensions).toEqual(['doc', 'docx', 'ppt', 'pptx'])
       expect(h.registry.candidates(path)[0]!.title()).toBe(en.title)

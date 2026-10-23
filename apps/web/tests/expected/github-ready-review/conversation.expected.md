@@ -16,7 +16,12 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
-- button "Thought for a while"
+  - button "More conversation views"
+- button "GitHub event received {{clock}}":
+  - text: GitHub event received
+  - time: {{clock}}
+- status: Completed
+- button "Completed in {{duration}}" [disabled]
 - paragraph: "Review complete: no actionable findings."
 - button "Copy"
 - button "Good response"

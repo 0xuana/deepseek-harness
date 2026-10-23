@@ -17,6 +17,7 @@ import type { WorkspaceFilesReadRemote } from '../src/client/rpc.ts'
 import { PLAIN_BODY_ID } from '../src/client/text/index.ts'
 
 const SESSION = 'documents' as SessionId
+const SHORTCUT_CATALOG: readonly never[] = []
 let runtime: SlotTestRuntime | undefined
 let animations: PropertyDescriptor | undefined
 
@@ -37,9 +38,11 @@ afterEach(async () => {
 
 async function boot() {
   const rt = await SlotTestRuntime.create()
+  rt.ctx.provide('fileDrag', { actions: { prepare: async () => ({ start: () => true, release: () => {} }), reportFailure: () => {} }, read: () => undefined } satisfies import('@deepseek-ai/cordis').Context['fileDrag'])
   runtime = rt
-  rt.ctx.provide('settingsScope', { developerTools: { enabled: createSnapshotStore(true) } } as never)
-  rt.ctx.provide('layout', { openRightbar: vi.fn(), closeRightbar: vi.fn() } as never)
+  rt.ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) } } as never)
+  rt.ctx.provide('layout', { openRightbar: vi.fn(), closeRightbar: vi.fn(), panelInfo: rt.panelInfo } as never)
+  rt.ctx.provide('shortcuts', { register: () => () => {}, catalog: { getSnapshot: () => SHORTCUT_CATALOG, subscribe: () => () => {} } } as never)
   const locale = new LocaleRuntime(rt.ctx)
   rt.ctx.provide('locale', locale)
   rt.slots.installLocale(locale)

@@ -6,11 +6,13 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - text: Reply with the single word LIGHTHOUSE and stop. {{clock}}
 - button "Copy"
-- button "Thought for a while" [expanded]
-- button "Context injection runtime-context"
-- button "Think"
+- status: Completed
+- button "Completed in {{duration}}" [expanded]
+- button "Analysis completed" [expanded]
+- button "Think The user wants me to reply with a single word. Let me comply."
 - paragraph: LIGHTHOUSE
 - button "Copy"
 - button "Good response"

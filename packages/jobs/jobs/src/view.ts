@@ -7,6 +7,8 @@
  */
 
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+// Type-only: the Workspace registry's archive-admission family map this seam merges `job` into.
+import type {} from '@deepseek-ai/dsh-workspace/types'
 import type { JobId } from './brand.ts'
 
 /**
@@ -16,13 +18,19 @@ import type { JobId } from './brand.ts'
  */
 export type JobStatus = 'running' | 'stopping' | 'completed' | 'killed' | 'failed'
 
+declare module '@deepseek-ai/dsh-workspace/types' {
+  interface SessionActivityKindMap {
+    /** A background job owned by this session is running or stopping. */
+    job: true
+  }
+}
+
 /**
  * Producer-defined job kinds. Plugins extend this map by declaration merging;
  * the registry treats every value as an opaque id namespace.
  */
 export interface JobKindMap {
   bash: 'bash'
-  subagent: 'subagent'
 }
 
 /** The merge-extensible union of registered producer kind names. */
@@ -54,7 +62,7 @@ export interface JobChunk {
  * stream all consume this one shape.
  */
 export interface JobView {
-  /** The registry-issued id (`<kind>-N`). */
+  /** The registry-issued id (`<kind>-<short-uuid>`). */
   readonly id: JobId
   /**
    * The producer kind the job was registered with: a Host-registered

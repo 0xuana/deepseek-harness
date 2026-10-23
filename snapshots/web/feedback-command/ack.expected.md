@@ -6,9 +6,11 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - text: Reply with the single word LIGHTHOUSE and stop. {{clock}}
 - button "Copy"
-- button "Thought for a while"
+- status: Completed
+- button "Completed in {{duration}}"
 - paragraph: LIGHTHOUSE
 - button "Copy"
 - button "Good response"

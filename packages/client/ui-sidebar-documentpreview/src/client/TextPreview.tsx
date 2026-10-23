@@ -9,14 +9,14 @@
  * with the same reload. The type's controls, viewer choice, wrap and reload, sit at the end of
  * the path row; the Sidebar's strip carries none of them.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { ReactNode, RefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   FileTypeIcon, IconNowrapFillRegular, IconPauseOutlineRegular, IconPlayOutlineRegular,
-  IconRefreshOutlineRegular, IconWrapFillRegular, Menu, Tooltip, classifyFileType,
+  IconRefreshOutlineRegular, IconWrapFillRegular, Menu, PathLabel, Tooltip, classifyFileType,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type { TextInjected } from './face.ts'
@@ -29,51 +29,11 @@ import { binaryDocumentPath, matchingDocumentPreviews } from './document/registr
 import type { DocumentPreviewDefinition } from './document/registry.ts'
 import { unviewableBinaryPath } from './document/unviewable.ts'
 import { PLAIN_BODY_ID } from './text/index.ts'
-import { loadedPages, lastLineLoaded, scrollToLine } from './text/lines.ts'
+import { clearLineMark, loadedPages, lastLineLoaded, markLine, scrollToLine } from './text/lines.ts'
 import css from './TextPreview.module.css'
 
 export { linesOf, loadedPages, lastLineLoaded, scrollToLine } from './text/lines.ts'
 export type { LoadedPage } from './text/lines.ts'
-
-/** Keep the path fade in sync with whether its full text fits the header row. */
-function usePathClipped(
-  box: RefObject<HTMLDivElement | null>,
-  text: RefObject<HTMLSpanElement | null>,
-  path: string,
-  shown: boolean,
-): void {
-  useLayoutEffect(() => {
-    const outer = box.current
-    const inner = text.current
-    if (outer === null || inner === null) return undefined
-    const apply = (): void => {
-      if (inner.offsetWidth > outer.clientWidth) outer.dataset.textpreviewPathClipped = ''
-      else delete outer.dataset.textpreviewPathClipped
-    }
-    apply()
-    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(apply)
-    observer?.observe(outer)
-    observer?.observe(inner)
-    return () => { observer?.disconnect() }
-  }, [box, text, path, shown])
-}
-
-/** The header's path: directories greyed, the final segment in full ink, faded when clipped. */
-function HeaderPath({ pathRef, pathTextRef, path }: {
-  pathRef: RefObject<HTMLDivElement>
-  pathTextRef: RefObject<HTMLSpanElement>
-  path: string
-}): ReactNode {
-  const { directory, name } = pathPartsOf(path)
-  return (
-    <div ref={pathRef} className={css.path} title={path} data-textpreview-path>
-      <span ref={pathTextRef} className={css.pathText}>
-        {directory !== '' && <span className={css.pathDirectory}>{directory}</span>}
-        <span className={css.pathName}>{name}</span>
-      </span>
-    </div>
-  )
-}
 
 /** Private registration inputs; the framework binds the registry source to useDocumentPreviews. */
 export interface TextPreviewInjected extends TextInjected {
@@ -129,14 +89,11 @@ export function TextPreview({
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const scrollportRef = useRef<HTMLElement | null>(null)
   const storedScrollTopRef = useRef(0)
-  const pathRef = useRef<HTMLDivElement | null>(null)
-  const pathTextRef = useRef<HTMLSpanElement | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const absolutePath = meta.value?.absolutePath ?? current?.complete?.absolutePath
   const displayPath = absolutePath ?? file.path
   // Contributions that hand the file to the Host wait for its Host path.
   const fileOwner = absolutePath === undefined ? undefined : { absolutePath }
-  usePathClipped(pathRef, pathTextRef, displayPath, state !== undefined)
   // Every tab of this type is a `file` resource address, so its params are the
   // `file` type's; the union is narrowed on the one field read, not validated.
   const line = navigation.params !== undefined && 'line' in navigation.params ? navigation.params.line : undefined
@@ -176,8 +133,8 @@ export function TextPreview({
 
   // Answer a navigation once: a line the pages do not reach yet loads the next
   // page (again, until the pages cover it or the file ends); a line they hold
-  // is scrolled to and marked. The store remembers the answer, so a remount
-  // restores the reader's place instead.
+  // is scrolled to and marked with a fading band. The store remembers the
+  // answer, so a remount restores the reader's place instead.
   useEffect(() => {
     const body = scrollportRef.current
     if (current === undefined || body === null || current.revision === navigation.revision) return
@@ -191,8 +148,9 @@ export function TextPreview({
       }
       return
     }
-    const landed = scrollToLine(body, line)
-    if (!landed && line <= loadedThrough) return
+    const row = scrollToLine(body, line)
+    if (row === undefined && line <= loadedThrough) return
+    if (row !== undefined) markLine(body, row, line)
     actions.navigated(tab.id, navigation.revision)
     // Recorded here as well as by the scroll event, so the store holds the
     // landing before any later navigation reads it.
@@ -215,6 +173,7 @@ export function TextPreview({
     else if (mode === 'bytes-complete') reloadAll(tab.id, file, signal, observedVersion)
     else rendererReload()
   }, [canRead, mode, reloadPages, reloadAll, rendererReload, tab.id, file, signal, observedVersion])
+  useEffect(() => tab.actions.bindCommands({ refresh: reload }), [tab.actions, reload])
   useEffect(() => {
     if (state?.autoRefresh && changed && current !== undefined && !current.loading && meta.status === 'live') reload()
   }, [state?.autoRefresh, changed, current?.loading, meta.status, reload])
@@ -243,7 +202,7 @@ export function TextPreview({
     return (
       <div className={css.preview} data-textpreview-state="unsupported" data-textpreview-url={tab.contentId}>
         <div className={css.header}>
-          <HeaderPath pathRef={pathRef} pathTextRef={pathTextRef} path={displayPath} />
+          <PathLabel path={displayPath} className={css.path} data-textpreview-path />
           {fileOwner !== undefined && renderSlot('sidebar.right.tab.document.actions', fileOwner)}
         </div>
         <div className={css.body} data-textpreview-body>
@@ -261,7 +220,7 @@ export function TextPreview({
       <div className={css.status} data-textpreview-state="loading">
         {meta.status === 'none'
           ? <p className={css.statusLine}>{t('resourceUnavailable')}</p>
-          : <LoadingIndicator className={css.statusLine} label={t('loading')} />}
+          : <LoadingIndicator label={t('loading')} />}
       </div>
     )
   }
@@ -305,7 +264,7 @@ export function TextPreview({
           </p>
         )}
       <div className={css.header}>
-        <HeaderPath pathRef={pathRef} pathTextRef={pathTextRef} path={displayPath} />
+        <PathLabel path={displayPath} className={css.path} data-textpreview-path />
         {candidates.length > 1
           && (
             <Menu
@@ -334,7 +293,13 @@ export function TextPreview({
               aria-pressed={state.wrap}
               aria-label={t('wrap.aria')}
               data-textpreview-tool="wrap"
-              onClick={() => { actions.toggledWrap(tab.id) }}
+              onClick={() => {
+                actions.toggledWrap(tab.id)
+                // Wrapping reflows the lines under a line mark without resizing its scrollport.
+                const body = scrollportRef.current
+                /* v8 ignore next -- callback refs bind the scrollport during commit, before user input. */
+                if (body !== null) clearLineMark(body)
+              }}
             >
               {state.wrap ? <IconNowrapFillRegular /> : <IconWrapFillRegular />}
             </button>
@@ -350,17 +315,21 @@ export function TextPreview({
             </button>
           </Tooltip>
         </span>
-        <Tooltip label={t('reload')} side="bottom" delayMs={500}>
+        {/* Preview and file-tree refresh controls own different reload lifecycles and locale namespaces. */}
+        {/* jscpd:ignore-start */}
+        <Tooltip label={t('reload')} shortcutKeys={tab.refreshShortcut?.keys} side="bottom" delayMs={500}>
           <button
             type="button"
             className={css.tool}
             aria-label={t('reload')}
             data-textpreview-tool="reload"
+            aria-keyshortcuts={tab.refreshShortcut?.aria}
             onClick={reload}
           >
             <IconRefreshOutlineRegular />
           </button>
         </Tooltip>
+        {/* jscpd:ignore-end */}
         {fileOwner !== undefined && renderSlot('sidebar.right.tab.document.actions', fileOwner)}
       </div>
       <div
@@ -379,7 +348,7 @@ export function TextPreview({
         }}
       >
         {mode !== 'renderer' && !hasContent && current?.failure === undefined && (
-          <LoadingIndicator className={clsx(css.statusLine, css.bodyLoading)} label={t('loading')} />
+          <LoadingIndicator label={t('loading')} />
         )}
         {content !== undefined && renderSlot('sidebar.right.tab.document', {
           resourceAddress: tab.contentId, content, wrap: state.wrap, scrollportRef: bindScrollport,
@@ -434,7 +403,7 @@ export function TextPreview({
             data-textpreview-more
             onClick={loadNext}
           >
-            {current.loading ? <LoadingIndicator label={t('loading')} /> : t('loadMore')}
+            {current.loading ? <LoadingIndicator inline label={t('loading')} /> : t('loadMore')}
           </button>
         )}
       </div>

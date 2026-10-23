@@ -3,7 +3,7 @@ import type { ChatNode } from '../contract/chat-nodes.ts'
 import type {
   ChatLocationNodeIndex, ChatNodeStore, ChatTurnProcessPresentation,
 } from '../contract/snapshot.ts'
-import { TURN_PROCESS_INDEPENDENT_KINDS } from '../contract/turn-process.ts'
+import { isAtOrOutside } from '../contract/group-tree.ts'
 
 function nodeTurn(node: ChatNode | undefined): number | undefined {
   const location = node?.location
@@ -20,7 +20,8 @@ function samePresentation(
     && left.turnStarted === right.turnStarted
     && left.turnClosed === right.turnClosed
     && left.hasExternalProcess === right.hasExternalProcess
-    && left.compactAnswer === right.compactAnswer)
+    && left.hasNonReplyProcess === right.hasNonReplyProcess
+    && left.hasInterleavedInput === right.hasInterleavedInput)
 }
 
 function derivePresentation(
@@ -40,27 +41,32 @@ function derivePresentation(
   let openingHumanAnchor: number | undefined
   for (const key of keys) {
     const node = nodes.get(key) as ChatNode | undefined
-    if ((node?.kind === 'user' || node?.kind === 'steering')
-      && node.anchorSeq < spec.controlAnchorSeq) {
-      openingHumanAnchor = Math.min(openingHumanAnchor ?? node.anchorSeq, node.anchorSeq)
+    if (node !== undefined && isAtOrOutside(node, 'input')
+      && (spec.controlAnchorSeq === location.turn.start?.seq || node.anchorSeq < spec.controlAnchorSeq)) {
+      openingHumanAnchor = Math.max(openingHumanAnchor ?? node.anchorSeq, node.anchorSeq)
     }
   }
 
   let hasExternalProcess = false
-  let compactAnswer = true
+  let hasNonReplyProcess = false
+  let hasInterleavedInput = false
   for (const key of keys) {
     const node = nodes.get(key) as ChatNode | undefined
     if (node === undefined || !isVisibleChatNode(node) || node.kind === 'turn-process') continue
-    if ((node.kind === 'user' || node.kind === 'steering')
-      && (openingHumanAnchor === undefined || node.anchorSeq > openingHumanAnchor)
-      && (spec.answerAnchorSeq === null || node.anchorSeq < spec.answerAnchorSeq)) {
-      compactAnswer = false
+    if (isAtOrOutside(node, 'input')
+      && (openingHumanAnchor === undefined || node.anchorSeq > openingHumanAnchor)) {
+      hasInterleavedInput = true
     }
-    if (TURN_PROCESS_INDEPENDENT_KINDS.has(node.kind)
+    if (isAtOrOutside(node, 'turn')
       || node.anchorSeq < spec.processStartSeq
       || (spec.answerAnchorSeq !== null && node.anchorSeq >= spec.answerAnchorSeq)) continue
     if (node.kind !== 'assistant-step' || spec.answerStep === null || node.data.step !== spec.answerStep) {
       hasExternalProcess = true
+      // When every reply stays visible, another Step's reply folds only its reasoning.
+      if (node.kind !== 'assistant-step'
+        || node.data.blocks.some(block => block.kind === 'reasoning' && block.text.trim() !== '')) {
+        hasNonReplyProcess = true
+      }
     }
   }
   return {
@@ -69,7 +75,8 @@ function derivePresentation(
     turnStarted: location.turn.start !== undefined,
     turnClosed: location.turn.status === 'closed',
     hasExternalProcess,
-    compactAnswer,
+    hasNonReplyProcess,
+    hasInterleavedInput,
   }
 }
 

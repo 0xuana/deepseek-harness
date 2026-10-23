@@ -6,13 +6,15 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - text: "Use the bash tool to run exactly: echo WEB_E2E_OK. Then reply with the single word DONE and stop. {{clock}}"
 - button "Copy"
-- button "1 tool call" [expanded]
-- button "Context injection runtime-context"
-- button "Think"
+- status: Completed
+- button "Completed in {{duration}}" [expanded]
+- button "Ran commands" [expanded]
+- button "Think The user wants me to run a simple bash command and reply with \"DONE\"."
 - button "Bash Echo the test string"
-- button "Think"
+- button "Think The command executed successfully and output \"WEB_E2E_OK\". I just need to reply with \"DONE\"."
 - paragraph: DONE
 - button "Copy"
 - button "Good response"

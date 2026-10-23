@@ -27,7 +27,7 @@ kind: "package-library"
 
 ### 何时使用
 
-当持久化与测试支持读取方需要在任何功能插件挂载前取得完整第一方已发布格式清单时，导入本库。功能组合不会注册或重排其条目。它不发布运行时不变式伴生入口，因为构造过程会拒绝无效静态清单，每次完成的还原也会校验结果；可变行 decoder 状态只属于一次由调用方持有的流式还原。
+当持久化与测试支持读取方需要在任何功能插件挂载前取得完整第一方已发布格式清单时，导入本库。功能组合不会注册或重排其条目。
 
 ### 入口
 
@@ -70,7 +70,7 @@ Production 历史读取使用 `{ recovery: 'recoverable', validation: 'transform
 - [已发布 v0 到 v1 迁移边](../session-format-v0-to-v1/README.zh.md)——编解码器与校验器所有权。
 - [已发布 v1 到 v2 迁移边](../session-format-v1-to-v2/README.zh.md)——Assistant 流嵌入与基数变化引用重映射。
 - [已发布 V2 到 V3 规范](../session-format-v2-to-v3/README.zh.md#v2-to-v3-specification)——转换、保留与拒绝。
-- [V3 到 V4 规范](../session-format-v3-to-v4/README.zh.md#v3-to-v4-specification)——恒等转换与 delivery generation 校验。
+- [V3 到 V4 规范](../session-format-v3-to-v4/README.zh.md#v3-to-v4-specification)——转换、引用重映射与 delivery generation 校验。
 - [JSONL 持久化](../session-persistence-jsonl/README.zh.md)——不可变 generation 命名与排他发布。
 
 -----

@@ -6,9 +6,11 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - text: Reply with a one-sentence description of event sourcing, then stop. {{clock}}
 - button "Copy"
-- button "Context injection runtime-context"
+- status: Failed
+- button "Failed" [disabled] [expanded]
 - group:
   - status: Retried model request (2/2) · {{duration}}
 - status:

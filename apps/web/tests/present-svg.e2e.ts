@@ -36,7 +36,7 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
       replayOverride = join(replayRoot, 'replay.override.json')
       const script = deriveReplayScript(parseSessionLog(await readFile(FIXTURE, 'utf8')))
       // Recorded absolute paths must follow each isolated Session's working directory.
-      const cwdToken = '{{fromRequest:Your working directory is ([^\\n]+)\\.}}'
+      const cwdToken = '{{fromRequest:Current working directory: "([^"]+)"}}'
       await writeFile(replayOverride, JSON.stringify(script).replaceAll('{{cwd}}', JSON.stringify(cwdToken).slice(1, -1)))
     }
     scaffold = await launchWebScaffold({
@@ -92,7 +92,7 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
     if (MODE === 'record') await recordFixture(scaffold, sessionId, FIXTURE)
 
     const svg = await readFile(join(cwd, FILE), 'utf8')
-    const document = await page.evaluate((source) => {
+    const parsedSvg = await page.evaluate((source) => {
       const parsed = new DOMParser().parseFromString(source, 'image/svg+xml')
       return {
         root: parsed.documentElement.localName,
@@ -100,7 +100,7 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
         errors: parsed.querySelectorAll('parsererror').length,
       }
     }, svg)
-    expect(document).toEqual({ root: 'svg', namespace: 'http://www.w3.org/2000/svg', errors: 0 })
+    expect(parsedSvg).toEqual({ root: 'svg', namespace: 'http://www.w3.org/2000/svg', errors: 0 })
 
     const events = session.snapshotEvents()
     const declarations = events.filter(event => event.type === 'deliverables/presented')
@@ -120,8 +120,43 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
     await card.waitFor({ state: 'visible' })
     expect(await card.count()).toBe(1)
     expect(await page.getByText('产物', { exact: true }).count()).toBe(0)
-    // The scaffold workspace is not a git repository, so the changed-files card lists the written SVG from the write call alone.
-    expect(await page.locator('[data-changed-files]').count()).toBe(1)
+    // The scaffold workspace is not a git repository; the write call supplies its single changed file.
+    const changes = page.locator('[data-changed-files]')
+    // Changed-file cards wait for a separate summary request after the presentation events arrive.
+    await changes.waitFor({ state: 'visible' })
+    expect(await changes.count()).toBe(1)
+    expect(await changes.getByText(`已编辑 ${FILE}`, { exact: true }).count()).toBe(1)
+    expect(await changes.getByRole('list').count()).toBe(0)
+    expect(await changes.locator('svg').evaluate(icon => icon.innerHTML))
+      .toBe(await card.locator('svg').evaluate(icon => icon.innerHTML))
+    await expect.poll(() => changes.evaluate(element => element.isConnected
+      ? element.getBoundingClientRect().height : undefined), { timeout: 10_000 }).toBe(62)
+    // Earlier locator reads do not guarantee both cards remain mounted when the
+    // turn tail updates. Observe their presence and styles in one browser task.
+    await expect.poll(() => page.evaluate(() => {
+      const presentedCard = document.querySelector('[data-presented-file]')
+      const changedCard = document.querySelector('[data-changed-files]')
+      if (presentedCard === null || changedCard === null) return null
+      const previous = document.body.getAttribute('data-ds-dark-theme')
+      try {
+        return [false, true].map((dark) => {
+          document.body.toggleAttribute('data-ds-dark-theme', dark)
+          const appearance = [presentedCard, changedCard].map((card) => {
+            const tile = card.querySelector('svg')!.parentElement!
+            return { fill: getComputedStyle(tile).backgroundColor, tileBorder: getComputedStyle(tile).border,
+              cardBorder: getComputedStyle(card).border }
+          })
+          return { fills: appearance.map(card => card.fill), matchingTiles: appearance[0]!.tileBorder === appearance[1]!.tileBorder,
+            matchingCards: appearance[0]!.cardBorder === appearance[1]!.cardBorder }
+        })
+      } finally {
+        if (previous === null) document.body.removeAttribute('data-ds-dark-theme')
+        else document.body.setAttribute('data-ds-dark-theme', previous)
+      }
+    }), { timeout: 10_000 }).toEqual([
+      { fills: ['color(srgb 1 1 1 / 0.5)', 'color(srgb 1 1 1 / 0.5)'], matchingTiles: true, matchingCards: true },
+      { fills: ['color(srgb 1 1 1 / 0.05)', 'color(srgb 1 1 1 / 0.05)'], matchingTiles: true, matchingCards: true },
+    ])
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings, connectionDiagnostics.join('\n')).toEqual([])
   })
@@ -132,5 +167,13 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
     // Delivery owns the transcript; navigation and composer chrome have separate scenarios.
     const aria = await captureExpandedTurnProcessAria(page, '[data-chat-flow]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(join(DIR, 'ui.expected.md'), aria, MODE)
+  })
+
+  it('opens the single edited file from its compact card', async () => {
+    await page.locator('[data-changed-files]').getByRole('button', { name: `查看 ${FILE} 的改动` }).click()
+    const review = page.locator('[data-changes-review]')
+    await review.waitFor({ state: 'visible' })
+    expect(await review.getByRole('button', { name: '选择要查看的文件' }).innerText()).toContain(FILE)
+    expect(tripwire.pageErrors).toEqual([])
   })
 })

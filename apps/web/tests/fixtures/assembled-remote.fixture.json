@@ -181,9 +181,7 @@
           "trust": "user",
           "isDefault": false
         }
-      ],
-      "authorable": true,
-      "modeSelectionEnabled": true
+      ]
     }
   },
   "commands": {

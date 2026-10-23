@@ -6,16 +6,16 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - text: Reply with a one-sentence description of event sourcing, then stop. {{clock}}
 - button "Copy"
-- button "Context injection runtime-context"
 - paragraph: partial
-- status: Deep diving...
+- status: Deep diving
+- text: Deep diving for {{duration}} ···
 - list:
   - listitem:
     - text: Edited queue item
     - button "Edit queued message"
-    - tooltip "Edit queued message"
     - button "Remove queued message"
     - button "Steer queued message"
 - textbox "Cmd/Ctrl+Enter steers all queued messages"

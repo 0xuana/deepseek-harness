@@ -7,7 +7,7 @@ import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import { DocumentPreviewRegistry } from '../src/client/document/registry.ts'
 import { apply, HTML_BODY_ID, htmlBodyDefinition } from '../src/client/html/index.ts'
 import { HtmlBody } from '../src/client/html/HtmlBody.tsx'
-import { en, zh } from '../src/client/html/locales.ts'
+import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/html/locales.ts'
 import type { HtmlBodyProps } from '../src/client/html/HtmlBody.tsx'
 
 type Registration = {
@@ -32,7 +32,7 @@ describe('HTML registration', () => {
 
   it('registers its dictionary and matching keyed body, and removes all contributions on disposal', async () => {
     const ctx = new Context()
-    ctx.provide('settingsScope', { developerTools: { enabled: createSnapshotStore(true) } } as never)
+    ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) } } as never)
     // No Session or Tab services are mounted; the global callback must use its file address.
     const registry = new DocumentPreviewRegistry()
     const dictionaries = new Map<string, unknown>()
@@ -49,12 +49,12 @@ describe('HTML registration', () => {
       bind: () => (key: keyof typeof en) => en[key],
       register: (name: string, value: unknown) => { dictionaries.set(name, value); return () => { dictionaries.delete(name) } },
     } as never)
-    const fiber = ctx.plugin({ inject: ['settingsScope'], apply })
+    const fiber = ctx.plugin({ inject: ['configForms'], apply })
     dispose = async () => { await fiber.dispose() }
     await fiber.await()
     expect(registry.candidates('INDEX.HTM').map(entry => entry.id)).toEqual([HTML_BODY_ID])
     expect(registry.getSnapshot()[0]?.title()).toBe(en.title)
-    expect(dictionaries.get('documentHtml')).toEqual({ zh, en })
+    expect(dictionaries.get('documentHtml')).toEqual({ zh, en, ja, es, fr, de, ru, pt })
     expect(register).toHaveBeenCalledOnce()
     const registration = register.mock.calls[0]?.[0]
     expect(registration).toMatchObject({ name: 'sidebar.right.tab.document', key: HTML_BODY_ID, locale: 'documentHtml' })

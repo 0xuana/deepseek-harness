@@ -24,13 +24,16 @@
       "path": "../../host/open-in-app"
     },
     {
-      "path": "../locale"
+      "path": "../locale/tsconfig.client.json"
     },
     {
       "path": "../store"
     },
     {
-      "path": "../ui-conversation"
+      "path": "../ui-conversation/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-layout"
     },
     {
       "path": "../ui-primitives"
@@ -45,6 +48,9 @@
       "path": "../ui-sidebar-documentpreview/tsconfig.client.json"
     },
     {
+      "path": "../ui-sidebar-files"
+    },
+    {
       "path": "../ui-slots"
     },
     {
@@ -52,6 +58,9 @@
     },
     {
       "path": "../../util/native-command"
+    },
+    {
+      "path": "../shortcuts/tsconfig.client.json"
     }
   ]
 }
