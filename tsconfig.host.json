@@ -10,6 +10,7 @@
   "include": [
     "apps/web/tests/creation-recommendations.e2e.ts",
     "apps/web/tests/japanese-plugin-metadata.e2e.ts",
+    "apps/web/tests/additional-locales.e2e.ts",
     "apps/web/tests/rich-text-quotes.e2e.ts",
     "apps/web/tests/hover-input.e2e.ts",
     "apps/web/tests/collapse-timing.e2e.ts",
