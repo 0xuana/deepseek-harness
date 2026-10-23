@@ -44,7 +44,7 @@ interface StorageBackend {
 }
 ```
 
-一个后端拥有一个介质（一棵文件树的根目录、一个数据库文件），并提供可选的操作组；`kv` 是唯一已交付的操作组。`KvFacet.open(descriptor)` 打开一个具名 unit——`KvUnitDescriptor` 携带名称、当前格式版本、可选的兼容版本、表名清单，以及是否存在全局单例 slot——并返回提供 `loadAll`、`putRecord`、`deleteRecord`、`setGlobal` 和 `close` 的 `KvUnit`。unit 名与表名必须匹配 `UNIT_NAME_RE`（既可安全用作文件名，也可安全用作 SQL 标识符片段）。整单元布局的键保持不透明；JSON 逐记录布局的键会成为路径安全的文件路径片段。unit 不对并发写入做串行化——顺序由调用方负责——但每次单独调用在介质上都是原子的，且 resolve 后即已持久。不支持的单元版本戳以 `version-mismatch` 拒绝；不支持的 JSON 逐记录文档读作不存在。无法按该 unit 解析的介质拒绝 `malformed-medium`。[`backend.ts`](../../packages/storage/storage/src/backend.ts) 是规范性约定；[`tests/contract.ts`](../../packages/storage/storage/tests/contract.ts) 中的共享一致性套件检查两个后端的整单元行为。[JSON 后端](../../packages/storage/storage-json/README.zh.md)按照布局以原子方式为每个单元或每条记录重新发布一份文件；[SQLite 后端](../../packages/storage/storage-sqlite/README.zh.md)在单个数据库中每行存储一份文档，用于频繁更新的数据。
+一个后端拥有一个介质（一棵文件树的根目录、一个数据库文件），并提供可选的操作组；`kv` 是唯一已交付的操作组。`KvFacet.open(descriptor)` 打开一个具名 unit——`KvUnitDescriptor` 携带名称、当前格式版本、可选的兼容版本、表名清单，以及是否存在全局单例 slot——并返回提供 `loadAll`、`putRecord`、`deleteRecord`、`deleteRecords`、`setGlobal` 和 `close` 的 `KvUnit`。unit 名与表名必须匹配 `UNIT_NAME_RE`（既可安全用作文件名，也可安全用作 SQL 标识符片段）；记录键在 `single` 布局中是不透明字符串，在 `per-record` 布局中则是匹配 `[a-zA-Z0-9_-]+` 的路径片段。unit 不对并发写入做串行化——顺序由调用方负责——整文档与行存储调用在介质上是原子的，而逐记录批次在完成前中断时可能只应用一部分。写入完成后即已持久化；逐记录删除会在 POSIX 上同步目录变更。`deleteRecords` 以一次调用应用整批删除：所有列出的记录都从可读状态消失且后端接受该批后才 resolve，拒绝时通常整批未应用；无法建立或恢复批次状态的批量删除会以 `unknown-state` 拒绝，之后该 unit 的所有操作都以同一错误拒绝，直到 `close()` 释放它（关闭后的调用以 `closed` 拒绝）。`single` 布局在原子替换之后失败（目录 fsync 错误）时，新文件可能已落在介质上而调用方看到拒绝；必须关闭后端及其领域，再重新打开以检查已存状态，然后决定是否重试。`single` 介质上的版本不在当前版本和已声明兼容版本内时拒绝 `version-mismatch`；`per-record` 文档的版本在接受集合之外时读作不存在。无法按该 unit 解析的介质拒绝 `malformed-medium`。[`backend.ts`](../../packages/storage/storage/src/backend.ts) 是逐条款的规范性约定，[`tests/contract.ts`](../../packages/storage/storage/tests/contract.ts) 中的共享一致性套件会针对每个后端检查共享条款。[json 后端](../../packages/storage/storage-json/README.zh.md)以原子方式为每个 unit 整文件重新发布一份人类可读文件；[sqlite 后端](../../packages/storage/storage-sqlite/README.zh.md)在单个数据库中每行存储一份文档，用于频繁更新的数据。
 
 ## 声明领域
 
@@ -99,11 +99,11 @@ interface DomainSpec {
 
 `version` 表示当前读写格式。`compatibleVersions` 列出拥有方可用当前 schema 解码其记录和全局值的旧版本；只允许小于 `version` 的非负整数。不声明兼容版本时，读取仍要求精确版本。接受旧版本不放宽记录校验，也不允许更新的未知版本。每行已存字段必须能无歧义地确定其含义；单元版本戳无法在混合行中区分相同字段的不同含义。
 
-普通兼容打开和读取不会重新盖戳或规范化已存值。整单元 JSON 用一次原子文件替换发布当前版本戳和修改后的数据；SQLite 将首次单元版本更新与修改放在同一事务中提交，此后使用普通语句。删除不存在的记录不会推进版本戳。版本戳标识可接受格式，不代表值规范化已经完成；读取器必须接受混合代际。采用单元级版本戳的后端会拒绝不支持的单元版本。
+普通兼容打开和读取不会重新盖戳或规范化已存值。整单元 JSON 用一次原子文件替换发布当前版本戳和修改后的数据；SQLite 将首次单元版本更新与修改放在同一事务中提交；批量删除始终使用一个事务。删除不存在的记录或空批次不会推进版本戳。版本戳标识可接受格式，不代表值规范化已经完成；读取器必须接受混合代际。采用单元级版本戳的后端会拒绝不支持的单元版本。
 
 发布前的序列化失败或成功的 SQLite 回滚会保留原有数据与版本戳。JSON 替换后的 I/O 失败或 SQLite 回滚本身失败时，即使操作被拒绝，已存结果也可能未知。必须停止使用并关闭后端及其领域，然后重新打开检查已存状态，再决定是否重试。各后端 README 定义了这些失败情况。
 
-JSON 的 `per-record` 布局独立检查和标记每份文档；不支持的文档读取为缺失。其已有整单元引导是只读加载的例外：它将接受的历史值复制到当前版本文档中，不转换其中的值。SQLite 无论布局请求为何都保持单元级版本检查。布局与恢复行为见 [JSON 后端](../../packages/storage/storage-json/README.zh.md)和 [SQLite 后端](../../packages/storage/storage-sqlite/README.zh.md)。
+JSON 的 `per-record` 布局独立检查和标记每份文档；不支持的文档读取为缺失。其已有整单元引导是只读加载的例外：它将接受的历史值复制到当前版本文档中，不转换其中的值。已有的已声明表目录（即使为空）或已声明全局文档会禁止引导。SQLite 无论布局请求为何都保持单元级版本检查。布局与恢复行为见 [JSON 后端](../../packages/storage/storage-json/README.zh.md)和 [SQLite 后端](../../packages/storage/storage-sqlite/README.zh.md)。
 
 兼容后继版本需提升 `version`、在 `compatibleVersions` 中保留仍可读的版本戳，并扩展同一 schema 的解码和默认规则。消费者在重写选定记录时规范化值；Storage 不分配应用记录版本。验证历史版本与跨版本升级、混合值、不写入的读取、失败回滚、重启、其他单元隔离和未知版本拒绝。删表与布局变更各自需要保留及升级策略；兼容版本戳本身不定义这些策略。
 
@@ -140,7 +140,7 @@ interface Domain<S extends DomainSpec> {
 }
 ```
 
-读取是同步的，来自权威的内存态：`KvTable` 暴露 `get`/`entries`/`keys`/`size`（快照迭代器，在排队写入落地期间保持稳定），global 句柄的 `get()` 在第一次 `set` 将 slot 物化到介质之前一直返回 spec 的 `initial`。每次写入——`put`、`delete`、`update`、`global.set`——都在同一条逐领域写链上排队，先在后端完成持久化，再更新内存，最后发出 `domain/changed`。后端写入被拒时不发布领域变更；持久化结果未知时，必须先重新打开，才能继续使用该快照。`update(key, fn)` 在其写链 slot 上是一次原子的读-改-写（键缺失时拒绝 `missing-key`）；`delete` 一个不存在的键 resolve 为 `false`，不产生写入也不产生事件。返回的记录就是存储的对象本身，不是副本——请经 `put`/`update` 整体替换，绝不要就地修改。
+读取是同步的，来自权威的内存态：`KvTable` 暴露 `get`/`entries`/`keys`/`size`（快照迭代器，在排队写入落地期间保持稳定），global 句柄的 `get()` 在第一次 `set` 将 slot 物化到介质之前一直返回 spec 的 `initial`。每次写入——`put`、`delete`、`deleteMany`、`update`、`global.set`——都在同一条逐领域写链上排队，先在后端完成持久化，再更新内存，最后发出 `domain/changed`；后端写入被拒时不会发布领域变更；持久化结果未知时必须重新打开后才能继续使用该快照；若后端报告 `unknown-state`，领域会被隔离，读取与后续写入都会拒绝，直到 `close()` 释放它。`update(key, fn)` 在其写链 slot 上是一次原子的读-改-写（键缺失时拒绝 `missing-key`）；`delete` 一个不存在的键 resolve 为 `false`，不产生写入也不产生事件。`deleteMany(keys)` 在一个写链 slot 内把存在的键作为一次后端批量删除移除，resolve 为移除数量，并为每个被移除的键发一次 `domain/changed`；后端写入被拒时所有记录保持原样，也不发事件；`unknown-state` 拒绝会隔离整个领域。返回的记录就是存储的对象本身，不是副本——请经 `put`/`update` 整体替换，绝不要就地修改。
 
 ## 领域 facility：`ctx.storageDomain`
 

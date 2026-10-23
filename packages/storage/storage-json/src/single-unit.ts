@@ -89,16 +89,8 @@ class SingleJsonUnit implements KvUnit {
     })
   }
 
-  async deleteRecord(table: string, key: string): Promise<void> {
-    this.assertOpen()
-    const records = this.records(table)
-    if (!records.has(key)) return
-    const previous = records.get(key)
-    records.delete(key)
-    await this.publish().catch((error: unknown) => {
-      records.set(key, previous)
-      throw error
-    })
+  deleteRecord(table: string, key: string): Promise<void> {
+    return this.deleteRecords(table, [key])
   }
 
   async deleteRecords(table: string, keys: readonly string[]): Promise<void> {

@@ -46,7 +46,7 @@ host 侧唯一的持久化面是 session 事件日志（`packages/session/sessio
 1. `open` 对不存在的介质创建（懒物化允许：可延迟到首写，但 `loadAll` 立即可用返回空表）；对已存在介质载入。
 2. 单元级检查接受 `descriptor.version` 和拥有方声明的 `compatibleVersions`；其他版本戳以 `StorageError('version-mismatch')` 拒绝。普通兼容读取保留已存版本戳和值。[领域版本](../../../../docs/subsystems/storage.zh.md#domain-versioning)定义写入盖戳和 JSON 逐记录例外。
 3. 持久性：写原语 resolve 后进程崩溃再 open，`loadAll` 必须反映该写入。
-4. 后端不承诺 unit 内写并发序——**调用方负责串行**；每次修改原子发布其数据和当前版本戳（JSON 整文件替换 / SQLite 推进版本戳时使用事务）。
+4. 后端不承诺 unit 内写并发序——**调用方负责串行**；整单元修改原子发布其数据和当前版本戳（JSON 整文件替换 / SQLite 在批量删除或推进版本戳时使用事务）；逐记录批次在完成前中断时可能只应用一部分。
 5. `deleteRecord` 幂等；`putRecord` 覆写。
 6. 任意字符串 key / 任意 JSON 值安全（key 不进文件路径，结构性质）。
 7. `close` 幂等；close 后任何操作 → `StorageError('closed')`。
@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS "u_<unit>_<table>" (
 ```
 
 - unit 版本存 `units` 行，未接受的版本以 `version-mismatch` 拒绝。行粒度 document-per-row，保住按 key 精确落盘更新（为 session sidecar 这类高频点更新大表留路）；查询需求出现时 JSON1 直查 value 列。
-- 当前版本的写原语使用单条语句。对已接受旧单元的首次修改在同一事务中提交其数据和当前版本戳。这不增加跨表领域事务。
+- 当前版本的单记录写入使用单条语句。批量删除和对已接受旧单元的首次修改使用一个事务；首次修改一同提交数据和当前版本戳。这不增加跨表领域事务。
 
 ### `dsh-domain`：领域数据形式
 
@@ -158,7 +158,7 @@ export interface KvTable<K extends string, V> {
 
 - **一级 mapping**：key → 记录，不做嵌套表；层级需求用复合 key 或值内字段。两后端因此同构（JSON object 一层 ↔ SQLite 一行）。
 - **记录是纯数据**：可直接 JSON 序列化的不可变 POJO；`get`/`entries` 返回值不得原地改（TypeScript readonly 投影，不做运行时冻结）。带行为的领域对象属于消费方包。
-- **写串行**：域内一条 promise 链，`put`/`delete`/`update`/`global.set` 全排队；`update` 的 fn 在链上执行，并发不交错。不做 active-record（取出可变对象自动落盘——落盘时机不可控，与整域原子覆写冲突）。
+- **写串行**：域内一条 promise 链，`put`/`delete`/`deleteMany`/`update`/`global.set` 全排队；`update` 的 fn 在链上执行，并发不交错。不做 active-record（取出可变对象自动落盘——落盘时机不可控，与整域原子覆写冲突）。
 - **版本兼容**：领域拥有方通过 `compatibleVersions` 声明可读的旧版本，并用当前 schema 解码历史值。Storage 不转换记录值；[领域版本](../../../../docs/subsystems/storage.zh.md#domain-versioning)定义版本戳发布和混合代际要求。
 - **变更事件**：每次写落盘 resolve 后 emit `domain/changed`（`@mode emit`），逐条发、不带旧值（对齐仓库"新快照 + 操作判别"惯例，范本 `goal/changed`）；payload `DomainChanged` 是 put/deleted 判别联合——域名 + 表名 + key（global 变更两者为 `''`）+ operation，put 支带新快照 value、deleted 支无 value（`packages/storage/storage-domain/src/events.ts`）。此为下期 RPC 推帧的事件源。错误词汇 `DomainError`，码表：`already-open` / `facet-unsupported` / `invalid-record`（带 `{ table, key }`）/ `missing-key` / `closed`。
 

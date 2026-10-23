@@ -54,9 +54,9 @@ Two fields: the database path and the journal mode. `:memory:` opens an in-proce
 
 ### Observable behavior
 
-Missing directories and database files are created owner-only (`0o700`/`0o600`); an existing database keeps its modes. A unit accepts its descriptor's current version or `compatibleVersions`, otherwise rejects `version-mismatch`. Accepted older units retain their stamp on read; the first mutation commits data and the current stamp in one transaction. Deleting a missing key leaves the stamp unchanged. Untouched record values and other units remain unchanged; the backend does not convert application values. A database stamped with a physical layout version other than the current one rejects outright; domain compatibility does not migrate the database layout. Storage checks use `StorageError` codes; underlying SQLite failures propagate, and writes are durable once resolved.
+Missing directories and database files are created owner-only (`0o700`/`0o600`); an existing database keeps its modes. A unit accepts its descriptor's current version or `compatibleVersions`, otherwise rejects `version-mismatch`. Accepted older units retain their stamp on read; the first mutation commits data and the current stamp in one transaction. Deleting missing keys or an empty batch leaves the stamp unchanged. Untouched record values and other units remain unchanged; the backend does not convert application values. A database stamped with a physical layout version other than the current one rejects outright; domain compatibility does not migrate the database layout. Storage checks use `StorageError` codes; underlying SQLite failures propagate, and writes are durable once resolved.
 
-A failed first mutation preserves data and stamp when SQLite rolls back successfully, including an automatic rollback. If explicit rollback also fails, the backend retains an `AggregateError` containing both failures and rejects further unit reads, writes, and pending or new opens. The transaction outcome is unknown. Close the backend and its domains, then create a new backend to inspect saved state before deciding whether to retry. See [domain versioning](../../../docs/subsystems/storage.md#domain-versioning) for mixed records and downgrade behavior.
+Every nonempty batch delete uses one transaction, including its version update when needed. A failed transaction preserves data and stamp when SQLite rolls back successfully, including an automatic rollback. A failed `BEGIN` leaves the batch unapplied and permits retry on the same handle. If rollback itself fails, the backend retains a `StorageError` with code `unknown-state` whose cause is an `AggregateError` containing both failures, and rejects further unit reads, writes, and pending or new opens. The transaction outcome is unknown. Close the backend and its domains, then create a new backend to inspect saved state before deciding whether to retry. See [domain versioning](../../../docs/subsystems/storage.md#domain-versioning) for mixed records and downgrade behavior.
 
 -----
 
@@ -71,7 +71,7 @@ The backend is a document-per-row layout over one `node:sqlite` connection. Per-
 ### Design concept
 
 - **Document per row.** Each unit table becomes a physical STRICT table `u_<unit>_<table> (key TEXT PRIMARY KEY, value TEXT)` whose `value` column holds the record's JSON text; the global singleton lives in a shared `unit_globals` table. A key update replaces one data row; advancing the unit stamp also updates its metadata.
-- **Atomic writes.** Current-version writes use one prepared statement. The first mutation of an accepted older unit commits its data and version stamp in one transaction; successful rollback preserves both. Write ordering stays the caller's responsibility (the domain layer's write chain).
+- **Atomic writes.** Current-version single-record writes use one prepared statement. Batch deletes and the first mutation of an accepted older unit share one transaction helper; the first mutation includes its current version stamp. Successful rollback preserves both data and stamp. Write ordering stays the caller's responsibility (the domain layer's write chain).
 - **Names validated before DDL.** Unit and table names must match `UNIT_NAME_RE` before they reach DDL, so no external input is ever interpolated into SQL identifiers.
 - **Separate version checks.** The physical layout version lives in `PRAGMA user_version` (fresh databases stamp it last) and must match exactly. Unit versions live in `units` and also accept the owner's declared `compatibleVersions`; record conversion belongs to the owner.
 
@@ -127,7 +127,7 @@ None — the backend never touches live request prefixes.
 
 These limits define when this backend is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
 
-- **Synchronous driver blocks the event loop** — writes use synchronous `DatabaseSync` calls; an accepted older unit's first mutation also holds its version-stamping transaction on the JavaScript thread.
+- **Synchronous driver blocks the event loop** — writes use synchronous `DatabaseSync` calls; batch deletes and an accepted older unit's first mutation hold their transaction on the JavaScript thread.
 - **No busy-wait or retry policy** — a competing connection holding a write lock rejects the operation immediately instead of waiting; the domain layer's write chain serializes writes within one process, and cross-process coordination is out of scope.
 - **Only the current physical layout version opens** — any other stamped `user_version` is rejected rather than migrated (pre-release stance).
 - **Version checks remain unit-wide** — a `per-record` layout request does not add per-record stamps or JSON's absent-document recovery policy to this backend.

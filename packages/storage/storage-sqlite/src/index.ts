@@ -62,7 +62,7 @@ export class SqliteStorageBackend implements StorageBackend {
   /** Open (or still-opening) units by name; presence is the double-open guard. */
   private readonly units = new Map<string, Promise<SqliteKvUnit>>()
   private closing: Promise<void> | undefined
-  private failure: AggregateError | undefined
+  private failure: StorageError | undefined
 
   /**
    * @param config - Validated plugin configuration.

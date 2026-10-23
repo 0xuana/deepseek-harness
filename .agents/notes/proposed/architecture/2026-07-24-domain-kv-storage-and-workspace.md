@@ -46,7 +46,7 @@ The backend contract (asserted clause by clause by the shared conformance suite,
 1. `open` creates when the medium holds nothing (lazy materialization allowed: may defer to the first write, but `loadAll` must immediately serve empty tables); loads when the medium exists.
 2. Unit-wide checks accept `descriptor.version` and the owner's `compatibleVersions`; other stamps reject with `StorageError('version-mismatch')`. Ordinary compatible reads preserve saved stamps and values. [Domain versioning](../../../../docs/subsystems/storage.md#domain-versioning) defines write stamping and JSON per-record exceptions.
 3. Durability: after a write primitive resolves, a process crash followed by a re-open must observe the write in `loadAll`.
-4. The backend does not promise write ordering within a unit — **the caller serializes**; each mutation atomically publishes its data and current stamp (JSON whole-file replacement / SQLite transaction when advancing the stamp).
+4. The backend does not promise write ordering within a unit — **the caller serializes**; whole-unit mutations atomically publish their data and current stamp (JSON whole-file replacement / SQLite transaction for batch deletion or advancing the stamp); per-record batches can be partially applied if interrupted before resolution.
 5. `deleteRecord` is idempotent; `putRecord` overwrites.
 6. Any string key / any JSON value is safe (keys never reach file paths, a structural property).
 7. `close` is idempotent; any operation after close → `StorageError('closed')`.
@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS "u_<unit>_<table>" (
 ```
 
 - Unit versions live in `units` rows; an unaccepted version rejects with `version-mismatch`. Row granularity is document-per-row, preserving precise per-key durable updates (the path left open for high-frequency point-update tables like the session sidecar); when query needs appear, JSON1 reads the value column directly.
-- Current-version write primitives use single statements. The first mutation of an accepted older unit commits its data and current stamp in one transaction. This does not add cross-table domain transactions.
+- Current-version single-record writes use single statements. Batch deletes and the first mutation of an accepted older unit use one transaction; the first mutation commits its data and current stamp together. This does not add cross-table domain transactions.
 
 ### `dsh-domain`: the domain data form
 
@@ -158,7 +158,7 @@ Rules:
 
 - **Single-level mapping**: key → record, no nested tables; hierarchical needs use composite keys or fields inside the value. The two backends stay isomorphic as a result (one JSON object level ↔ one SQLite row).
 - **Records are plain data**: immutable, directly JSON-serializable POJOs; values returned by `get`/`entries` must not be mutated in place (TypeScript readonly projection, no runtime freezing). Behavior-carrying domain objects belong to consumer packages.
-- **Serialized writes**: one promise chain per domain; `put`/`delete`/`update`/`global.set` all queue on it; `update`'s fn runs on the chain, so concurrency cannot interleave. No active-record (pulling out a mutable object that auto-persists — uncontrollable persist timing, in conflict with the whole-unit atomic-rewrite model).
+- **Serialized writes**: one promise chain per domain; `put`/`delete`/`deleteMany`/`update`/`global.set` all queue on it; `update`'s fn runs on the chain, so concurrency cannot interleave. No active-record (pulling out a mutable object that auto-persists — uncontrollable persist timing, in conflict with the whole-unit atomic-rewrite model).
 - **Version compatibility**: the domain owner declares readable older versions through `compatibleVersions` and decodes historical values with its current schemas. Storage does not convert record values; [domain versioning](../../../../docs/subsystems/storage.md#domain-versioning) defines stamp publication and mixed-generation requirements.
 - **Change events**: after each write's durability resolves, emit `domain/changed` (`@mode emit`), one per record, no old value (matching the repository's "new snapshot + operation discriminant" convention, template `goal/changed`); the payload `DomainChanged` is a put/deleted discriminated union — domain + table + key (both `''` for global changes) + operation, with the put branch carrying the new snapshot value and the deleted branch carrying none (`packages/storage/storage-domain/src/events.ts`). This is next phase's RPC push-frame event source. The error vocabulary is `DomainError`, codes: `already-open` / `facet-unsupported` / `invalid-record` (with `{ table, key }`) / `missing-key` / `closed`.
 
