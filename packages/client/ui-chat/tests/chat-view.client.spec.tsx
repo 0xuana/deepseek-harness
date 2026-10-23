@@ -29,6 +29,7 @@ import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/c
 import type { KeyedSnapshotSelectorHook, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type { ConnectionState } from '@deepseek-ai/dsh-client-connection/client'
 import { EMPTY_CONVERSATION_SNAPSHOT } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -38,7 +39,7 @@ import { derivePresentationPolicy, type CollapseTiming, type FoldedReplies } fro
 import { CHAT_FLOW_INJECT, CHAT_NODE_INJECT } from '../src/client/apply.ts'
 import { ChatView } from '../src/client/chat/ChatView.tsx'
 import { ChatFlow } from '../src/client/chat/ChatFlow.tsx'
-import { en, zh } from '../src/client/locale.ts'
+import { en, zh, pt } from '../src/client/locale.ts'
 import { AssistantNodeView } from '../src/client/chat/AssistantNodeView.tsx'
 import { CommandNodeView, ManualCompactionNodeView } from '../src/client/chat/CommandNodeView.tsx'
 import {
@@ -259,7 +260,7 @@ function bindKeyedSnapshotSelector<Value>(
 }
 
 declare const nodeDispatch: PropsRenderSlots<'conversation.chat.node'>['renderSlot']
-declare const flowDispatch: ChatViewSlotProps['renderSlot']
+declare const flowDispatch: PropsRenderSlots<'conversation.chat.flow'>['renderSlot']
 type NodeRenderer = typeof nodeDispatch<'conversation.chat.node'>
 type FlowRenderer = typeof flowDispatch<'conversation.chat.flow'>
 type ImageRenderer = (owner: MessageImagesOwnerProps) => React.ReactNode
@@ -280,18 +281,19 @@ const renderCommandSlot: React.ComponentProps<typeof CommandNodeView>['renderSlo
   (_key, _owner, opts) => opts?.fallback ?? null
 const renderTurnTailSlot: React.ComponentProps<typeof TurnTailNodeView>['renderSlot'] = () => null
 
-function HarnessChatFlow({ standard, owner, hookContext, renderSlot }: {
+function HarnessChatFlow({ standard, owner, hookContext, renderSlot, useConnectionState }: {
   readonly standard: HarnessStandardProps
   readonly owner: ChatFlowOwnerProps
   readonly hookContext: ChatFlowHookContext
   readonly renderSlot: ChatFlowSlotProps['renderSlot']
+  readonly useConnectionState: ChatFlowSlotProps['useConnectionState']
 }) {
   const hooks = useMemo(() => ({
     useGroupAction: CHAT_FLOW_INJECT.hooks.groupAction(standard, hookContext),
     useGroupHeaderAction: CHAT_FLOW_INJECT.hooks.groupHeaderAction(standard, hookContext),
   }), [standard, hookContext])
   const { renderSlot: _rootRenderSlot, __renders: _rootRenders, ...shared } = standard
-  return <ChatFlow {...shared} {...owner} {...hooks} renderSlot={renderSlot} />
+  return <ChatFlow {...shared} {...owner} {...hooks} renderSlot={renderSlot} useConnectionState={useConnectionState} />
 }
 
 function HarnessChatNode({ standard, owner, hookContext, usePerformanceUsage, toolOwners, fallback, renderAssistantSlot }: {
@@ -451,17 +453,22 @@ function makeHarness(
     if (name !== 'conversation.chat.user.content') throw new Error(`Unexpected Chat Factory: ${name}`)
     return renderUserContent(owner as UserContentInput, renderImages, props.t)
   }
-  const renderSlot: FlowRenderer = (key, owner, opts) => {
+  const renderSlot = (key: string, owner: ChatFlowOwnerProps, opts: Parameters<FlowRenderer>[2]) => {
+    if (key === 'conversation.chat.text-interaction') return null
     if (key !== 'conversation.chat.flow') throw new Error(`Undeclared ChatView child: ${key}`)
     if ('renderSlot' in owner || 'useStore' in owner || 'actions' in owner) {
       throw new Error('Flow owner data must not replace its rendering or store authority')
     }
-    return <HarnessChatFlow standard={props} owner={owner} hookContext={opts.hookContext} renderSlot={renderFlowSlot} />
+    return <HarnessChatFlow standard={props} owner={owner} hookContext={opts.hookContext} renderSlot={renderFlowSlot}
+      useConnectionState={useConnectionState} />
   }
   // SessionProvider seat arrives with the session-scope child declaration;
   // ChatView never invokes it (pass-through stub).
+  const connection = createSnapshotStore<ConnectionState | undefined>('connected')
+  const useConnectionState = bindSnapshotSelector(connection)
   const SessionProviderStub: ChatViewSlotProps['SessionProvider'] = ({ children }) => <>{children}</>
   const props: HarnessStandardProps = {
+    fileDrag,
     renderFactorySlot,
     usePanelInfo: selector => selector({ activePanelId: null }),
     sessionId: SID,
@@ -487,6 +494,7 @@ function makeHarness(
     },
     useInput: (() => { throw new Error('unused') }),
     inputActions: {
+      insertQuote: () => false,
       captureInsertion: () => ({ start: 0, end: 0, draftRev: 0 }),
       insertText: () => false,
       setDraft: () => {},
@@ -498,6 +506,8 @@ function makeHarness(
     },
     useStore: bindSnapshotSelector(chat),
     actions: chat.actions,
+    useInteractionIds: bindSnapshotSelector(createSnapshotStore<readonly string[]>([])),
+    dispatchInteraction: () => null,
     usePresentation: bindSnapshotSelector(derivePresentationPolicy(transcriptView, collapseTiming, foldedReplies)),
     // The fixture implements the concrete flow dispatch behind the generic slot signature.
     renderSlot: renderSlot as ChatViewSlotProps['renderSlot'],
@@ -537,6 +547,7 @@ function makeHarness(
   }
   return {
     set, setSession: session.set, setChat: chatSource.set, ChatView, props,
+    setConnection: (state: ConnectionState) => { connection.set(state) },
     openFile, openUserFile, loadOlder, loadThrough, openView,
     setOutline: (value: unknown) => { outlineValue = value },
     chatScroll, forkAt, toolOwners,
@@ -3528,8 +3539,13 @@ describe('ChatView', () => {
     expect(chat.locations.getTurn(1)).toContain(later.key)
     const branch = view.getByRole('button', { name: '在新对话中分支' })
     expect(branch.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.pointerDown(branch, { pointerType: 'touch' })
     fireEvent.click(branch)
     expect(h.forkAt).not.toHaveBeenCalled()
+    expect(view.getByRole('tooltip', { hidden: true }).textContent).toBe(h.props.t('message.branchUnavailable'))
+    fireEvent.pointerDown(branch, { pointerType: 'touch' })
+    fireEvent.click(branch)
+    expect(view.queryByRole('tooltip', { hidden: true })).toBeNull()
   })
 
   it('keeps final content actions but disables branch when Tool and interrupted Think follow it', () => {
@@ -3746,6 +3762,24 @@ describe('ChatView', () => {
     expect(status.textContent).toBe('深度求索中')
     view.unmount()
     expect(vi.getTimerCount()).toBe(0)
+  }))
+
+  it('the running clock freezes while the connection is recovering', withClock(10_000, () => {
+    const h = makeHarness(
+      { nodes: [{ ...userInTurn(1, 'go', 1), time: 2_000 }], turnTimings: new Map([[1, { startTime: 1_000 }]]) },
+      { running: true },
+    )
+    const view = render(<h.ChatView {...h.props} />)
+    const content = runningContent(view.container)!
+    expect(content.textContent).toBe('深度求索中，用时 9秒 ···')
+    act(() => { h.setConnection('connecting') })
+    act(() => { vi.advanceTimersByTime(5_000) })
+    expect(content.textContent).toBe('深度求索中，用时 9秒 ···')
+    act(() => { h.setConnection('disconnected') })
+    act(() => { vi.advanceTimersByTime(5_000) })
+    expect(content.textContent).toBe('深度求索中，用时 9秒 ···')
+    act(() => { h.setConnection('connected') })
+    expect(content.textContent).toBe('深度求索中，用时 19秒 ···')
   }))
 
   it('the running clock reads hours once the turn passes an hour', withClock(3_600_000, () => {
@@ -4546,7 +4580,7 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     const column = view.container.querySelector('[data-chat-flow]')!
     const status = column.querySelector('[data-chat-running]')
-    expect(column.lastElementChild).toBe(status)
+    expect([...column.children].filter(child => !child.hasAttribute('data-text-interaction-surface')).at(-1)).toBe(status)
     expect(within(status as HTMLElement).getByRole('status').textContent).toBe('深度求索中')
     expect(status?.lastElementChild?.textContent).toBe('深度求索中')
     const icon = status?.querySelector('svg')?.parentElement
@@ -4575,4 +4609,10 @@ describe('ChatView', () => {
       .map(element => element.closest<HTMLElement>('[data-chat-node-key]')?.dataset.chatNodeKey)
     expect(rows).toEqual(['fixture:steering:3'])
   })
+})
+
+const fileDrag = { prepare: vi.fn(async () => ({ start: () => true, release: () => {} })), reportFailure: vi.fn() }
+
+it('formats Portuguese elapsed minutes with numeric units', () => {
+  expect(formatRunDuration(90_000, key => pt[key])).toBe('1m 30s')
 })
