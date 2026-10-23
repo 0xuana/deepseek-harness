@@ -46,6 +46,16 @@ description: "配置和维护 Windows 打包 runner、签名凭据、EV Token �
 
 操作者可在 Windows 上运行 `pwsh -NoProfile -File apps/desktop/tests/windows-runner-task.ps1`，使用隔离的假 runner 验证安装、无控制台的首次启动与自动恢复、防止重复启动、停止、子进程退出、启动／日志失败时的禁用处理和卸载。此显式运行的测试创建临时任务并保留诊断文件，不连接 GitHub 或访问签名硬件。`pwsh -NoProfile -File apps/desktop/tests/windows-runner-launcher.ps1` 无需计划任务，检查 GUI 可执行文件、子进程无控制台、退出状态、诊断输出以及存在继承管道写端时的有界排空；Windows CI 会执行该测试。真实机器验收还需检查空闲 runner 上线且不出现 Terminal 窗口、Actions job 分配，以及经操作者批准的重启后登录。签名打包和注销／重启验收需要操作者单独验证。
 
+### 可选网络依赖
+
+`ConfigRoot` 中没有 `runner-network.json` 时，启动仍使用清理继承环境后的直连行为。要配置网络依赖，请在 checkout 外创建操作者管理的该 JSON 文件，且只包含 `proxyUrl`、`noProxy`、`serviceName`、`probeUrl`、`attempts`、`timeoutSeconds` 和 `retrySeconds`。前四个字段为字符串，后三个预算为 1 至 60 的整数。直连时将 `proxyUrl` 留空，没有 Windows 服务管理依赖时将 `serviceName` 留空。URL 必须使用 HTTP(S)，不能包含凭据、查询参数或片段；代理 URL 不能包含路径。启动脚本在清理环境后设置 `HTTP_PROXY`、`HTTPS_PROXY`、`NO_PROXY` 和 `NODE_USE_ENV_PROXY`，并要求 Node HEAD 探测成功才允许启动 runner。服务就绪检查不会启动或停止 Windows 服务。
+
+若使用专用子进程，在安装任务时添加 `-NetworkRoot <absolute-private-network-directory>`。该目录必须包含 `launch.json`，且只包含绝对路径的 `executable` 文件名、字符串数组 `arguments`，以及 1 至 3600 的整数 `restartDelaySeconds`。此模式要求存在 `runner-network.json`，其中 `serviceName` 应留空。为子进程分配独立的数据目录、监听绑定和可执行文件标识，与桌面软件管理的应用分离；仅使用不同端口无法防止其他管理器按可执行文件名终止进程。脚本不会修改桌面网络设置。实际服务商名称、路径、地址、端口和参数只保存在机器配置中，不得写入仓库文件或共享日志。将两个配置目录的访问权限限制为 runner 操作者。
+
+安装时会启动依赖进行就绪检查，并在注册任务前停止它。runner 存活期间，守卫仅在自己拥有的网络进程退出后，按配置间隔重新启动它；启动连续失败时仍会重试，但不会重启 runner、重跑任务或重试签名。退出、重启和启动失败消息写入 `run-*.log`，依赖进程的输出会被丢弃。重启消息只表明进程已创建，不代表网络可用；请在 runner 日志中确认重新连接。进程仍存活但无响应时需要操作者排查。守卫独占锁定 `NetworkRoot`，回收残留子进程前核对 PID、启动时间和可执行文件，并在 runner 退出时停止子进程。不可恢复的守卫错误会保留活动 runner 直到其退出，并报告恢复已停止。重新安装时保留 `NetworkRoot`；仅拉取代码不会替换已安装的辅助脚本。
+
+Windows CI 使用隔离的本地 fixture 运行 `pwsh -NoProfile -File apps/desktop/tests/windows-runner-network.ps1` 和 `pwsh -NoProfile -File apps/desktop/tests/windows-runner-network-process.ps1`。在已配置的打包机器上，给第一条命令添加 `-CheckStartup`，可验证实际启动环境清理后的网络配置。这些测试不会使用签名硬件或外部网络端点。
+
 <a id="signing-configuration"></a>
 
 ## 签名配置
