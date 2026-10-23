@@ -1048,7 +1048,7 @@ describe('turn rows', () => {
       step({
         step: 1,
         answer: 'short preview',
-        answerBody: 'short preview\nfull second paragraph',
+        answerBody: '**short preview**\n\nfull `second` paragraph',
         answerTruncated: false,
       }),
       step({ step: 2, calls: [], tools: [], answer: 'capped', answerBody: 'capped'.repeat(50), answerTruncated: true }),
@@ -1057,6 +1057,8 @@ describe('turn rows', () => {
     fireEvent.click(stepRow(1))
     expect(screen.getAllByText(say('detail.answer')).length).toBeGreaterThan(0)
     expect(document.body.textContent).toContain('full second paragraph')
+    expect(document.querySelector('strong')?.textContent).toBe('short preview')
+    expect(document.querySelector('code')?.textContent).toBe('second')
     fireEvent.click(stepRow(2))
     expect(screen.getByText(say('detail.answer.truncated'))).toBeTruthy()
   })

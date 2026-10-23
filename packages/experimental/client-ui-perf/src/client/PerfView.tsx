@@ -4,13 +4,14 @@
  */
 
 import {
-  Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState,
+  Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState,
   type ReactElement, type ReactNode, type UIEvent,
 } from 'react'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
-import { HoverCard, ImageLightbox, SegmentedControl, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
+import { HoverCard, ImageLightbox, MarkdownText, SegmentedControl, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
@@ -1319,6 +1320,23 @@ function turnDidCell(turn: PerfTurnMetrics, t: PerfTranslate): ReactElement {
 }
 
 /** One step's detail row: every listed call as an accordion block. */
+/** Full model answer rendered with the shared Chat Markdown primitive. */
+function AnswerBody({ text, t }: { readonly text: string; readonly t: PerfTranslate }): ReactElement {
+  const labels = useMemo<MarkdownLabels>(() => ({
+    code: {
+      copyLabel: t('detail.copy'),
+      copiedLabel: t('detail.copied'),
+      toolbarLabels: {
+        codeLabel: t('detail.code.title'),
+        wrapLabel: t('detail.code.wrap'),
+        unwrapLabel: t('detail.code.unwrap'),
+      },
+    },
+    footnotes: t('detail.footnotes'),
+  }), [t])
+  return <div className={css.answerBody}><MarkdownText text={text} labels={labels} variant="compact" /></div>
+}
+
 function stepDetailRow(
   step: PerfStepMetrics,
   t: PerfTranslate,
@@ -1348,7 +1366,7 @@ function stepDetailRow(
                   {` · ${t('detail.chars', { chars: formatTokens(answerBody.length) })}`}
                 </span>
               </div>
-              <div className={css.answerBody}>{answerBody}</div>
+              <AnswerBody text={answerBody} t={t} />
               {step.answerTruncated
                 ? <div className={css.blockEmpty}>{t('detail.answer.truncated')}</div>
                 : null}
