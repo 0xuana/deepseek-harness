@@ -560,6 +560,17 @@ describe('web e2e: sidebar search alignment and row action targets', () => {
     }
     for (const dark of [false, true]) {
       await page.evaluate(dark => document.body.toggleAttribute('data-ds-dark-theme', dark), dark)
+      await expect.poll(async () => {
+        const reference = await newSession.boundingBox()
+        if (reference === null) throw new Error('New session has no layout box')
+        const controls = [searchButton, page.getByRole('button', { name: 'View options', exact: true }), page.getByRole('button', { name: 'Add workspace', exact: true })]
+        const boxes = await Promise.all(controls.map(control => control.boundingBox()))
+        return boxes.map(box => box === null ? null : box.x + box.width - reference.x - reference.width)
+      }).toEqual([-61, -29, 3])
+      const labelBox = await page.locator('[class*="sectionHeader"] [class*="sectionLabel"]').boundingBox()
+      const referenceBox = await newSession.boundingBox()
+      if (labelBox === null || referenceBox === null) throw new Error('Sidebar heading has no layout box')
+      expect(labelBox.x - referenceBox.x).toBe(7)
       await searchButton.click()
       await expect.poll(() => searchButton.getAttribute('aria-expanded')).toBe('true')
       await expect.poll(measure, { timeout: 10_000 }).toEqual({ height: 32, leftOffset: 0, rightOffset: 0 })

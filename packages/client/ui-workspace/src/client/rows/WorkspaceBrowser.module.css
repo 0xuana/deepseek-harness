@@ -72,6 +72,10 @@
   margin-right: -4px;
 }
 
+.root:not(.rail) .sectionHeader:not(:has(.searchExpanded)) {
+  padding-right: 1px;
+}
+
 .sectionLabel {
   position: relative;
   left: -1px;
