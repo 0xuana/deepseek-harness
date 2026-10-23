@@ -1,14 +1,14 @@
 {
   "name": "@deepseek-ai/dsh-official-bundles",
-  "description": "Installation-owned lists of official dsh bundles: shipped profile templates, optional, on-demand, and retired bundles",
-  "version": "0.2.1-rc.3",
+  "description": "Installation-owned lists of official dsh packages: shipped profile templates, optional, on-demand, and retired bundles, and the plugin manager's protected and presented packages",
+  "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "public"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
-    "directory": "packages/boot/official-bundles"
+    "directory": "packages/util/official-bundles"
   },
   "type": "module",
   "main": "lib/index.js",
