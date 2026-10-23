@@ -3,7 +3,7 @@ import * as fsPromises from 'node:fs/promises'
 import { realpathSync } from 'node:fs'
 import { once } from 'node:events'
 import { tmpdir } from 'node:os'
-import { basename, delimiter, join, relative, sep } from 'node:path'
+import { basename, delimiter, dirname, join, relative, sep, toNamespacedPath } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterAll, describe, expect, it, vi, type TestContext } from 'vitest'
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk'
@@ -14,7 +14,22 @@ const fsControl = vi.hoisted(() => ({
   cleanupFailure: undefined as Error | undefined,
   spillAllocationFailure: undefined as { error: Error; allocated: string[] } | undefined,
   legacyRealpathParent: undefined as string | undefined,
+  allocationAlias: undefined as { parent: string; alias: string; allocated: string[] } | undefined,
 }))
+
+vi.mock('node:path', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:path')>()
+  return {
+    ...actual,
+    toNamespacedPath(path: string): string {
+      const mapping = fsControl.allocationAlias
+      const native = mapping !== undefined && actual.dirname(path) === mapping.parent
+        ? actual.join(mapping.alias, actual.basename(path))
+        : path
+      return actual.toNamespacedPath(native)
+    },
+  }
+})
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>()
@@ -34,7 +49,12 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     async mkdtemp(prefix: string): Promise<string> {
       const failure = fsControl.spillAllocationFailure
       if (prefix.endsWith('acp-snap-spill-') && failure !== undefined) throw failure.error
+      const mapping = fsControl.allocationAlias
+      if (mapping !== undefined && dirname(prefix) === mapping.parent) {
+        throw Object.assign(new Error('workspace allocation requires its native path'), { code: 'ENOENT' })
+      }
       const path = await actual.mkdtemp(prefix)
+      if (mapping !== undefined && basename(prefix).startsWith('acp-snap-cwd-')) mapping.allocated.push(path)
       failure?.allocated.push(path)
       return path
     },
@@ -783,6 +803,40 @@ describe('runScenario', () => {
       allocate.mockRestore()
     }
     expect(await readdir(parent)).toEqual([])
+  })
+
+  it('allocates through the native path while preserving the priced logical cwd and cleanup', async () => {
+    const { fixtureFile } = await scenario({})
+    const root = await mkdtemp(join(tmpdir(), 'acp-snap-allocation-alias-'))
+    tempDirs.push(root)
+    const parent = join(await realpath(root), 'parent')
+    const alias = join(await realpath(root), 'native-alias')
+    await mkdir(parent)
+    await symlink(parent, alias, 'junction')
+    // A real directory alias models a native allocation spelling without changing the request cwd.
+    const mapping = { parent, alias, allocated: [] as string[] }
+    fsControl.allocationAlias = mapping
+    try {
+      const result = await runScenario(
+        { steps: boot },
+        {
+          agent: AGENT, mode: 'replay', fixtureFile, workspaceParent: parent, workspaceCwdTextLength: 192,
+          prepareWorkspace: async (cwd) => {
+            expect(dirname(cwd)).toBe(parent)
+            expect(cwd).toBe(await realpath(cwd))
+            expect(JSON.stringify(cwd).length).toBe(192)
+          },
+        },
+      )
+      expect(mapping.allocated).toEqual([toNamespacedPath(join(alias, basename(result.cwd)))])
+      expect(dirname(result.cwd)).toBe(parent)
+      expect(JSON.stringify(result.cwd).length).toBe(192)
+      await expect(readdir(result.cwd)).rejects.toMatchObject({ code: 'ENOENT' })
+      expect(await readdir(parent)).toEqual([])
+      expect(await readdir(alias)).toEqual([])
+    } finally {
+      fsControl.allocationAlias = undefined
+    }
   })
 
   it('prices the native long parent path when legacy resolution retains a short alias', async () => {

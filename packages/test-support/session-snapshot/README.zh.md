@@ -90,7 +90,7 @@ Headless/ACP 与 SDK 适配器在规范化之前，将原始目录中的子创�
 
 需要非 Windows 主机的场景声明 `posixOnly`，在 Windows 上跳过运行测试，但 fixture 保护仍在所有平台覆盖其已提交文件；组合需要可用 `pwsh` 的场景声明 `pwshOnly`。当临时目录授权自身待测时，`workspaceParent` 将生成子级 cwd 移出平台临时区域；场景签入的 `workspace/` 会先复制到该子级，随后 `prepareWorkspace` 在 agent 启动前针对生成 cwd 运行。默认生成的 workspace 在会话 fixture 中存储为 `{{cwd}}`，使平台临时根目录与随机 basename 不影响录制。headless manifest 在测试 Session workspace 授权本身时使用 `workspace.parent: outside-temp`。适配器在父目录可写且位于系统临时授权之外时，于平台临时根目录旁分配目录，否则使用 home，并拒绝已被自动临时写授权覆盖的生成 cwd。
 
-持久记录 runtime-context 文本 token 计价的 ACP 场景可将 `workspaceCwdTextLength` 设为 cwd 的精确 JSON 引用字符串长度。harness 先通过原生文件系统 API 解析父目录，再将 cwd 填充至该长度，并保留唯一随机后缀。生成的 ASCII 目录名（含固定前缀和随机后缀）限制为 255 字节。若指定长度不是安全整数、容不下临时根目录和生成的目录名，或会使目录名超过该上限，harness 会在填充字符串或分配目录前拒绝。文件系统对完整路径的限制仍然适用。其他场景保留普通临时路径。
+持久记录 runtime-context 文本 token 计价的 ACP 场景可将 `workspaceCwdTextLength` 设为 cwd 的精确 JSON 引用字符串长度。harness 先通过原生文件系统 API 解析父目录，再将 cwd 填充至该长度，并保留唯一随机后缀。在 Windows 上，目录分配使用带命名空间前缀的路径；返回的 cwd 和模型请求仍使用计价时的逻辑路径，保持其 JSON 长度。生成的 ASCII 目录名（含固定前缀和随机后缀）限制为 255 字节。若指定长度不是安全整数、容不下临时根目录和生成的目录名，或会使目录名超过该上限，harness 会在填充字符串或分配目录前拒绝。文件系统对完整路径的限制仍然适用。其他场景保留普通临时路径。
 
 ### 可能出什么问题
 

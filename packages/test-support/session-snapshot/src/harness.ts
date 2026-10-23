@@ -20,7 +20,7 @@ import { cp, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { existsSync, realpathSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join, delimiter } from 'node:path'
+import { basename, dirname, join, delimiter, toNamespacedPath } from 'node:path'
 import { vi } from 'vitest'
 import {
   PROTOCOL_VERSION,
@@ -270,7 +270,10 @@ function workspaceTemporaryPrefix(options: RunOptions): string {
  * @returns The captured stdout/stderr, session id, generated cwd, and harvested logs.
  */
 export async function runScenario(input: InputScript, opts: RunOptions): Promise<RunResult> {
-  const cwd = await mkdtemp(workspaceTemporaryPrefix(opts))
+  const cwdPrefix = workspaceTemporaryPrefix(opts)
+  // Windows mkdtemp needs an explicit long-path namespace; requests retain the priced logical cwd.
+  const allocatedCwd = await mkdtemp(toNamespacedPath(cwdPrefix))
+  const cwd = join(dirname(cwdPrefix), basename(allocatedCwd))
   const cwdAliases = [...new Set([realpathSync(cwd), realpathSync.native(cwd)])]
   const sessionsRoot = await mkdtemp(join(tmpdir(), 'acp-snap-sessions-'))
   let spillRoot: string | undefined
