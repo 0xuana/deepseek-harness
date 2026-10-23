@@ -85,6 +85,9 @@ jobs:
       - name: Verify windowless Windows runner launcher
         shell: pwsh
         run: ./apps/desktop/tests/windows-runner-launcher.ps1
+      - name: Verify Windows packaging priority inheritance
+        shell: pwsh
+        run: ./apps/desktop/tests/windows-packaging-priority.ps1
       - name: Verify Windows runner network supervision
         shell: pwsh
         run: |

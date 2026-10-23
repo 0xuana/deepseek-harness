@@ -64,7 +64,7 @@ if ($Action -eq 'install') {
         (New-ScheduledTaskTrigger -AtLogOn -User $sid),
         (New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes($RestartMinutes) -RepetitionInterval (New-TimeSpan -Minutes $RestartMinutes))
     )
-    $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+    $settings = New-ScheduledTaskSettingsSet -Priority 4 -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
     $settings.Enabled = $false
     $null = Register-ScheduledTask -TaskName $taskName -TaskPath '\' -Action $execution -Principal $principal -Trigger $trigger -Settings $settings -Description "DSH packaging runner: $RunnerRoot; owner: $sid"
     Write-Output "Installed disabled task $taskName. Run start while logged in; reboot requires desktop login. Logs: $serviceDir"
