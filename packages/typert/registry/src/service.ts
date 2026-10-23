@@ -471,7 +471,7 @@ class ResourceStore {
     if (kind === GLOBAL_RESOURCE_KIND) {
       throw new Error(`typert: resource kind "${GLOBAL_RESOURCE_KIND}" is reserved for the built-in global resource`)
     }
-    if ('field' in declaration) validateWireName('resource field', declaration.field)
+    if (declaration.field !== undefined) validateWireName('resource field', declaration.field)
     if (this.declarations.has(kind)) throw new Error(`typert: resource kind "${kind}" is already registered`)
     const entry: ProviderEntry<TypertResourceDeclaration> = { provider: { ...declaration }, owner: {} }
     const { declarations, changes } = this

@@ -449,6 +449,28 @@ describe('TypertRegistry', () => {
     expect(ctx.typert.resources.get('registryFixture')).toBeUndefined()
   })
 
+  it('preserves a default resolver in get and entries and withdraws it with its fiber', async () => {
+    const ctx = await makeCtx()
+    const resolve = () => 'fixture-id'
+    const changes: TypertRegistryChange[] = []
+    ctx.typert.resources.subscribe(change => { changes.push(change) })
+    const fiber = ctx.plugin({
+      inject: ['typert'],
+      apply: (pluginCtx: Context) => { pluginCtx.typert.resources.register('registryFixture', { resolve }) },
+    })
+    await fiber
+    expect(ctx.typert.resources.get('registryFixture')).toEqual({ resolve })
+    expect(ctx.typert.resources.entries()).toEqual([{ kind: 'registryFixture', resolve }])
+    expect(() => ctx.typert.resources.register('registryFixture', { resolve })).toThrow('already registered')
+    await fiber.dispose()
+    expect(ctx.typert.resources.get('registryFixture')).toBeUndefined()
+    expect(ctx.typert.resources.entries()).toEqual([])
+    expect(changes).toEqual([
+      { kind: 'resource', key: 'registryFixture' },
+      { kind: 'resource', key: 'registryFixture' },
+    ])
+  })
+
   it('reserves the built-in global resource kind', async () => {
     const ctx = await makeCtx()
     const changes: TypertRegistryChange[] = []

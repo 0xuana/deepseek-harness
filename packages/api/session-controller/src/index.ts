@@ -81,6 +81,7 @@ declare module '@deepseek-ai/cordis' {
  * Extract the Session resource from an ID or a history address.
  * @param input - validated wire arguments and their ordered parameter descriptions.
  * @returns the named Session identity, otherwise the first object's Session identity or history address.
+ * @throws Error when the request object supplies both sessionId and address.
  */
 function resolveSessionResource({ args, parameters }: TypertResourceResolveInput): SessionId | undefined {
   const sessionParameter = parameters.find(parameter => parameter.name === 'sessionId' || parameter.wire === 'sessionId')
@@ -90,6 +91,9 @@ function resolveSessionResource({ args, parameters }: TypertResourceResolveInput
     if (typeof value !== 'object' || value === null || Array.isArray(value)) continue
     const request = value as { readonly sessionId?: SessionId; readonly address?: SessionAddress }
     const address = request.address
+    if (request.sessionId !== undefined && address !== undefined) {
+      throw new Error('Session resource request must not contain both sessionId and address')
+    }
     return request.sessionId ?? (address === undefined ? undefined
       : address.kind === 'session' ? address.sessionId : address.childSessionId)
   }

@@ -886,24 +886,26 @@ export interface TypertResourceResolveInput {
 
 /** Default identity extraction for one resource kind. */
 export type TypertResourceDeclaration =
-  | { readonly field: string }
+  | { readonly field: string; readonly resolve?: never }
   | {
-    /** Called once before lookups resolve. Undefined means no matching resource. */
+    readonly field?: never
+    /** Called once before lookups resolve. Returns one identity, or undefined when absent; throws to reject the resource. */
     resolve(input: TypertResourceResolveInput): string | undefined
   }
 
 /** One registered resource kind with its default identity extraction. */
 export type TypertResourceEntry = TypertResourceDeclaration & {
+  /** Resource kind contributed by its owning domain. */
   readonly kind: string
 }
 
-/** Runtime registry of resource kinds' default wire fields. */
+/** Runtime registry of resource kinds' default identity extraction. */
 export interface TypertResourceRegistry {
   /**
-   * Register one kind's default wire field for the calling fiber. Only the
+   * Register one kind's default identity extraction for the calling fiber. Only the
    * domain that owns the kind registers it.
    * @param kind - merge-declared resource kind.
-   * @param declaration - the kind's default wire field.
+   * @param declaration - either a default wire field or a resolver, never both.
    * @returns disposer withdrawing the exact registration.
    * @throws Error when the kind is already registered or is `global`, the built-in resource kind.
    */
@@ -914,7 +916,7 @@ export interface TypertResourceRegistry {
    * @returns the live declaration, or `undefined` when unregistered.
    */
   get(kind: string): TypertResourceDeclaration | undefined
-  /** @returns a registration-order snapshot of registered kinds with their fields. */
+  /** @returns a registration-order snapshot of registered kinds with their extraction declarations. */
   entries(): readonly TypertResourceEntry[]
   /**
    * Observe later resource-kind changes.

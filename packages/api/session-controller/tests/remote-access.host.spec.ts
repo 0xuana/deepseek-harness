@@ -86,8 +86,8 @@ async function harness(): Promise<{
   await ctx.plugin(TypertRegistry)
   await mountAgentLoopTestDependencies(ctx)
   const loop = await mountAgentLoopTestHarness(ctx)
-  const shared = await loop.create(SHARED)
-  const hidden = await loop.create(PRIVATE)
+  const shared = await loop.create(SHARED, {}, { cwd: '/tmp' })
+  const hidden = await loop.create(PRIVATE, {}, { cwd: '/tmp' })
   const controller = await createSessionTestController(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
   const as = (principal: Principal, method: string): Context => {
     const invocation: RemoteInvocation = {
@@ -115,20 +115,21 @@ describe('Session Controller access', () => {
   it('reads the Session resource of page and follow requests from the addressed Session', async () => {
     const { ctx, controller } = await harness()
     const resource = ctx.typert.resources.get('session')
-    if (resource === undefined || !('resolve' in resource)) throw new Error('Session resource resolver is missing')
+    if (resource?.resolve === undefined) throw new Error('Session resource resolver is missing')
     for (const method of ['page', 'follow']) {
-      const reader = remoteMethods(controller).find(marker => marker.method === method)?.resources?.['session']
-        ?? ((request: unknown) => resource.resolve({ args: { request }, parameters: [{ name: 'request', wire: 'request' }] }))
-      expect(reader?.({ address: { kind: 'session', sessionId: SHARED } })).toBe(SHARED)
-      // A subagent address reads the child transcript; whether the parent's access covers it is the policy's rule.
-      expect(reader?.({ address: { kind: 'subagent', parentSessionId: SHARED, childSessionId: PRIVATE } })).toBe(PRIVATE)
+      const marker = remoteMethods(controller).find(marker => marker.method === method)
+      expect(marker).toBeDefined()
+      expect(marker?.resources?.['session']).toBeUndefined()
     }
+    const resolve = (request: unknown) => resource.resolve({ args: { request }, parameters: [{ name: 'request', wire: 'request' }] })
+    expect(resolve({ address: { kind: 'session', sessionId: SHARED } })).toBe(SHARED)
+    expect(resolve({ address: { kind: 'subagent', parentSessionId: SHARED, childSessionId: PRIVATE } })).toBe(PRIVATE)
   })
 
   it('resolves named Session IDs and first-object requests without treating unrelated strings as identities', async () => {
     const { ctx } = await harness()
     const resource = ctx.typert.resources.get('session')
-    if (resource === undefined || !('resolve' in resource)) throw new Error('Session resource resolver is missing')
+    if (resource?.resolve === undefined) throw new Error('Session resource resolver is missing')
     const resolve = (args: Readonly<Record<string, unknown>>, ...names: string[]) => resource.resolve({
       args, parameters: names.map(name => ({ name, wire: name })),
     })
@@ -144,6 +145,40 @@ describe('Session Controller access', () => {
     expect(resolve({}, 'sessionId')).toBeUndefined()
     expect(resolve({})).toBeUndefined()
     expect(resource.resolve({ args: { target: SHARED }, parameters: [{ name: 'sessionId', wire: 'target' }] })).toBe(SHARED)
+  })
+
+  it.each(['page', 'follow'])('authorizes %s by Address and rejects coexisting Session IDs through SRC dispatch', async (method) => {
+    const { ctx, shared, hidden } = await harness()
+    shared.inbox.append('next-turn', message('shared history'))
+    hidden.inbox.append('next-turn', message('private history'))
+    await ctx.plugin(TypertGatewayService)
+    guestPolicy(ctx, {
+      role: { name: 'test:history-reader', resource: 'session', actions: ['session/page', 'session/follow'] },
+      resource: { kind: 'session', id: SHARED },
+    })
+    const abort = new AbortController()
+    const peer: PeerScope = { id: 'history-access-peer' as PeerId, ctx, principal: GUEST, interactions: 'answer', signal: abort.signal, dispose: async () => {} }
+    const invoke = async (request: Record<string, unknown>): Promise<unknown> => {
+      const call = { peer, namespace: 'session', method, args: { request }, signal: abort.signal }
+      if (method === 'page') return ctx.typertGateway.invoke(call)
+      const stream = (await ctx.typertGateway.stream(call))[Symbol.asyncIterator]()
+      try {
+        return (await stream.next()).value
+      } finally {
+        await stream.return?.()
+      }
+    }
+    const request = (sessionId: SessionId) => ({ address: { kind: 'session', sessionId }, throughSeq: 0 })
+    try {
+      await expect(invoke(request(SHARED))).resolves.toBeDefined()
+      await expect(invoke(request(PRIVATE))).rejects.toMatchObject({ code: 'remote-access/denied', details: { reason: 'no-allow' } })
+      for (const target of [SHARED, PRIVATE]) {
+        await expect(invoke({ ...request(target), sessionId: SHARED }))
+          .rejects.toMatchObject({ code: 'remote-access/denied', details: { reason: 'resource-invalid' } })
+      }
+    } finally {
+      abort.abort()
+    }
   })
 
   it('lets a global role call session/list and lists only the Sessions a Session role admits', async () => {

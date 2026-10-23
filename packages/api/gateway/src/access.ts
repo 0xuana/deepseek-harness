@@ -52,8 +52,15 @@ export function callResources(
   ]
   for (const declaration of typert.resources.entries()) {
     sources.set(declaration.kind, () => {
-      if ('resolve' in declaration) {
-        return read(() => declaration.resolve({ args, parameters: descriptor.parameters }), [])
+      if (declaration.resolve !== undefined) {
+        let id: unknown
+        try {
+          id = declaration.resolve({ args, parameters: descriptor.parameters })
+        } catch (error) {
+          // A resolver failure cannot identify an authorized resource.
+          return 'invalid'
+        }
+        return Array.isArray(id) ? 'invalid' : id === undefined ? [] : [id]
       }
       const id = defaultFieldId(descriptor, args, declaration.field)
       return Array.isArray(id) ? 'invalid' : id === undefined ? [] : [id]

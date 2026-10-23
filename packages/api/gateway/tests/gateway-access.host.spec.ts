@@ -904,6 +904,20 @@ describe('resource resolution', () => {
     expect(callResources(ctx.typert, undefined, method('request'), { request: {} }, NEVER)).toBeUndefined()
   })
 
+  it('rejects arrays from a default resolver instead of authorizing several identities', async () => {
+    const ctx = new Context()
+    roots.push(ctx)
+    await ctx.plugin(TypertRegistry)
+    for (const ids of [[], ['r1'], ['r1', 'r2']]) {
+      const dispose = ctx.typert.resources.register('test-shelf', {
+        // Exercise invalid results from an untyped provider at the authorization boundary.
+        resolve: () => ids as never,
+      })
+      expect(callResources(ctx.typert, undefined, method(), {}, NEVER)).toBeUndefined()
+      await dispose()
+    }
+  })
+
   it('lets a reader replace the defaults for its kind, called with the positional wire arguments', async () => {
     const typert = await registry()
     const readers = { 'test-shelf': (ids: unknown) => ids }
