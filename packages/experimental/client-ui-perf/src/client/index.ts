@@ -102,23 +102,17 @@ export function apply(ctx: Context): void {
           if (pending !== undefined) return pending
           const task = (async (): Promise<LoadOlderResult> => {
             const before = perf.getSnapshot()
-            let changed = false
-            const stop = perf.subscribe(() => { changed = true })
-            try {
-              // A view can mount before the Session finishes opening; paging before
-              // that is a no-op, so wait for open unless the view is gone.
-              await whenOpened(session, lifecycle.signal)
-              if (lifecycle.signal.aborted) return 'retry'
-              if (session.getSnapshot().loadingOlder) return 'retry'
-              await session.loadOlder()
-              if (changed || perf.getSnapshot() !== before) return 'grew'
-              const after = session.getSnapshot()
-              // A page can grow the Session window without adding a perf node. Only
-              // an exhausted Session may hide the trigger; otherwise keep it retryable.
-              return after.hasMore ? 'retry' : 'exhausted'
-            } finally {
-              stop()
-            }
+            // A view can mount before the Session finishes opening; paging before
+            // that is a no-op, so wait for open unless the view is gone.
+            await whenOpened(session, lifecycle.signal)
+            if (lifecycle.signal.aborted) return 'retry'
+            if (session.getSnapshot().loadingOlder) return 'retry'
+            await session.loadOlder()
+            if (perf.getSnapshot() !== before) return 'grew'
+            const after = session.getSnapshot()
+            // A page can grow the Session window without adding a perf node. Only
+            // an exhausted Session may hide the trigger; otherwise keep it retryable.
+            return after.hasMore ? 'retry' : 'exhausted'
           })()
           const promise = task.finally(() => { pages.delete(binding) })
           pages.set(binding, promise)

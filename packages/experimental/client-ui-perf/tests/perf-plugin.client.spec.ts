@@ -450,14 +450,12 @@ describe('browser plugin registration', () => {
     const injectEntry = bench.entries()[0]!.inject as ((sessionId: SessionId) => PerfViewInjected) | undefined
     const injected = injectEntry!(SID)
     bench.setHasMore(true)
-    const gate = Promise.withResolvers<undefined>()
-    bench.loadOlder.mockImplementationOnce(() => gate.promise)
+    bench.loadOlder.mockImplementationOnce(() => undefined)
     const first = injected.loadOlder()
     const second = injected.loadOlder()
     expect(second).toBe(first)
     await Promise.resolve()
     expect(bench.loadOlder).toHaveBeenCalledTimes(1)
-    gate.resolve(undefined)
     expect(await first).toBe('retry')
     expect(bench.loadOlder).toHaveBeenCalledTimes(1)
 

@@ -1734,7 +1734,7 @@ function stepRows(options: StepRowsOptions): ReactNode[] {
     const gap = gaps.get(step.step)
     const visibleGap = gap !== undefined && gap >= STEP_GAP_MIN_MS ? gap : undefined
     const expanded = open[step.step] === true
-    const hasAnswer = step.answerBody !== null && step.answerBody !== undefined
+    const hasAnswer = step.answerBody !== null
     const hasDetail = step.calls.length > 0 || hasAnswer
     const rowClass: (string | undefined)[] = []
     if (hasDetail) rowClass.push(css.stepRowClickable)

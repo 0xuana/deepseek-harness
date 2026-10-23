@@ -5,7 +5,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-compaction/types'
 import type {} from '@deepseek-ai/dsh-tools'
-import type { LlmRetryEventData } from '@deepseek-ai/dsh-llm-retry/types'
+
 import type {} from '@deepseek-ai/dsh-user-approval/types'
 import type { SessionEventMap } from '@deepseek-ai/dsh-session/types'
 import type { PerfEventMetrics } from './perf-contract.ts'
@@ -13,9 +13,15 @@ import type { PerfEventMetrics } from './perf-contract.ts'
 /** Event shape a Conversation Definition receives. */
 type MatchEvent = Parameters<ConversationNodeDefinition['match']>[0]
 
-/** Payload of an event whose type is known to the caller. */
-function dataOf<T>(event: MatchEvent): T {
-  return (event as MatchEvent & { data: T }).data
+/**
+ * Payload of an event whose type is known to the caller.
+ * @param event - event seen by the Definition match.
+ * @param type - event discriminant already narrowed by the caller.
+ * @returns the typed event payload.
+ */
+function dataOf<K extends keyof SessionEventMap>(event: MatchEvent, type: K): SessionEventMap[K] {
+  void type
+  return (event as MatchEvent & { type: K; data: SessionEventMap[K] }).data
 }
 
 /**
@@ -113,7 +119,7 @@ export function eventMetrics(event: MatchEvent, location: ConversationLocation |
   }
   const eventType: string = event.type
   if (eventType === 'request/context') {
-    const data = dataOf<SessionEventMap['request/context']>(event)
+    const data = dataOf(event, 'request/context')
     return {
       ...base,
       kind: 'request-context',
@@ -124,7 +130,7 @@ export function eventMetrics(event: MatchEvent, location: ConversationLocation |
     }
   }
   if (eventType === 'llm/retry') {
-    const data = dataOf<LlmRetryEventData>(event)
+    const data = dataOf(event, 'llm/retry')
     return {
       ...base,
       kind: 'model-retry',
@@ -138,7 +144,7 @@ export function eventMetrics(event: MatchEvent, location: ConversationLocation |
     }
   }
   if (eventType === 'assistant/attempt') {
-    const data = dataOf<{ turn: number; step: number }>(event)
+    const data = dataOf(event, 'assistant/attempt')
     return {
       ...base,
       kind: 'model-attempt',
@@ -148,20 +154,18 @@ export function eventMetrics(event: MatchEvent, location: ConversationLocation |
     }
   }
   if (eventType === 'user/message') {
-    const data = dataOf<{
-      source: { kind: string }
-      content: readonly { type: string; text?: string }[]
-    }>(event)
-    if (data.source.kind !== 'runtime-context' && data.source.kind !== 'time-context') return null
+    const data = dataOf(event, 'user/message')
+    const kind: string = data.source.kind
+    if (kind !== 'runtime-context' && kind !== 'time-context') return null
     return {
       ...base,
       kind: 'context-refresh',
-      status: data.source.kind,
+      status: kind,
       chars: contentChars(data.content),
     }
   }
   if (eventType === 'approval/asked') {
-    const data = dataOf<{ toolName: string; reason?: string }>(event)
+    const data = dataOf(event, 'approval/asked')
     return {
       ...base,
       kind: 'approval',
@@ -171,7 +175,7 @@ export function eventMetrics(event: MatchEvent, location: ConversationLocation |
     }
   }
   if (eventType === 'approval/decided') {
-    const data = dataOf<{ outcome: string }>(event)
+    const data = dataOf(event, 'approval/decided')
     return { ...base, kind: 'approval', status: data.outcome }
   }
   return null
