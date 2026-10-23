@@ -51,7 +51,10 @@ function stubAgent(rawId: string, supplied?: Session, suppliedCtx?: Context): St
     ? agentCtx.sessions.create(SessionId(rawId))
     : suppliedCtx.sessions.create(SessionId(rawId)))
   if (suppliedCtx === undefined) {
-    if (agentCtx.sessions.get(session.id) !== session) agentCtx.sessions.enter(session)
+    if (agentCtx.sessions.get(session.id) !== session) {
+      agentCtx.sessions.enter(session)
+      agentCtx.sessions.announce(session)
+    }
   }
   const inbox = createInboxStub()
   let status: AgentStatus = 'running'

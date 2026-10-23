@@ -108,6 +108,22 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'actionCards',
+    pkg: 'action-cards',
+    title: 'Optional action cards',
+    mode: 'service',
+    consumers: ['creation-recommendations', 'client-ui-action-cards'],
+    note: 'Owns the card tool, card state, user actions and status notices; card kinds register their actions and handlers.',
+  },
+  {
+    key: 'pluginRecommendations',
+    pkg: 'plugin-recommendations',
+    title: 'Explicit-need plugin recommendations',
+    mode: 'service',
+    consumers: ['client-ui-plugin-recommendations'],
+    note: 'Reads the current catalog text of an official plugin card and enables the plugin through the profile plugin manager after a click.',
+  },
+  {
     key: 'headlessStartup',
     pkg: 'headless',
     title: 'Headless invocation options',
@@ -1577,7 +1593,8 @@ function renderLifecycle(): string {
     '  Note over Agent,Driver: claim pending next-step input plus one queued prompt',
     `  Driver-->>SDK: ${mermaidCode('agent/inbox/spliced')} pure deletion`,
     `  Driver-->>SDK: ${mermaidCode('agent/inbox/claimed')} { message, turn } per message`,
-    `  Driver->>Prompt: ${mermaidCode('system-prompt/assemble')} waterfall`,
+    '  Driver->>Tools: resolve({ agent, modelSelection, signal }) once per proposed step',
+    `  Driver->>Prompt: ${mermaidCode('system-prompt/assemble')} waterfall with the step tool set`,
     `  Driver->>Hooks: ${mermaidCode('agent/pre-step')} waterfall`,
     '  Hooks-->>Driver: authoritative reject or enter(messages)',
     '  alt proposed step rejected, first batch empty, or pre-step failed',
@@ -1617,6 +1634,7 @@ function renderLifecycle(): string {
     '    end',
     '  end',
     `  Driver->>Session: ${mermaidCode('step/end')}`,
+    '  Driver->>Tools: dispose the step tool set',
     '  opt natural stop and next-step inbox empty',
     `    Driver->>Hooks: ${mermaidCode('agent/turn-stopping')} serial terminal checkpoint`,
     '  end',
