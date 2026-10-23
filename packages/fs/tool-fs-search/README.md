@@ -114,11 +114,12 @@ Each call resolves the packaged binary (`@vscode/ripgrep`, or the executable's `
 After `pnpm run build`, compile the package-local diagnostic with external runtime dependencies, then run it under plain Node:
 
 ```sh
+cd packages/fs/tool-fs-search
 node --input-type=module <<'JS'
 import { build } from 'tsdown';
-await build({ config: false, tsconfig: false, dts: false, entry: 'packages/fs/tool-fs-search/tests/glob-native.perf.ts', outDir: 'packages/fs/tool-fs-search/tests/.dsh-build', clean: false, deps: { neverBundle: [/^[^./]/] } });
+await build({ config: false, tsconfig: false, dts: false, entry: 'tests/glob-native.perf.ts', outDir: 'tests/.dsh-build', clean: false, deps: { neverBundle: [/^[^./]/] } });
 JS
-node packages/fs/tool-fs-search/tests/.dsh-build/glob-native.perf.mjs
+node tests/.dsh-build/glob-native.perf.mjs
 ```
 
 The diagnostic creates 20,000 unrelated files and six matches, then measures five `ctx.tools.execute()` calls through the Native executor with a real Agent, working-directory service, and local subprocess backend. It reports raw timings, the median, and a hash of the complete value, text, and presentation metadata. `--plugin <built-module>` selects another search-package revision; `--workspace <directory>` opts into a read-only existing workspace instead of the synthetic tree. Setup, model generation, UI, and Session persistence are excluded; there is no timing threshold.
