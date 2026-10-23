@@ -40,6 +40,8 @@ export const EXTENSION_BUNDLES: readonly string[] = [
  * which includes every eligible bundle, ranks them last in this order.
  */
 export const MORE_BUNDLES: readonly string[] = [
+  '@deepseek-ai/dsh-creation-recommendations',
+  '@deepseek-ai/dsh-plugin-recommendations',
   '@deepseek-ai/dsh-experimental-inspector-profile',
   '@deepseek-ai/dsh-cua-bundle',
   '@deepseek-ai/dsh-experimental-tool-worktree',
@@ -54,6 +56,8 @@ export const MORE_BUNDLES: readonly string[] = [
 
 /** Official bundles the plugin manager marks with the Experimental badge. */
 export const EXPERIMENTAL_BUNDLES: ReadonlySet<string> = new Set([
+  '@deepseek-ai/dsh-creation-recommendations',
+  '@deepseek-ai/dsh-plugin-recommendations',
   '@deepseek-ai/dsh-cua-bundle',
   '@deepseek-ai/dsh-experimental-agent-team-profile',
   '@deepseek-ai/dsh-experimental-voice-input-bundle',
