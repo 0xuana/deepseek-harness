@@ -130,6 +130,8 @@ interface SessionEventMap {
      */
     error?: { name: string; code: string; reason?: string }
     meta?: JsonValue
+    /** Final successful canonical value for inspection; absent on failures and older records. */
+    value?: JsonValue
   }
   /**
    * Full header for the next request, appended inside its step before dispatch.
