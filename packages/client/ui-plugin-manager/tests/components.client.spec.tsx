@@ -1209,6 +1209,33 @@ describe('PluginManagerPage', () => {
       expect(card()).not.toBeNull()
     })
 
+    it.each([en, zh])('hides unsupported CUA by default and retains installed or selected entries for management', (dict) => {
+      const name = '@deepseek-ai/dsh-cua-bundle'
+      const entry = pkg({ name, installed: false, enabled: false, optional: true, listedByDefault: false,
+        error: { code: 'unsupported-platform' } })
+      const other = pkg({ name: '@deepseek-ai/dsh-experimental-session-titles-bundle', installed: false, optional: true, enabled: false })
+      const { actions, set, setLanguage } = renderTab({ packages: [other, entry] })
+      setLanguage(dict)
+      const card = () => document.querySelector(`[data-plugin-package="${name}"]`)
+      expect(card()).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: dict.moreAction }))
+      expect(card()).toBeNull()
+      for (const availability of ['profile', 'missing'] as const) {
+        const installed = { ...entry, installed: true, availability, installTarget: { spec: `${name}@1.0.0`, version: '1.0.0' } }
+        set({ packages: [other, installed] })
+        expect(card()).not.toBeNull()
+        expect(screen.getByText(dict.reasonUnsupportedPlatform)).toBeTruthy()
+        expect(screen.getByRole('switch', { name: dict.enableToggle.replace('{name}', name) })).toHaveProperty('disabled', true)
+      }
+      set({ packages: [other, { ...entry, enabled: true }] })
+      fireEvent.click(screen.getByRole('button', { name: dict.openDetail.replace('{name}', name) }))
+      const toggle = screen.getByRole('switch', { name: dict.enableToggle.replace('{name}', name) })
+      expect(toggle).toHaveProperty('disabled', false)
+      expect(screen.getByText(`${dict.reasonLabel}: ${dict.reasonUnsupportedPlatform}`)).toBeTruthy()
+      fireEvent.click(toggle)
+      expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith(name, false)
+    })
+
     it.each([en, zh])('keeps disabled CUA on the secondary page with experimental labels', (dict) => {
       const name = '@deepseek-ai/dsh-cua-bundle'
       const entry = (enabled: boolean) => pkg({ name, official: true, enabled, meta: { title: 'Computer Use' } })

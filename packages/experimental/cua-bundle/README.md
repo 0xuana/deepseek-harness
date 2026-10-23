@@ -37,7 +37,7 @@ The switch saves bundle selection in the profile’s `package.json`. Computer Us
 
 Disabling unloads the provider and withdraws CUA tools from its Agent scopes. Runtime configuration, the new-session default and saved grants remain. Session-only application decisions end with provider disposal.
 
-Computer Use is available only on a macOS DSH Host. The native provider is an optional dependency installed only on macOS; shared CUA and Client packages remain in the installation. Other Hosts refuse enablement before saving settings. An already selected bundle is skipped at startup with a diagnostic and remains available for deselection; saved user settings remain. A browser on another operating system can connect to a supported Mac Host.
+Computer Use is available only on a macOS DSH Host. The native provider is an optional dependency installed only on macOS; shared CUA and Client packages remain in the installation. Other Hosts hide the bundle from default plugin lists and model recommendations and refuse enablement before saving settings. Explicit profile dependencies and saved selections remain visible for management. An already selected bundle is skipped at startup with a diagnostic and remains available for deselection; saved user settings remain. A browser on another operating system can connect to a supported Mac Host.
 
 If preparation fails, the saved selection remains and CUA operations stay unavailable. Read the Host startup diagnostic, correct its cause, then restart DSH.
 

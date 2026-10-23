@@ -392,7 +392,8 @@ function EnableSwitch({ pkg, title, t, busy, onSetEnabled }: {
       <Switch
         checked={pkg.enabled}
         label={t('enableToggle', { name: title })}
-        disabled={busy || pkg.readOnlyReason !== undefined || (!pkg.enabled && pkg.error !== undefined && !(pkg.availability === 'missing' && pkg.installTarget !== undefined))}
+        disabled={busy || pkg.readOnlyReason !== undefined || (!pkg.enabled && pkg.error !== undefined
+          && (pkg.error.code === 'unsupported-platform' || !(pkg.availability === 'missing' && pkg.installTarget !== undefined)))}
         {...pkg.readOnlyReason === undefined ? {} : { title: managementText({ code: pkg.readOnlyReason }, t) }}
         onChange={onSetEnabled}
       />
