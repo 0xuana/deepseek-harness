@@ -105,9 +105,9 @@ Node 部署在受支持的 macOS、Linux 与 Windows 目标上获得 `@vscode/ri
 
 ### 搜索如何运行
 
-未显式提供 `path` 时，如果目录部分的每一项都是普通相对名称，且精确匹配已存在的非符号链接目录、不属于 VCS 元数据目录，`glob` 会为 `packages/core/src/*.ts` 这样的模式缩小遍历范围。仅由 `-` 组成的前缀仍遍历工作区，因为 ripgrep 将该参数解释为标准输入。其他模式仍遍历工作区；匹配规则、修改时间排序和结果的逻辑根目录保持不变。
+未显式提供 `path` 时，如果目录部分的每一项都是普通相对名称且不属于 VCS 元数据目录，`glob` 会为 `packages/core/src/*.ts` 这样的模式跳过无关子树。按顺序添加的 ripgrep glob 先排除目录树，再仅放行前缀目录，最后应用原始文件模式。仅匹配目录的放行规则不会纳入同名文件。搜索根目录、路径分隔符、符号链接处理、匹配规则和修改时间排序保持不变；其他模式仍按原方式遍历。
 
-每次调用在构造 argv 前解析一次工作目录，然后解析打包二进制（`@vscode/ripgrep`，或 pkg 单文件运行时中可执行程序的 `-rg` 伴随文件），前置 `--no-config`，使宿主的 `RIPGREP_CONFIG_PATH` 无法向不受约束的 spawn 注入 `--pre` 预处理器，并把每个模型控制的值作为普通 argv 元素传入——不存在 shell 层，因此不涉及 shell 引号处理。collect 模式预算限制完整 stdout 与 stderr 尾部；lossy stdout 读取以 `SEARCH_RAW_OUTPUT_OVERFLOW` 失败，而不是解析静默不完整的流。工具从不读取原始 spill 路径。
+每次调用解析打包二进制（`@vscode/ripgrep`，或 pkg 单文件运行时中可执行程序的 `-rg` 伴随文件），前置 `--no-config`，使宿主的 `RIPGREP_CONFIG_PATH` 无法向不受约束的 spawn 注入 `--pre` 预处理器，并把每个模型控制的值作为普通 argv 元素传入——不存在 shell 层，因此不涉及 shell 引号处理。collect 模式预算限制完整 stdout 与 stderr 尾部；lossy stdout 读取以 `SEARCH_RAW_OUTPUT_OVERFLOW` 失败，而不是解析静默不完整的流。工具从不读取原始 spill 路径。
 
 ### Native 模式 benchmark
 

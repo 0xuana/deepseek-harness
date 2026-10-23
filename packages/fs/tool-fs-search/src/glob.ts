@@ -10,12 +10,11 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { readdir } from 'node:fs/promises'
-import { join, sep } from 'node:path'
+import { sep } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, SearchResultView, ToolResult } from '@deepseek-ai/dsh-tools'
 import type { SpillRef } from '@deepseek-ai/dsh-spill'
-import { resolveSearchWorkdir, runRipgrep, toWorkdirRelative, trySaveFormattedResult } from './search-core.ts'
+import { runRipgrep, toWorkdirRelative, trySaveFormattedResult } from './search-core.ts'
 import { globSearchMeta, searchViewFromMeta } from './presentation.ts'
 import { acceptedDirectCallValue } from './direct-call.ts'
 
@@ -82,14 +81,27 @@ export function parseGlobArgs(args: { pattern: string; path?: string }): GlobInp
  * search root rides behind `--` so a leading-dash path can never be parsed as
  * a flag. `--sort=modified` orders by modification time, `--no-ignore
  * --hidden` searches ignored and hidden files, and
- * {@link GLOB_VCS_EXCLUDES} keeps VCS metadata out.
+ * {@link GLOB_VCS_EXCLUDES} keeps VCS metadata out. Simple directory prefixes
+ * prune unrelated subtrees through directory-only globs without changing the
+ * search root, path separators, or symlink handling.
  *
  * @param input - the validated arguments.
  * @returns the complete ripgrep argument vector (excluding the binary itself).
  */
 export function buildGlobCommand(input: GlobInput): string[] {
+  const directories = input.pattern.split('/').slice(0, -1)
+  const pruning: string[] = []
+  if (input.path === undefined && directories.length > 0
+    && directories.every(part => /^[\w .-]+$/.test(part) && part !== '.' && part !== '..' && !GLOB_VCS_EXCLUDES.includes(part))) {
+    pruning.push('--glob=!**')
+    // Trailing slashes admit directories only, never files with the same names.
+    for (let depth = 1; depth <= directories.length; depth++) {
+      pruning.push(`--glob=/${directories.slice(0, depth).join('/')}/`)
+    }
+  }
   const parts = [
     '--files',
+    ...pruning,
     `--glob=${input.pattern}`,
     '--sort=modified',
     '--no-ignore',
@@ -105,34 +117,6 @@ export function buildGlobCommand(input: GlobInput): string[] {
   ]
   if (input.path !== undefined) parts.push('--', input.path)
   return parts
-}
-
-/**
- * Exact directory entries keep prefix narrowing case-sensitive, skip links, and
- * preserve the logical search root. Inspection requires the co-located local
- * workspace used by ripgrep; pending filesystem reads are not abortable.
- */
-async function scopedGlobCommand(input: GlobInput, workdir: string): Promise<string[]> {
-  const command = buildGlobCommand(input)
-  const slash = input.pattern.lastIndexOf('/')
-  if (input.path !== undefined || slash < 1) return command
-  const segments = input.pattern.slice(0, slash).split('/')
-  if (segments.some(part => !/^[\w .-]+$/.test(part) || part === '.' || part === '..' || GLOB_VCS_EXCLUDES.includes(part))) return command
-  let prefix = ''
-  for (const part of segments) {
-    let directory: boolean
-    try {
-      directory = (await readdir(join(workdir, prefix), { withFileTypes: true }))
-        .some(entry => entry.name === part && entry.isDirectory())
-    } catch (_error) {
-      // Prefix inspection is optional; ripgrep retains ownership of search errors.
-      return command
-    }
-    if (!directory) return command
-    prefix = join(prefix, part)
-  }
-  // ripgrep treats a bare '-' as stdin even after '--'.
-  return prefix === '-' ? command : [...command, '--', prefix]
 }
 
 /**
@@ -364,9 +348,7 @@ export function applyGlobTool(ctx: Context, caps: GlobToolCaps): void {
     },
     async execute(args, exec) {
       const input = parseGlobArgs(args)
-      const workdir = await resolveSearchWorkdir(ctx, exec, 'glob')
-      const argv = await scopedGlobCommand(input, workdir)
-      const run = await runRipgrep(ctx, exec, 'glob', workdir, argv, caps.rawOutputMaxBytes, caps.graceMs, caps.stderrMaxBytes)
+      const run = await runRipgrep(ctx, exec, 'glob', buildGlobCommand(input), caps.rawOutputMaxBytes, caps.graceMs, caps.stderrMaxBytes)
       const root = input.path === undefined ? '.' : toWorkdirRelative(input.path, run.workdir)
       if (run.noMatches) return { root, paths: [] }
 

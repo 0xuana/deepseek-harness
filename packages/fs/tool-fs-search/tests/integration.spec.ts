@@ -80,7 +80,7 @@ describe('search tools over the real subprocess service + the packaged rg', () =
   })
 
   describe('glob', () => {
-    it('starts a literal-prefix search inside its directory and preserves workspace-relative results', async () => {
+    it('prunes unrelated directories and preserves workspace-relative results', async () => {
       await mkdir(join(dir, 'packages', 'core', 'src', 'nested'), { recursive: true })
       await writeFile(join(dir, 'packages', 'core', 'src', 'old.ts'), '')
       await writeFile(join(dir, 'packages', 'core', 'src', '.hidden.ts'), '')
@@ -97,22 +97,31 @@ describe('search tools over the real subprocess service + the packaged rg', () =
         join('packages', 'core', 'src', 'old.ts'),
         join('packages', 'core', 'src', '.hidden.ts'),
       ] })
-      expect(spawn.mock.calls[0]?.[0].argv.slice(-2)).toEqual(['--', join('packages', 'core', 'src')])
+      expect(spawn.mock.calls[0]?.[0].argv.slice(3, 8)).toEqual([
+        '--glob=!**', '--glob=/packages/', '--glob=/packages/core/', '--glob=/packages/core/src/', '--glob=packages/core/src/*.ts',
+      ])
+      expect(spawn.mock.calls[0]?.[0].argv).not.toContain('--')
     })
 
-    it.each(['*.ts', '**/*.ts', 'src/**/*.ts', '!src/*.ts', './src/*.ts', 'src/../src/*.ts', 'missing/*.ts', 'notes.md/*.ts', '.git/*.ts'])(
+    it.each(['*.ts', '**/*.ts', 'src/**/*.ts', '!src/*.ts', './src/*.ts', 'src/../src/*.ts', '.git/*.ts'])(
       'keeps the original traversal for %s', async (pattern) => {
         const spawn = vi.spyOn(ctx.subprocess, 'spawn')
         const result = await call('glob', { pattern }, agent())
         expect(result.isError).toBe(false)
-        expect(spawn.mock.calls[0]?.[0].argv).not.toContain('--')
+        expect(spawn.mock.calls[0]?.[0].argv).not.toContain('--glob=!**')
       },
     )
 
-    it('keeps the original traversal when directory entry casing differs', async () => {
+    it.each(['missing/*.ts', 'notes.md/*.ts', 'src/alpha.ts/*.ts'])('does not admit a missing or file prefix for %s', async (pattern) => {
+      const result = await call('glob', { pattern }, agent())
+      expect(result.isError).toBe(false)
+      expect(text(result)).toBe('No files found')
+    })
+
+    it('preserves case-sensitive matching while pruning directories', async () => {
       const spawn = vi.spyOn(ctx.subprocess, 'spawn')
       expect(text(await call('glob', { pattern: 'SRC/*.ts' }, agent()))).toBe('No files found')
-      expect(spawn.mock.calls[0]?.[0].argv).not.toContain('--')
+      expect(spawn.mock.calls[0]?.[0].argv).toContain('--glob=/SRC/')
     })
 
     it('does not follow a directory link when narrowing a literal prefix', async () => {
@@ -148,6 +157,7 @@ describe('search tools over the real subprocess service + the packaged rg', () =
       const argv = spawn.mock.calls[0]?.[0].argv
       expect(argv?.filter(part => part === '--')).toHaveLength(1)
       expect(argv?.slice(-2)).toEqual(['--', '.'])
+      expect(argv).not.toContain('--glob=!**')
     })
 
     it('discovers files in a directory named dash without treating it as stdin', async () => {

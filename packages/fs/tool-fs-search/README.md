@@ -105,9 +105,9 @@ Local workspace discovery is naturally a process-backed `rg` workflow, and putti
 
 ### How a search runs
 
-Without an explicit `path`, `glob` narrows traversal for patterns such as `packages/core/src/*.ts` when every directory component is a plain relative name that exactly matches an existing non-symlink directory outside VCS metadata. A prefix consisting only of `-` retains workspace traversal because ripgrep interprets that argument as standard input. Other patterns retain workspace traversal; matching, modification-time ordering, and the logical result root stay unchanged.
+Without an explicit `path`, `glob` prunes unrelated subtrees for patterns such as `packages/core/src/*.ts` when every directory component is a plain relative name outside VCS metadata. Ordered ripgrep globs exclude the tree, admit only the prefix directories, then apply the original file pattern. Directory-only includes cannot admit files with the same names. The search root, path separators, symlink handling, matching, and modification-time ordering stay unchanged; other patterns retain the original traversal.
 
-Each call resolves its working directory once before constructing argv, then resolves the packaged binary (`@vscode/ripgrep`, or the executable's `-rg` sidecar in a pkg single-file runtime), prepends `--no-config` so a host `RIPGREP_CONFIG_PATH` cannot inject a `--pre` preprocessor into the unconfined spawn, and passes every model-controlled value as a plain argv element — no shell layer exists, so no quoting applies. Collect-mode budgets bound complete stdout and a stderr tail; a lossy stdout read fails as `SEARCH_RAW_OUTPUT_OVERFLOW` rather than parsing a silently-partial stream. The tools never read a raw spill path.
+Each call resolves the packaged binary (`@vscode/ripgrep`, or the executable's `-rg` sidecar in a pkg single-file runtime), prepends `--no-config` so a host `RIPGREP_CONFIG_PATH` cannot inject a `--pre` preprocessor into the unconfined spawn, and passes every model-controlled value as a plain argv element — no shell layer exists, so no quoting applies. Collect-mode budgets bound complete stdout and a stderr tail; a lossy stdout read fails as `SEARCH_RAW_OUTPUT_OVERFLOW` rather than parsing a silently-partial stream. The tools never read a raw spill path.
 
 ### Native-mode benchmark
 
