@@ -10,14 +10,20 @@ Web 模型选择器通过一个专门的客户端包在 `DeepSeek-V4.1-Flash` �
 
 ## 决策
 
-- 每个 `/models` 条目可以声明 `badge: { text, tone }`。`text` 采用包元数据的 `LocalizedText` 形式：单个字符串，或以小写语言 id 为键且包含 `en` 的译文。每段文字去掉首尾空白后须为单行，长度为 1 到 12 个用户可见字符。
+- 每个 `/models` 条目可以在 `client_metadata["deepseek-harness"]` 下声明 `badge: { text, tone }`，与 `client_requirements` 一样以 User-Agent 的产品名为键。`client_metadata` 存放所有版本都可以忽略的客户端专属数据，因此公开的模型字段保持不变，以后新增的 DeepSeek Harness 字段也放进同一个对象。`text` 采用包元数据的 `LocalizedText` 形式：单个字符串，或以小写语言 id 为键且包含 `en` 的译文。每段文字去掉首尾空白后须为单行，长度为 1 到 12 个用户可见字符。
 - `tone` 取 `neutral`、`info`、`success` 或 `warning`，分别是 `Tag` 表示普通事实、强调、利好和需要注意的配色。已发布的版本标记使用 `info`；调研的选择器把套餐和能力标签画成中性色，新功能用强调色，用量提示用警示色。`danger` 和 `solid` 保留各自表示失败和当前选中的含义。
-- [`parseModelListing`](../../../../packages/llm/llm-deepseek/src/listing.ts) 与条目的其他声明一起解码角标，[`resolveListedCatalog`](../../../../packages/llm/llm-deepseek/src/listed-catalog.ts) 保留已提供模型的角标；两条路由都通过 `catalogModelInfo` 附上角标。`badge` 缺省或为 `null` 时不显示角标；`tone` 缺省或无法识别时按 `neutral` 显示。无法读取的角标被丢弃，并与列表的其他问题一起报告，但不会隐藏所属模型。
+- [`parseModelListing`](../../../../packages/llm/llm-deepseek/src/listing.ts) 与条目的其他声明一起解码角标，[`resolveListedCatalog`](../../../../packages/llm/llm-deepseek/src/listed-catalog.ts) 保留已提供模型的角标；两条路由都通过 `catalogModelInfo` 附上角标。这条路径上任何一层缺省或为 `null` 时不显示角标；`tone` 缺省或无法识别时按 `neutral` 显示。某一层不是对象或角标无法读取时，角标被丢弃，并与列表的其他问题一起报告，但不会隐藏所属模型。
 - `LlmModelInfo.badge` 与 `ModelCatalogModel.badge` 把角标从模型发现经 Host 模型目录送到浏览器。`resolveModelInfo` 不返回它，模型请求、Session 事件和面向模型的工具都不读取它。
 - [`ui-model-selection`](../../../../packages/client/ui-model-selection/README.zh.md) 在触发按钮、根菜单当前值和各选项中，把角标放在目录名称之后，并用 `ctx.locale.resolveText` 解析其文字。`conversation.input.model.label` 的扩展会同时替换名称与角标，并从 owner props 收到角标。
 - 本版本不内置任何角标：路由加载到第一份列表之前、自定义目录以及非官方端点都不显示角标。写死的 `ui-deepseek-model-label-1017` 包及其 Web bundle 条目已移除。
 
 ## 考虑过的替代方案
+
+**顶层 `badge` 字段。** 公开的 `/models` 字段为所有客户端描述模型的能力与限制，而角标是 DeepSeek Harness 的发版和运营文案。放在顶层会被当作模型属性，其他客户端可能开始显示它，此后服务端就无法随意修改或撤下；两个客户端也无法显示不同的角标。
+
+**把 `badge` 放进 `client_requirements["deepseek-harness"]`。** 这样不增加顶层字段，已发布版本也会忽略其中多出的键。但版本要求无法读取时，所有版本都会隐藏该模型，已发布的版本也不例外；撤下角标后，序列化器若把清空的对象写成 `null`，模型就会被隐藏。版本要求决定模型能否使用，展示数据必须可以忽略。
+
+**只用于展示的映射，例如 `client_presentation`。** 下一个不属于展示数据的客户端专属字段又要新开一个顶层字段；`client_metadata` 可以容纳任何版本都能忽略的字段。
 
 **用语义化的角标类别映射到客户端字典。** OpenCode、ZCode 和 DeepSeek-Reasonix 都翻译一组封闭的、由客户端持有的标签类别，没有一家直接渲染服务端发来的文字。固定词表表达不了 `1017` 这样的版本代号，每出现一种新说法都要发一次客户端版本，而列表正是为了免去这一步。列表文字属于提供方数据，按[客户端文案归 locale 管理的决定](../architecture/2026-08-23-locale-owned-client-ui-copy.zh.md)原样渲染；`LocalizedText` 形式仍允许服务端提供译文。
 
@@ -34,6 +40,7 @@ Web 模型选择器通过一个专门的客户端包在 `DeepSeek-V4.1-Flash` �
 ## 影响
 
 - 服务端无需客户端发版即可修改、翻译或撤下角标；运行中的客户端在下一次列表刷新和目录重新加载后显示变化。
+- 旧版本必须执行的条件放在 `client_requirements`；`client_metadata` 下的每个字段都必须保证不读取它的版本也能安全运行。
 - 服务端声明之前，`deepseek-flash` 不显示角标；自定义端点、自定义目录以及列表加载之前也都不显示。
 - `/model` 弹窗、触发按钮的无障碍名称和模型设置页仍只显示名称。
 - 仍指向 `ui-deepseek-model-label-1017` 的 profile patch 不再匹配任何条目，启动时会给出警告（[升级指南](../../../../docs/upgrade-guide/v0.2.1-rc.2/model-badge-package-removal/guide.zh.md)）。

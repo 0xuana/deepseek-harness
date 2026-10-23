@@ -17,6 +17,7 @@ const PRO = {
   api_capabilities: { anthropic_messages: { system_prompt_update: 'leading-only' } },
 }
 const requires = (version: unknown) => ({ client_requirements: { 'deepseek-harness': { min_version: version } } })
+const shows = (badge: unknown) => ({ client_metadata: { 'deepseek-harness': { badge } } })
 const resolve = (rows: object[] | undefined, overrides: Record<string, ModelOverride> = {}) => resolveListedCatalog({
   listing: rows === undefined ? undefined : parseModelListing({ data: rows }).entries,
   supported: resolveAdapterOptions({}).models,
@@ -142,15 +143,15 @@ describe('with a listing', () => {
   it('collects badges of offered models only and reports a dropped badge', () => {
     const badge = { text: { en: 'New', zh: '新' }, tone: 'info' }
     const catalog = resolve([
-      { ...FLASH, badge },
-      { ...PRO, badge: { text: '' } },
-      { ...FLASH, id: 'deepseek-v5', badge },
+      { ...FLASH, ...shows(badge) },
+      { ...PRO, ...shows({ text: '' }) },
+      { ...FLASH, id: 'deepseek-v5', ...shows(badge) },
     ])
     expect(catalog.offered.map(model => model.id)).toEqual(['deepseek-flash', 'deepseek-v4-pro'])
     expect([...catalog.badges]).toEqual([['deepseek-flash', badge]])
     expect(catalog.offered[0]).not.toHaveProperty('badge')
     expect(catalog.problems).toEqual([
-      expect.stringMatching(/^model "deepseek-v4-pro" shows no badge: badge text is not a string/),
+      expect.stringMatching(/^model "deepseek-v4-pro" shows no badge: client_metadata\["deepseek-harness"\]\.badge\.text is not a string/),
     ])
   })
 

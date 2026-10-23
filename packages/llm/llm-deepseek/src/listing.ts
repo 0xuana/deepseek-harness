@@ -64,7 +64,10 @@ export interface ListingEntry {
   readonly requirement: ClientRequirement
   /** Declared capabilities. */
   readonly capabilities: ListedCapabilities
-  /** Declared selector badge; absent when the entry declares none, and never a reason to hide the entry. */
+  /**
+   * Selector badge declared under `client_metadata[APP_IDENTITY.product].badge`; absent when the
+   * entry declares none, and never a reason to hide the entry.
+   */
   readonly badge?: ListedBadge
 }
 
@@ -134,16 +137,28 @@ function localizedBadgeText(value: unknown): LlmModelBadge['text'] | undefined {
   return en === undefined ? undefined : { ...translations, en }
 }
 
+/** This client's entry in a listing entry's `client_metadata`, as diagnostics name it. */
+const OWN_METADATA = `client_metadata["${APP_IDENTITY.product}"]`
+
+/** An optional object field: `undefined` when absent or `null`, `false` when it is not an object. */
+function optionalFields(value: unknown): Fields | undefined | false {
+  return value === undefined || value === null ? undefined : fieldsOf(value) ?? false
+}
+
 function badgeOf(entry: Fields): ListedBadge | undefined {
-  // `null` declares no badge, like an absent field; this build ships none to fall back on.
-  if (entry.badge === undefined || entry.badge === null) return undefined
-  const declared = fieldsOf(entry.badge)
-  if (declared === undefined) return { kind: 'invalid', reason: 'badge is not an object' }
+  // `null` at any level declares no badge, like an absent field; this build ships none to fall back on.
+  const metadata = optionalFields(entry.client_metadata)
+  if (metadata === false) return { kind: 'invalid', reason: 'client_metadata is not an object' }
+  const own = optionalFields(metadata?.[APP_IDENTITY.product])
+  if (own === false) return { kind: 'invalid', reason: `${OWN_METADATA} is not an object` }
+  const declared = optionalFields(own?.badge)
+  if (declared === false) return { kind: 'invalid', reason: `${OWN_METADATA}.badge is not an object` }
+  if (declared === undefined) return undefined
   const text = localizedBadgeText(declared.text)
   if (text === undefined) {
     return {
       kind: 'invalid',
-      reason: 'badge text is not a string or an object of lowercase language ids including "en", '
+      reason: `${OWN_METADATA}.badge.text is not a string or an object of lowercase language ids including "en", `
         + `each text 1 to ${MAX_BADGE_TEXT_LENGTH} characters on one line`,
     }
   }

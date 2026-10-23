@@ -100,7 +100,7 @@ it('resolves listed capabilities with this build\'s model knowledge', async () =
 
 it('advertises the badges its listing declares', async () => {
   const badge = { text: { en: 'New', zh: '新' }, tone: 'success' }
-  const server = await listing(json({ data: [{ ...FLASH, badge }, PRO] }))
+  const server = await listing(json({ data: [{ ...FLASH, client_metadata: { 'deepseek-harness': { badge } } }, PRO] }))
   const ctx = await host(server.origin)
   await ctx.plugin(Account, { baseURL: server.baseURL })
   expect((await ctx.llm.listModels('deepseek-account')).map(row => [row.id, row.badge])).toEqual([
