@@ -60,7 +60,7 @@ kind: "package-reference"
 | `src/client/perf-totals.ts` | 从宿主 stats 与 tokenUsage projection 生成全量合计 |
 | `src/client/perf-snapshot-builder.ts` | `perf` 视图目标的增量 builder |
 | `src/client/PerfView.tsx` | 表格、合计/事件行、时间条、步骤/工具/回答详情、复制按钮，以及提问图片标签、预览与看图器 |
-| `src/client/locales.ts` | 全部可见文案；中、日已翻译，德、西、法、葡、俄当前使用英文 fallback |
+| `src/client/locales.ts` | 全部可见文案，覆盖 8 种 shipped 语言 |
 
 页脚的开关控制合计行、事件行与上下文口径，滚表格时页脚钉在输入框上方。「显示上下文增量」默认关闭；打开后每轮/每步显示相对同范围内上一个已测值的提示词大小变化，负增量（例如压缩后）用错误色显示。展开的步骤行在「触发」列显示该步开始时间戳（`MM-DD HH:MM:SS.mmm`，tooltip 为完整的 `YYYY-MM-DD HH:MM:SS.mmm`），以及距上一步至少一秒的空闲；亚秒级调度噪声不显示。带模型回答的步骤也可以展开：点击该行会打开详情行，通过共享的 Chat Markdown 原语渲染回答，最多保留 16,000 字符并提示截断。
 
@@ -101,7 +101,6 @@ kind: "package-reference"
 - **默认产品不挂载。** Web 包按规则拒绝引用 experimental 包；可选的「开发者工具」组合包（`@deepseek-ai/dsh-experimental-inspector-profile`）会挂载本视图，也可以由 profile 显式添加。
 - **窗口被截断时没有起始时刻。** 已加载窗口从半步中间开始时，首 token、模型用时和总用时都推导不出来；行上标「起止未知」，不估算。
 - **Code-Mode 内层调用按根调用上下文并回步骤。** 内层调用不带 turn/step，因此每个根调用各自开一个以 root call id 为键的上下文，由 builder 把它的派发并回持有 runner 的那一步。窗口里丢了派发起点时仍会合并调用，但无法给出它们各自的实测耗时。
-- **五种 shipped locale 仍使用英文 fallback。** 德、西、法、葡、俄的字典和 metadata 目前是英文副本，先满足 shipped-language 门禁；这些语言下的界面文案仍为英文。
 - **更早历史的加载结果显式区分重试。** 页面请求只返回 `grew`、`exhausted` 或 `retry`；如果 Chat 或轨迹视图正在加载同一个 Session 的页，统计视图会保留加载按钮，而不是误报历史已耗尽或抛出错误。
 - **已知限制：没有整段墙钟 projection。** 合计行的总用时用模型用时 + 工具用时替代，因为宿主 projection 没有整段墙钟；工具段是逐调用求和，并行调用会让这段显得比非重叠墙钟更长。这里作为已知限制记录，插件不为此改动宿主逻辑。
 - **浏览器证据是仅测试用的 overlay。** 包级测试覆盖折叠、汇总、格式化与 jsdom 表格；`apps/web/tests/client-ui-perf-panel.e2e.ts` 用仅测试用的 overlay 把插件挂到真实 Web 面上，并比对提交的 ARIA golden。由于还没有任何 shipped profile 挂载本包，暂无录制会话场景。
