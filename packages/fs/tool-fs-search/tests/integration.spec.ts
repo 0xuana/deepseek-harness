@@ -88,7 +88,9 @@ describe('search tools over the real subprocess service + the packaged rg', () =
       await writeFile(join(dir, '.gitignore'), 'packages/\n')
       await utimes(join(dir, 'packages', 'core', 'src', 'old.ts'), new Date(2000, 0, 1), new Date(2000, 0, 1))
       const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+      const ensure = vi.spyOn(ctx.workingDirectory, 'ensure')
       const result = await call('glob', { pattern: 'packages/core/src/*.ts' }, agent())
+      expect(ensure).toHaveBeenCalledTimes(1)
       expect(result.isError).toBe(false)
       if (result.isError) throw new Error('expected glob success')
       expect(result.value).toEqual({ root: '.', paths: [
