@@ -1,4 +1,4 @@
-![The Discover tab listing plugins from an added plugin index](preview.svg)
+![Adding a plugin index URL, then installing its plugins from the Discover tab](preview.svg)
 
 A plugin index is a file at a URL that lists plugins. Add the URL, and its plugins appear in **Discover**, where you can browse and install them. DSH comes with no index; you choose which indexes to add.
 
