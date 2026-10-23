@@ -168,7 +168,8 @@ export function selectCompactableRange(
  * @param start - inclusive first surface-node seq.
  * @param end - inclusive last surface-node seq.
  * @param agent - agent used by the summarizer.
- * @param options - bracket owner, stability rule, and optional durability checkpoint.
+ * @param options - bracket owner, stability rule, self-selected prefix shrink policy,
+ * optional source-command correlation, and optional durability checkpoint.
  * @param signal - optional summarization cancellation signal.
  * @returns the successful durable compaction result.
  */
