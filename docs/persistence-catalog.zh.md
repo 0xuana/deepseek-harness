@@ -162,7 +162,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 }[T]
 ```
 
-来源：[`packages/core/session/src/types.ts:437`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:445`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:468`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:499`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:439`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:447`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:470`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:501`](../packages/core/session/src/types.ts)
 
 ## 事件
 
@@ -292,7 +292,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'assistant/attempt': { turn: number; step: number; stream: AssistantStreamRecord[] }
 ```
 
-来源：[`packages/core/session/src/types.ts:361`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:363`](../packages/core/session/src/types.ts)
 
 <a id="assistantmessage--surface"></a>
 
@@ -322,7 +322,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 类型：[TokenUsage](subsystems/llm-streaming.zh.md)
 
-来源：[`packages/core/session/src/types.ts:347`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:349`](../packages/core/session/src/types.ts)
 
 ### `command/*`
 
@@ -755,7 +755,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'request/context': RequestContext
 ```
 
-来源：[`packages/core/session/src/types.ts:408`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:410`](../packages/core/session/src/types.ts)
 
 <a id="requestheader--log-only"></a>
 
@@ -774,7 +774,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 }
 ```
 
-来源：[`packages/core/session/src/types.ts:396`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:398`](../packages/core/session/src/types.ts)
 
 ### `sandbox/*`
 
@@ -851,7 +851,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'session/end-seed': { inherited?: true }
 ```
 
-来源：[`packages/core/session/src/types.ts:433`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:435`](../packages/core/session/src/types.ts)
 
 <a id="sessiontitle--log-only"></a>
 
@@ -989,8 +989,10 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
  * The rendered system prompt on the model-visible surface. The loop appends
  * the first one as surface node 0 before the step's first `user/message`.
  * A prepared in-history route can append nonempty changes in a continuing
- * series. An incapable route or new series normalizes text to the first system
- * node. Normalization empties nonempty later nodes, then rewrites the head if
+ * series. An incapable route, or a new series whose effective text differs,
+ * normalizes text to the first system node; a series start whose latest
+ * surviving node already holds the rendering leaves it in place.
+ * Normalization empties nonempty later nodes, then rewrites the head if
  * needed, through logged per-node replacements. An empty rendering always
  * clears all active system nodes, leaving no older instructions model-visible.
  * Empty later nodes are dormant and project to no message; an empty head with
@@ -1000,7 +1002,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'system/message': { turn: number; step: number; message: SystemMessage }
 ```
 
-来源：[`packages/core/session/src/types.ts:336`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:338`](../packages/core/session/src/types.ts)
 
 ### `team/*`
 
@@ -1093,7 +1095,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 类型：[ToolCallId](subsystems/core.zh.md)
 
-来源：[`packages/core/session/src/types.ts:367`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:369`](../packages/core/session/src/types.ts)
 
 <a id="toolptc-dispatch--log-only"></a>
 
@@ -1174,7 +1176,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 }
 ```
 
-来源：[`packages/core/session/src/types.ts:381`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:383`](../packages/core/session/src/types.ts)
 
 ### `tool-workflow/*`
 
@@ -4902,7 +4904,7 @@ SHA-256: `4e97c3d85c0fc817ee58873c38c25a2474abaaa0af4839311b50b68db3b8cf1a`
 
 SHA-256: `335e242de1fcc17b6ca920fc420d71bec2d76e53e37955c00948b65ab77f05c5`
 
-来源：[`packages/core/session/src/types.ts:468`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:470`](../packages/core/session/src/types.ts)
 
 以下类型之一：
 
@@ -5837,7 +5839,7 @@ SHA-256: `a853902cfab417b8f08aa51ad6855fea46f34ed4588a74e47403035111d0fb86`
 
 SHA-256: `e4c18e294232c3ba6c9f1999f168263cc55956147cfe4121720899be8e52edd1`
 
-来源：[`packages/core/session/src/types.ts:367`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:369`](../packages/core/session/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -5996,7 +5998,7 @@ SHA-256: `cbbe8377ee744964537dbafd83607219e58ba79a13f6db0d0645c7ad3d5e8a09`
 
 SHA-256: `a81059ca06999da1e712414520c2c65e491d052fcf9640fae20aa38f0a5dc735`
 
-来源：[`packages/core/session/src/types.ts:389`](../packages/core/session/src/types.ts) · [`packages/core/tool-executor-ptc/src/types.ts:27`](../packages/core/tool-executor-ptc/src/types.ts)
+来源：[`packages/core/session/src/types.ts:391`](../packages/core/session/src/types.ts) · [`packages/core/tool-executor-ptc/src/types.ts:27`](../packages/core/tool-executor-ptc/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -6216,7 +6218,7 @@ SHA-256: `9e41386b3a0c9572b0d63078492ebb3997da7d3a830d44e0259418bd02f4bcb2`
 
 SHA-256: `bcf0caf62d964b2fcf5404bd5c909cfa9a21c3f3c96e6b7e36d9e33565223825`
 
-来源：[`packages/core/session/src/types.ts:470`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:472`](../packages/core/session/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -6243,7 +6245,7 @@ SHA-256: `79650cfa10aa3c52440328d85e8a25f0ffadc8d7efd784e3c0819d8bb74a1985`
 
 SHA-256: `5302e763151277614b97e77f00e3b326694c6c1247b916a20503c344dc970777`
 
-来源：[`packages/core/session/src/types.ts:381`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:383`](../packages/core/session/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -6285,7 +6287,7 @@ SHA-256: `693f4952fb5565da96c06bace8924b098ac2fbc915fde0ff8019701183abc057`
 
 SHA-256: `ad0c38a0adb82a94c925456df41586d9b5f9202fca18593eae2213d4445b4585`
 
-来源：[`packages/core/session/src/types.ts:396`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:398`](../packages/core/session/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -6382,7 +6384,7 @@ SHA-256: `e3e77b26f0148755a505f5b8ea843a3be117827d4703bb5754d9dc8ddbef521f`
 
 SHA-256: `17d1afb770d9941936130996da00dc86782cfef731d8d6526162c301256a4ac3`
 
-来源：[`packages/core/session/src/types.ts:433`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:435`](../packages/core/session/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -6410,7 +6412,7 @@ SHA-256: `b2a948a5340a9341fa3bab99507c7090c5b0456de72ec28b5b157b8df3f1d640`
 
 SHA-256: `1ccb56061942f5ccb0d30c9e4f2883b9d115ff906560029de637b61d3cde896d`
 
-来源：[`packages/core/session/src/types.ts:347`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:349`](../packages/core/session/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -7823,7 +7825,7 @@ SHA-256: `b1ebd5cda47d90d980bb05bffc3f970c51537b9aff15b3bc3d639811727741b1`
 
 SHA-256: `6bc8e51124d0874bc89e1d0ceff381a9c3cd0fc240667d69f841ce4f60f65fe5`
 
-来源：[`packages/core/session/src/types.ts:336`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:338`](../packages/core/session/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -7958,7 +7960,7 @@ SHA-256: `5dd766ccd1702a1142ad8b4bd44f2242f8e8a6752669ad3de0a5d224329b1438`
 
 SHA-256: `54f9276a1617d7c12594722c89cfe864bcbe4517e9a6f9c98bab14f199a135e0`
 
-来源：[`packages/core/session/src/types.ts:361`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:363`](../packages/core/session/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
