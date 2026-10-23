@@ -83,7 +83,7 @@ Misconfiguration fails fast: unknown settings, duplicate per-model overrides, in
 
 The oldest balanced span is replaced by one summary message and the recent tail stays verbatim; the conversation continues from the summary. The operation reports how many history items were condensed and the estimated tokens freed. If nothing can be condensed safely — for example the whole conversation is one indivisible unit — nothing changes and nothing is written to the session log. If no model is available to write the summary (no configured target and no routed request yet), condensation fails with a clear error telling you to configure the summarization provider and model or route one request.
 
-If an automatically selected or `/compact` summary receives `CONTEXT_WINDOW_EXCEEDED`, condensation retries the first half of the selected complete history units, keeping each tool call with its results. Each further overflow halves the remaining units; a single unit that still overflows fails. A successful checkpoint replaces only the prefix actually summarized, leaving the remaining messages and images intact. Explicit `compactRegion(start, end)` calls keep their exact selection and propagate summary overflow.
+If an automatically selected or `/compact` summary receives `CONTEXT_WINDOW_EXCEEDED`, condensation retries the first half of the selected complete history units, rounded up to a whole unit, keeping each tool call with its results. Each further overflow applies the same reduction; a single unit that still overflows fails. A successful checkpoint replaces only the prefix actually summarized, leaving the remaining messages and images intact.
 
 ### Switching models
 
@@ -133,6 +133,8 @@ A direct `ctx.llm.stream()` call uses the configured provider/model pair and cap
 ### The region transaction
 
 Failed summary requests dispatch synchronous `compaction/summary-error` after checking cancellation and selection stability. A recovery listener must record a durable input change before requesting retry. The backend re-derives the selected messages and refreshes their token prices and shrink baseline. The image-offload plugin owns image selection; its recorded omissions remain effective if the summary later fails or is cancelled. When no listener handles a canonical context overflow, self-selected ranges may shrink within the same transaction; only the successful prefix appears in the checkpoint's cited range.
+
+Explicit `compactRegion(start, end)` calls keep their exact selection and propagate summary overflow.
 
 The transaction validates the surface span and the durable lock, appends `compaction/start`, summarizes through the hook, revalidates stability (whole-surface for automatic calls, selected-span for manual calls), rejects a summary that does not shrink its source, appends `compaction/summary` plus the replacement `user/message`, and makes exactly one `compaction/end` attempt. A live unmatched start is the durable lock: an unmatched marker before a newer `session/end-seed` is stale evidence from a prior lifecycle and does not block; one after that boundary reports `busy`. A failed close deliberately leaves a blocking orphan. Cancellation remains authoritative after cleanup and durability.
 

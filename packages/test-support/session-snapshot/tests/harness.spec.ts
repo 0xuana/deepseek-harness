@@ -683,6 +683,49 @@ describe('runScenario', () => {
     expect(child.startsWith(`..${sep}`)).toBe(false)
   })
 
+  it('fixes the serialized cwd length across different temporary parents and removes each generated directory', async () => {
+    const { fixtureFile } = await scenario({})
+    const parent = await mkdtemp(join(tmpdir(), 'acp-snap-path-length-'))
+    tempDirs.push(parent)
+    const longerParent = join(parent, 'a-longer-parent-directory')
+    await mkdir(longerParent)
+    const settled = await Promise.allSettled([parent, longerParent].map(workspaceParent => runScenario(
+      { steps: boot },
+      {
+        agent: AGENT, mode: 'replay', fixtureFile, workspaceParent, workspaceCwdTextLength: 192,
+        prepareWorkspace: async (cwd) => {
+          expect(cwd).toBe(await realpath(cwd))
+          expect(JSON.stringify(cwd).length).toBe(192)
+        },
+      },
+    )))
+    const results = settled.map((result) => {
+      if (result.status === 'rejected') throw result.reason
+      return result.value
+    })
+    expect(new Set(results.map(result => result.cwd)).size).toBe(2)
+    for (const result of results) {
+      expect(JSON.stringify(result.cwd).length).toBe(192)
+      expect(result.cwd).toMatch(/acp-snap-cwd-[-a-zA-Z0-9]+$/)
+      await expect(readdir(result.cwd)).rejects.toMatchObject({ code: 'ENOENT' })
+    }
+    expect(await readdir(parent)).toEqual(['a-longer-parent-directory'])
+  })
+
+  it.each([1, 192.5])('rejects unusable serialized cwd length %s before allocating a workspace', async (workspaceCwdTextLength) => {
+    const { fixtureFile } = await scenario({})
+    const allocate = vi.spyOn(fsPromises, 'mkdtemp')
+    try {
+      await expect(runScenario(
+        { steps: boot },
+        { agent: AGENT, mode: 'replay', fixtureFile, workspaceCwdTextLength },
+      )).rejects.toThrow('workspaceCwdTextLength')
+      expect(allocate).not.toHaveBeenCalled()
+    } finally {
+      allocate.mockRestore()
+    }
+  })
+
   it('promptAndCancel waits for the durable turn start, cancels, and settles the prompt', { timeout: 20_000 }, async () => {
     const { fixtureFile } = await scenario({ prompt: 'hang-until-cancel' })
     const result = await runScenario(

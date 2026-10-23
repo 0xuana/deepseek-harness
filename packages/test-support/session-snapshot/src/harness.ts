@@ -212,6 +212,12 @@ export interface RunOptions {
    */
   workspaceParent?: string
   /**
+   * Exact JSON-quoted cwd length for fixtures that persist path-dependent token prices.
+   * Pads a canonical temporary path while retaining mkdtemp's random suffix;
+   * an insufficient or non-integer length rejects before directory allocation.
+   */
+  workspaceCwdTextLength?: number
+  /**
    * Alternate live profile patch (absolute), overriding
    * {@link AgentUnderTest.configPath} for this run. Its basename still ends
    * in `cordis.yml` so the launcher can select the replay sibling.
@@ -236,6 +242,20 @@ export function snapshotSpillRoot(
   return `${root}/dsh-acp-snap-${key}`
 }
 
+/** Keep path-priced fixtures independent of the temporary root without sharing directories. */
+function workspaceTemporaryPrefix(options: RunOptions): string {
+  const parent = options.workspaceParent ?? tmpdir()
+  const length = options.workspaceCwdTextLength
+  if (length === undefined) return join(parent, 'acp-snap-cwd-')
+  const prefix = join(realpathSync(parent), 'acp-snap-cwd-')
+  // mkdtemp contributes six characters; runtime-context renders the JSON-quoted cwd.
+  const minimum = JSON.stringify(`${prefix}XXXXXX`).length
+  if (!Number.isSafeInteger(length) || length < minimum) {
+    throw new Error(`snapshot-harness: workspaceCwdTextLength must be an integer of at least ${minimum}`)
+  }
+  return prefix + '-'.repeat(length - minimum)
+}
+
 /**
  * Run a scenario end-to-end against a freshly-spawned subprocess. Owns the
  * child and its generated dirs; always tears them down. Returns the captured stdout
@@ -246,7 +266,7 @@ export function snapshotSpillRoot(
  * @returns The captured stdout/stderr, session id, generated cwd, and harvested logs.
  */
 export async function runScenario(input: InputScript, opts: RunOptions): Promise<RunResult> {
-  const cwd = await mkdtemp(join(opts.workspaceParent ?? tmpdir(), 'acp-snap-cwd-'))
+  const cwd = await mkdtemp(workspaceTemporaryPrefix(opts))
   const cwdAliases = [...new Set([realpathSync(cwd), realpathSync.native(cwd)])]
   const sessionsRoot = await mkdtemp(join(tmpdir(), 'acp-snap-sessions-'))
   let spillRoot: string | undefined

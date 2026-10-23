@@ -13,7 +13,7 @@ import {
   resolveTargetPolicy,
 } from '@deepseek-ai/dsh-compaction-basic/src/config.ts'
 import type { CompactionResult } from '@deepseek-ai/dsh-compaction'
-import LlmRuntime, { createUserMessage, ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, createSystemMessage, createToolResultMessage, LlmAdapter , createMessage } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, createSystemMessage, createToolResultMessage, LlmAdapter, LlmError, createMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import type {
   ContentBlock,
@@ -863,6 +863,58 @@ describe('pressure measurement and retention', () => {
     expect(session.surface.nodes).toEqual(originalNodes)
     expect(session.snapshotEvents().filter(event => event.type === 'compaction/summary')).toEqual([])
     expect(session.snapshotEvents().at(-1)).toMatchObject({ type: 'compaction/end', data: { error: 'summary failed' } })
+  })
+
+  it('shares one pressure-and-retention measurement before opening the compaction transaction', async () => {
+    const ctx = createContext()
+    try {
+      const compact = service(compactConfig, ctx)
+      const session = conversation(4)
+      const measuredRevisions: number[] = []
+      const originalMeasure = ctx.tokenMeter.measure.bind(ctx.tokenMeter)
+      const measure = vi.spyOn(ctx.tokenMeter, 'measure').mockImplementation((measuredSession, header) => {
+        measuredRevisions.push(measuredSession.seq)
+        return originalMeasure(measuredSession, header)
+      })
+      const failure = new Error('summary failed')
+      compact.error = failure
+
+      await expect(compactIfNeeded(compact, session, 'pressure')).rejects.toBe(failure)
+
+      const start = session.snapshotEvents().find(event => event.type === 'compaction/start')
+      if (start === undefined) throw new Error('pressure must open a compaction transaction')
+      expect(measuredRevisions.filter(revision => revision <= start.seq)).toHaveLength(1)
+      expect(measure.mock.calls[0]).toEqual([session, session.requestHeader()])
+      expect(measuredRevisions.some(revision => revision > start.seq)).toBe(true)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('recovers a pressure summary overflow below threshold while retaining the excluded suffix', async () => {
+    const ctx = createContext()
+    try {
+      const compact = service({ auto: false, thresholdRatio: 0.65, retainTokens: 180, compactionRetries: 0 }, ctx)
+      const session = conversation(4)
+      const originalNodes = [...session.surface.nodes]
+      const originalMessages = session.deriveMessages()
+      expect(ctx.tokenMeter.measure(session).totalTokens).toBeGreaterThanOrEqual(650)
+      compact.mutateDuringSummary = () => {
+        if (compact.calls.length === 1) throw new LlmError('summary input exceeds the model context', CONTEXT_WINDOW_EXCEEDED_CODE)
+      }
+
+      const result = await compactIfNeeded(compact, session, 'pressure')
+
+      expect(compact.calls.map(call => call.input.messages.length)).toEqual([6, 3])
+      expect(result?.shadowedSeqs).toEqual(originalNodes.slice(0, 3))
+      expect(session.surface.nodes.slice(1)).toEqual(originalNodes.slice(3))
+      expect(session.deriveMessages().slice(1)).toEqual(originalMessages.slice(3))
+      expect(ctx.tokenMeter.measure(session).totalTokens).toBeLessThan(650)
+      expect(session.snapshotEvents().filter(event => event.type.startsWith('compaction/')).map(event => event.type))
+        .toEqual(['compaction/start', 'compaction/summary', 'compaction/end'])
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 
   it('bounds retries when a shrinking checkpoint remains above threshold', async () => {
