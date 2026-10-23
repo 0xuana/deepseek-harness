@@ -24,25 +24,29 @@ export interface TextRefRange {
 const TEXT_REF_RE = /(^|\s)([/@])([\w-]+)/g
 /** One `@` path token: a quoted path through its closing quote or line end, or an unquoted run. */
 const PATH_TOKEN_RE = /(^|\s)(@(?:"[^"\n]*"?|[^\s"]+))/g
-/** What may follow a folder token: the trailing punctuation the sent-message path rule strips, then whitespace or the draft end. */
+/**
+ * What may follow an unquoted or open-quoted folder token's slash: trailing
+ * punctuation, then whitespace or the draft end. The class matches the
+ * punctuation that `folderReferenceRule` in ui-reference strips from a sent token.
+ */
 const FOLDER_END_RE = /[.,;:!?，。；：！？]*(?:\s|$)/y
 
 /**
  * End of the whole `@dir/` folder token at `start`, so `@src/a.ts` and
- * `@"a/b c.md"` never match their directory prefix. A closed quote must
- * directly follow the slash; an unquoted or open-quoted token (a drill in
- * progress) ends at its last slash.
+ * `@"a/b c.md"` never match their directory prefix. A closed quote ends the
+ * token when it directly follows the slash; an unquoted or open-quoted token
+ * (a drill in progress) ends at its last slash.
  * @param draft - draft text.
  * @param start - offset of the token's `@`.
  * @param token - the path token at `start`.
  * @returns the folder token's end offset, or undefined for a non-folder token.
  */
 function folderEnd(draft: string, start: number, token: string): number | undefined {
-  const closed = token.length > 2 && token.startsWith('@"') && token.endsWith('"')
-  const end = closed ? start + token.length : start + token.lastIndexOf('/') + 1
-  if (end === start || (closed && !token.endsWith('/"'))) return undefined
-  FOLDER_END_RE.lastIndex = end
-  return FOLDER_END_RE.test(draft) ? end : undefined
+  if (token.startsWith('@"') && token.endsWith('/"')) return start + token.length
+  const slash = token.lastIndexOf('/')
+  if (slash < 0 || token.endsWith('"')) return undefined
+  FOLDER_END_RE.lastIndex = start + slash + 1
+  return FOLDER_END_RE.test(draft) ? start + slash + 1 : undefined
 }
 /**
  * What may follow a `/name` token: whitespace or the draft end, the boundary
