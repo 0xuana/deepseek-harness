@@ -18,8 +18,12 @@ function dataOf<T>(event: MatchEvent): T {
   return (event as MatchEvent & { data: T }).data
 }
 
-/** Turn and step a Location resolves, or null when the window lost them. */
-function locationTurnStep(
+/**
+ * Turn and step a Location resolves.
+ * @param location - engine Location of a match.
+ * @returns the resolved turn and step, or null when the window lost them.
+ */
+export function locationTurnStep(
   location: ConversationLocation | undefined,
 ): { readonly turn: number; readonly step: number | null } | null {
   if (location === undefined) return null

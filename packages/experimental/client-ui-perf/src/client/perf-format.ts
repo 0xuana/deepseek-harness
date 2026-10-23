@@ -103,18 +103,25 @@ export function formatDateTimeShort(value: number | null): string {
     + `${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+/** Local timestamp: full date or month-day, seconds, and optional milliseconds. */
+function formatStamp(value: number | null, fullDate: boolean, millis: boolean): string {
+  if (!isNumber(value)) return DASH
+  const date = new Date(value)
+  const pad = (part: number, width = 2): string => String(part).padStart(width, '0')
+  const day = fullDate
+    ? `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+    : `${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+  const clock = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  return `${day} ${clock}${millis ? `.${pad(date.getMilliseconds(), 3)}` : ''}`
+}
+
 /**
  * Full timestamp with milliseconds for tooltips.
  * @param value - epoch milliseconds.
  * @returns `YYYY-MM-DD HH:MM:SS.mmm`, or the dash placeholder.
  */
 export function formatDateTimeMs(value: number | null): string {
-  if (!isNumber(value)) return DASH
-  const date = new Date(value)
-  const pad = (part: number, width = 2): string => String(part).padStart(width, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} `
-    + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-    + `.${pad(date.getMilliseconds(), 3)}`
+  return formatStamp(value, true, true)
 }
 
 /**
@@ -123,12 +130,7 @@ export function formatDateTimeMs(value: number | null): string {
  * @returns `MM-DD HH:MM:SS.mmm`, or the dash placeholder.
  */
 export function formatStepClock(value: number | null): string {
-  if (!isNumber(value)) return DASH
-  const date = new Date(value)
-  const pad = (part: number, width = 2): string => String(part).padStart(width, '0')
-  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} `
-    + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-    + `.${pad(date.getMilliseconds(), 3)}`
+  return formatStamp(value, false, true)
 }
 
 /**
@@ -137,11 +139,7 @@ export function formatStepClock(value: number | null): string {
  * @returns `YYYY-MM-DD HH:MM:SS`, or the dash placeholder.
  */
 export function formatDateTime(value: number | null): string {
-  if (!isNumber(value)) return DASH
-  const date = new Date(value)
-  const pad = (part: number): string => String(part).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} `
-    + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  return formatStamp(value, true, false)
 }
 
 /**

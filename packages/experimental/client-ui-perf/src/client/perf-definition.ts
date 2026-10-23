@@ -22,7 +22,7 @@ import {
 import {
   compactionEventId, compactionMetrics, foldCompaction, newCompactionState,
 } from './perf-compaction.ts'
-import { eventMetrics } from './perf-event.ts'
+import { eventMetrics, locationTurnStep } from './perf-event.ts'
 
 /** Target name shared by every Definition and the view builder. */
 export const TARGET = 'perf'
@@ -48,16 +48,6 @@ const EVENT_KIND = 'perf-event'
 /** Marker ids never collide with a step number. */
 const PROMPT_STEP = 0
 const END_STEP = 100_000
-
-/** Turn and step a match's Location resolves, or null when the window lost them. */
-function locationTurnStep(
-  location: ConversationLocation | undefined,
-): { readonly turn: number; readonly step: number | null } | null {
-  if (location === undefined) return null
-  if (location.kind === 'turn') return { turn: location.turn.turn, step: null }
-  if (location.kind === 'step') return { turn: location.turn.turn, step: location.step.step }
-  return null
-}
 
 /** Location a published node carries: the start match's, else the newest match's. */
 function nodeLocation(context: ConversationNodeContext<PerfStepState>): ConversationLocation {
