@@ -11,25 +11,11 @@ export function isNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
-/**
- * Counts are non-negative; a negative value counts as unreported.
- * @param value - candidate token count.
- * @returns true when the value is a usable count.
- */
-export function isCount(value: unknown): value is number {
-  return isNumber(value) && value >= 0
-}
-
-/**
- * Whether one usage object carries any token count.
- * @param value - candidate usage object.
- * @returns true when at least one count was reported.
- */
-export function isUsage(value: unknown): value is PerfUsage {
-  if (value === null || typeof value !== 'object') return false
-  const usage = value as PerfUsage
-  return isCount(usage.inputTokens) || isCount(usage.outputTokens)
-    || isCount(usage.cacheReadTokens) || isCount(usage.cacheWriteTokens)
+/** Whether one usage object reported any token bucket. */
+function reported(usage: PerfUsage | null): usage is PerfUsage {
+  return usage !== null
+    && (usage.inputTokens !== undefined || usage.outputTokens !== undefined
+      || usage.cacheReadTokens !== undefined || usage.cacheWriteTokens !== undefined)
 }
 
 /**
@@ -38,10 +24,8 @@ export function isUsage(value: unknown): value is PerfUsage {
  * @returns prompt token count, or null when nothing was reported.
  */
 export function contextTokens(usage: PerfUsage | null): number | null {
-  if (!isUsage(usage)) return null
-  return (isCount(usage.inputTokens) ? usage.inputTokens : 0)
-    + (isCount(usage.cacheReadTokens) ? usage.cacheReadTokens : 0)
-    + (isCount(usage.cacheWriteTokens) ? usage.cacheWriteTokens : 0)
+  if (!reported(usage)) return null
+  return (usage.inputTokens ?? 0) + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
 }
 
 /**
@@ -50,7 +34,7 @@ export function contextTokens(usage: PerfUsage | null): number | null {
  * @returns output token count, or null when unreported.
  */
 export function outputTokens(usage: PerfUsage | null): number | null {
-  return isUsage(usage) && isCount(usage.outputTokens) ? usage.outputTokens : null
+  return reported(usage) ? usage.outputTokens ?? null : null
 }
 
 /**
@@ -59,7 +43,7 @@ export function outputTokens(usage: PerfUsage | null): number | null {
  * @returns cache-read token count, or null when unreported.
  */
 export function cacheReadTokens(usage: PerfUsage | null): number | null {
-  return isUsage(usage) && isCount(usage.cacheReadTokens) ? usage.cacheReadTokens : null
+  return usage?.cacheReadTokens ?? null
 }
 
 /**
@@ -68,7 +52,7 @@ export function cacheReadTokens(usage: PerfUsage | null): number | null {
  * @returns cache-write token count, or null when unreported.
  */
 export function cacheWriteTokens(usage: PerfUsage | null): number | null {
-  return isUsage(usage) && isCount(usage.cacheWriteTokens) ? usage.cacheWriteTokens : null
+  return usage?.cacheWriteTokens ?? null
 }
 
 /**

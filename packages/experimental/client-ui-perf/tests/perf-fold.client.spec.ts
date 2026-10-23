@@ -35,7 +35,7 @@ import {
 } from '../src/client/perf-format.ts'
 import type { PerfCall, PerfStepMetrics, PerfStepState } from '../src/client/perf-contract.ts'
 import {
-  cacheHitRate, cacheReadTokens, cacheWriteTokens, contextTokens, isCount, isNumber, isUsage, outputTokens,
+  cacheHitRate, cacheReadTokens, cacheWriteTokens, contextTokens, isNumber, outputTokens,
 } from '../src/client/perf-usage.ts'
 
 let seq = 0
@@ -367,21 +367,11 @@ describe('display formatting boundaries', () => {
 })
 
 describe('token accounting helpers', () => {
-  it('accepts only finite, non-negative counts and usage with one reported count', () => {
+  it('accepts only finite numeric measurements', () => {
     expect(isNumber(0)).toBe(true)
     expect(isNumber(Number.NaN)).toBe(false)
     expect(isNumber(Number.POSITIVE_INFINITY)).toBe(false)
     expect(isNumber('1')).toBe(false)
-    expect(isCount(0)).toBe(true)
-    expect(isCount(-1)).toBe(false)
-    expect(isCount(null)).toBe(false)
-    expect(isUsage(null)).toBe(false)
-    expect(isUsage('usage')).toBe(false)
-    expect(isUsage({})).toBe(false)
-    expect(isUsage({ inputTokens: -1, outputTokens: -2 })).toBe(false)
-    expect(isUsage({ outputTokens: 5 })).toBe(true)
-    expect(isUsage({ cacheReadTokens: 0 })).toBe(true)
-    expect(isUsage({ cacheWriteTokens: 7 })).toBe(true)
   })
 
   it('sums disjoint prompt counts with absent fields counting as zero', () => {
@@ -391,6 +381,7 @@ describe('token accounting helpers', () => {
     expect(contextTokens({ cacheWriteTokens: 7 })).toBe(7)
     expect(contextTokens({ inputTokens: 3 })).toBe(3)
     expect(contextTokens({ outputTokens: 9 })).toBe(0)
+    expect(contextTokens({})).toBeNull()
   })
 
   it('reports each optional count only when the usage carries it', () => {
