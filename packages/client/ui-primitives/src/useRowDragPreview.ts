@@ -7,6 +7,7 @@ import css from './RowDragPreview.module.css'
 /**
  * Own a row's inert drag preview until drag end, replacement, or unmount.
  * The offscreen copy keeps WebKit snapshots separate from overlapping panels.
+ * The copy retains the source row's custom properties outside its layout ancestors.
  * Its cloned slot DOM remains in document.body for that lifetime; query live rows
  * within their list to exclude duplicate text and element IDs.
  * @param className - preview background matching the row's surface; WebKit fills
@@ -48,6 +49,10 @@ export function useRowDragPreview(className: string): {
         image.className = clsx(css.preview, className)
         image.inert = true
         image.setAttribute('aria-hidden', 'true')
+        for (let index = 0; index < style.length; index++) {
+          const property = style.item(index)
+          if (property.startsWith('--')) image.style.setProperty(property, style.getPropertyValue(property))
+        }
         Object.assign(image.style, {
           left: `${String(-rect.width)}px`, width: `${String(rect.width)}px`,
           height: `${String(rect.height)}px`, font: style.font,

@@ -4,8 +4,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  width: calc(100% + 4px);
-  margin: 4px -2px;
+  width: 100%;
+  margin: 4px 0;
+}
+
+.triggerRow:not(.railRow):has(button[data-signed-out='false']) {
+  width: calc(100% - 4px);
+  margin-inline: 2px;
 }
 
 .triggerRow.railRow {
@@ -18,15 +23,17 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--dsh-sidebar-label-gap);
   width: auto;
   height: 42px;
   margin: 0;
-  padding: 0 10px 0 8px;
+  padding: 0 calc(var(--dsh-sidebar-row-padding) - var(--dsh-sidebar-paint-inset));
   box-sizing: border-box;
   border: none;
   border-radius: var(--dsw-radius-md);
   background: transparent;
+  border-inline: var(--dsh-sidebar-paint-inset) solid transparent;
+  background-clip: padding-box;
   cursor: pointer;
   overflow: hidden;
   color: var(--dsw-alias-label-primary);
@@ -37,7 +44,7 @@
 
 @media (hover: hover) {
   .trigger:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
+    background-color: var(--dsw-alias-interactive-bg-hover);
   }
 }
 
@@ -51,6 +58,8 @@
   justify-content: center;
   gap: 0;
   padding: 0;
+  border-inline: 0;
+  background-clip: border-box;
 }
 
 .triggerLabel {
@@ -173,7 +182,7 @@
 
 @media (hover: hover) {
   .navCell:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
+    background-color: var(--dsw-alias-interactive-bg-hover);
   }
 }
 
@@ -232,7 +241,7 @@
 
 @media (hover: hover) {
   .close:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
+    background-color: var(--dsw-alias-interactive-bg-hover);
   }
 }
 

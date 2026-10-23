@@ -65,6 +65,22 @@ describe('row drag preview', () => {
     expect(third.isConnected).toBe(false)
   })
 
+  it('retains computed custom properties outside the source layout ancestors', () => {
+    const { row, start } = fixture(false)
+    const original = globalThis.getComputedStyle
+    const computed = document.createElement('div').style
+    computed.cssText = original(row).cssText
+    computed.setProperty('--row-inset', '3px')
+    computed.setProperty('--row-label-gap', '6px')
+    vi.spyOn(globalThis, 'getComputedStyle').mockImplementation((element, pseudo) =>
+      element === row ? computed : original(element, pseudo))
+    const image = start()
+    expect(image.style.getPropertyValue('--row-inset')).toBe('3px')
+    expect(image.style.getPropertyValue('--row-label-gap')).toBe('6px')
+    expect(row.style.getPropertyValue('--row-inset')).toBe('')
+    expect(row.style.getPropertyValue('--row-label-gap')).toBe('')
+  })
+
   it('removes a rejected custom preview while allowing native drag cleanup', () => {
     const { source, dataTransfer, start } = fixture(true)
     dataTransfer.setDragImage.mockImplementation(() => { throw new DOMException('Unavailable') })

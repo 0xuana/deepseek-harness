@@ -349,7 +349,7 @@ function ProjectRow({
               aria-label={t('actions.newSession.aria', { name: label })}
               onClick={(e) => { e.stopPropagation(); onCreate() }}
             >
-              <IconNewChatOutlineRegular />
+              <IconNewChatOutlineRegular size={14} />
             </button>
           </Tooltip>
         )}
