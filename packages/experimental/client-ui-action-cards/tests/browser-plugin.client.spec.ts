@@ -10,7 +10,7 @@ import { mountActionCards, inject } from '../src/client/mount.ts'
 import { apply as hostApply } from '../src/index.ts'
 import type { TailInjected } from '../src/client/Card.tsx'
 
-const apply = (ctx: Context) => mountActionCards(ctx, { package: '@deepseek-ai/dsh-experimental-action-cards', descriptors: [] })
+const apply = (ctx: Context) => mountActionCards(ctx, { package: '@deepseek-ai/dsh-action-cards', descriptors: [] })
 const Body = () => null
 
 it('binds actions to the displayed session, serves registered bodies and removes registrations on unload', async () => {

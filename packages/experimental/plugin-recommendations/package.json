@@ -57,8 +57,8 @@
   "dependencies": {
     "zod": "4.4.3",
     "@deepseek-ai/dsh-experimental-client-ui-plugin-recommendations": "workspace:*",
-    "@deepseek-ai/dsh-experimental-action-cards": "workspace:*",
-    "@deepseek-ai/dsh-experimental-client-ui-action-cards": "workspace:*"
+    "@deepseek-ai/dsh-action-cards": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-action-cards": "workspace:*"
   },
   "files": [
     "icon.svg",

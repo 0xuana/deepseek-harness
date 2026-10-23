@@ -6,7 +6,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type {
   ActionCardDecision, ActionCardFields, ActionCardProposal, ActionCardResult, ActionCardView,
-} from '@deepseek-ai/dsh-experimental-action-cards/types'
+} from '@deepseek-ai/dsh-action-cards/types'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { ActionCardKey } from './locales.ts'
 import type { FoldedTextProps, RegisteredBody } from './registry.ts'

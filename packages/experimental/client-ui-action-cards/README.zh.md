@@ -3,7 +3,7 @@ description: "可选操作卡片的浏览器端：已完成回答下方的卡片
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-experimental-client-ui-action-cards
+# @deepseek-ai/dsh-client-ui-action-cards
 
 [English](README.md) | 中文
 

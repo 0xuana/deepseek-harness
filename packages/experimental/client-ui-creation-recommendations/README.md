@@ -3,7 +3,7 @@ description: "Show completed-answer creation cards with location choice, Keep an
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-experimental-client-ui-creation-recommendations
+# @deepseek-ai/dsh-client-ui-creation-recommendations
 
 English | [中文](README.zh.md)
 

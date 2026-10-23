@@ -7,7 +7,7 @@
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "license": "MIT",
-  "name": "@deepseek-ai/dsh-experimental-client-ui-action-cards",
+  "name": "@deepseek-ai/dsh-client-ui-action-cards",
   "description": "Action cards below completed answers: the shared card frame, kind bodies and the compact tool row",
   "repository": {
     "type": "git",
@@ -57,7 +57,7 @@
     "@deepseek-ai/dsh-client-ui-primitives": "workspace:*",
     "@deepseek-ai/dsh-client-ui-tool": "workspace:*",
     "react": "^18.2.0",
-    "@deepseek-ai/dsh-experimental-action-cards": "workspace:*",
+    "@deepseek-ai/dsh-action-cards": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/dsh-client-test-runtime": "workspace:*"
