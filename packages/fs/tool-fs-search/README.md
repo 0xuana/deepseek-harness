@@ -105,6 +105,8 @@ Local workspace discovery is naturally a process-backed `rg` workflow, and putti
 
 ### How a search runs
 
+Without an explicit `path`, `glob` narrows traversal for patterns such as `packages/core/src/*.ts` when every directory component is a simple relative name and an existing non-symlink directory. Other patterns retain workspace traversal; matching, modification-time ordering, and the logical result root stay unchanged.
+
 Each call resolves the packaged binary (`@vscode/ripgrep`, or the executable's `-rg` sidecar in a pkg single-file runtime), prepends `--no-config` so a host `RIPGREP_CONFIG_PATH` cannot inject a `--pre` preprocessor into the unconfined spawn, and passes every model-controlled value as a plain argv element — no shell layer exists, so no quoting applies. Collect-mode budgets bound complete stdout and a stderr tail; a lossy stdout read fails as `SEARCH_RAW_OUTPUT_OVERFLOW` rather than parsing a silently-partial stream. The tools never read a raw spill path.
 
 ### Two budgets, two artifacts

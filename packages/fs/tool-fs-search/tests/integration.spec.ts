@@ -12,9 +12,9 @@ import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -74,10 +74,52 @@ describe('search tools over the real subprocess service + the packaged rg', () =
   })
 
   afterEach(async () => {
+    vi.restoreAllMocks()
+    await ctx.fiber.dispose()
     await rm(dir, { recursive: true, force: true })
   })
 
   describe('glob', () => {
+    it('starts a literal-prefix search inside its directory and preserves workspace-relative results', async () => {
+      await mkdir(join(dir, 'packages', 'core', 'src', 'nested'), { recursive: true })
+      await writeFile(join(dir, 'packages', 'core', 'src', 'old.ts'), '')
+      await writeFile(join(dir, 'packages', 'core', 'src', '.hidden.ts'), '')
+      await writeFile(join(dir, 'packages', 'core', 'src', 'nested', 'other.ts'), '')
+      await writeFile(join(dir, '.gitignore'), 'packages/\n')
+      await utimes(join(dir, 'packages', 'core', 'src', 'old.ts'), new Date(2000, 0, 1), new Date(2000, 0, 1))
+      const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+      const result = await call('glob', { pattern: 'packages/core/src/*.ts' }, agent())
+      expect(result.isError).toBe(false)
+      if (result.isError) throw new Error('expected glob success')
+      expect(result.value).toEqual({ root: '.', paths: [
+        join('packages', 'core', 'src', 'old.ts'),
+        join('packages', 'core', 'src', '.hidden.ts'),
+      ] })
+      expect(spawn.mock.calls[0]?.[0].argv.slice(-2)).toEqual(['--', 'packages/core/src'])
+    })
+
+    it.each(['*.ts', '**/*.ts', 'src/**/*.ts', '!src/*.ts', './src/*.ts', 'src/../src/*.ts', 'missing/*.ts', 'notes.md/*.ts', '.git/*.ts'])(
+      'keeps the original traversal for %s', async (pattern) => {
+        const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+        const result = await call('glob', { pattern }, agent())
+        expect(result.isError).toBe(false)
+        expect(spawn.mock.calls[0]?.[0].argv).not.toContain('--')
+      },
+    )
+
+    it('preserves case-sensitive glob matching on case-insensitive filesystems', async () => {
+      expect(text(await call('glob', { pattern: 'SRC/*.ts' }, agent()))).toBe('No files found')
+    })
+
+    it('does not follow a directory link when narrowing a literal prefix', async () => {
+      await mkdir(join(dir, 'src', 'nested'))
+      await writeFile(join(dir, 'src', 'nested', 'file.ts'), '')
+      await symlink(join(dir, 'src'), join(dir, 'linked'), 'junction')
+      const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+      expect(text(await call('glob', { pattern: 'linked/nested/*.ts' }, agent()))).toBe('No files found')
+      expect(spawn.mock.calls[0]?.[0].argv).not.toContain('--')
+    })
+
     it('discovers files by pattern, sorted by modification time, hidden included, .git excluded', async () => {
       const result = await call('glob', { pattern: '**/*.ts' }, agent())
       expect(result.isError).toBe(false)
@@ -195,9 +237,9 @@ describe('search tools over the real subprocess service + the packaged rg', () =
       expect(result.error).toMatchObject({ info: { name: 'AbortError', code: TOOL_ABORTED_BEFORE_DISPATCH } })
     })
 
-    it('an unusable session cwd provider rejection is SEARCH_FAILED', async () => {
+    it.each(['*', 'src/*.ts'])('an unusable session cwd provider rejection is SEARCH_FAILED for %s', async (pattern) => {
       const gone = join(dir, 'deleted-session-dir')
-      const result = await call('glob', { pattern: '*' }, { session: { header: { id: 'session-int', cwd: gone } } })
+      const result = await call('glob', { pattern }, { session: { header: { id: 'session-int', cwd: gone } } })
       expect(result.isError).toBe(true)
       expect(result.error).toMatchObject({ info: { name: 'SearchError', code: 'SEARCH_FAILED' } })
       expect(text(result)).toContain('subprocess failed before reporting an outcome')
