@@ -11,7 +11,7 @@ import {
   sendFrame,
   unsupportedFrameRefusal,
   viewerRequestFields,
-} from '@deepseek-ai/dsh-experimental-liveshare-protocol/protocol'
+} from '@deepseek-ai/dsh-experimental-liveshare-protocol'
 
 /** One registration token; the parsers accept only this UUID-v4 shape. */
 const REGISTRATION = '11111111-1111-4111-8111-111111111111'

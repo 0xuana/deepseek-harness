@@ -11,7 +11,7 @@ import {
   parseTunnelWorkerEvent,
   rejectedCommandShareId,
   unsupportedFrameRefusal,
-} from '@deepseek-ai/dsh-experimental-liveshare-protocol/protocol'
+} from '@deepseek-ai/dsh-experimental-liveshare-protocol'
 
 /** Which two endpoints exchanged a recorded frame, which also names the codec that reads it. */
 type Direction = 'relay->gateway' | 'gateway->relay' | 'host->worker' | 'worker->host'

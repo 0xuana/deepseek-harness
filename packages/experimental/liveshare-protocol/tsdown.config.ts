@@ -12,9 +12,6 @@ export default defineConfig(({ env }) => {
   return {
     entry: [
       'lib/types/index.js',
-      'lib/types/identity/index.js',
-      'lib/types/identity/mock.js',
-      'lib/types/tunnel-protocol.js',
     ],
     outDir: 'lib',
     format: ['esm'],

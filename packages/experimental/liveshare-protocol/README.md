@@ -26,13 +26,13 @@ English | [中文](README.zh.md)
 
 ### When to use it
 
-Import `./protocol` and `./identity` from this package whenever code must speak the Liveshare wire or resolve one viewer identity: the owner host and its gateway worker, the Relay server and its acceptance tests. The viewer carrier and the viewer-state vocabulary are imported from the package root. This is a library — no profile mounts it and no `cordis.yml` row names it.
+Import this package whenever code must speak the Liveshare wire or resolve one viewer identity: the owner host and its gateway worker, the Relay server and its acceptance tests. The root entry carries the wire codecs, the identity contract, the viewer carrier, and the viewer-state vocabulary; the mock provider lives in `src/identity/mock.ts` for tests only and no package entry exposes it. This is a library — no profile mounts it and no `cordis.yml` row names it.
 
 ### Entry point
 
 ```ts
-import { parseGatewayFrame, rawText, sendFrame } from '@deepseek-ai/dsh-experimental-liveshare-protocol/protocol'
-import { identityKeyOf, normalizeIdentity } from '@deepseek-ai/dsh-experimental-liveshare-protocol/identity'
+import { parseGatewayFrame, rawText, sendFrame } from '@deepseek-ai/dsh-experimental-liveshare-protocol'
+import { identityKeyOf, normalizeIdentity } from '@deepseek-ai/dsh-experimental-liveshare-protocol'
 ```
 
 The viewer carrier (`installViewerCarrier`) and the viewer-state vocabulary are published through the root entry, not through their own subpaths, because both faces of the owner page consume them together.
@@ -56,7 +56,7 @@ Relay compatibility uses declared versions, capabilities, and explicit refusals,
 | [`src/index.ts`](src/index.ts) | Both faces re-exported for callers that want one import |
 | [`src/tunnel-protocol.ts`](src/tunnel-protocol.ts) | Owner/worker IPC frames, gateway frames, and their codecs |
 | [`src/viewer-carrier.ts`](src/viewer-carrier.ts) | Viewer-page carrier script and the owner page routes it forwards; reachable through the root entry |
-| [`src/viewer-states.ts`](src/viewer-states.ts) | Viewer state vocabulary and its answers, re-exported by `./protocol` and the root entry |
+| [`src/viewer-states.ts`](src/viewer-states.ts) | Viewer state vocabulary and its answers, re-exported by the root entry |
 | [`src/identity/types.ts`](src/identity/types.ts) | Provider-neutral identity triple and `IdentityProvider` contract |
 | [`src/identity/keys.ts`](src/identity/keys.ts) | Canonical ACL key codec and the tenant normalization adapters apply before storing an identity |
 | [`src/identity/mock.ts`](src/identity/mock.ts) | Loopback identity provider for local runs and tests |

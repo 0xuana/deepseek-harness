@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MockIdentityProvider,
   type MockIdentityPersona,
-} from '@deepseek-ai/dsh-experimental-liveshare-protocol/identity/mock'
+} from '../src/identity/mock.ts'
 
 /** The personas one provider is built from; the array stays writable so a test can empty it. */
 function personas(): MockIdentityPersona[] {

@@ -6,7 +6,7 @@ import {
   normalizeIdentity,
   requireIdentityTenant,
   type IdentityActor,
-} from '@deepseek-ai/dsh-experimental-liveshare-protocol/identity'
+} from '@deepseek-ai/dsh-experimental-liveshare-protocol'
 
 const actor: IdentityActor = {
   providerId: 'example',

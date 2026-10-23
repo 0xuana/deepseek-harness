@@ -1,27 +1,23 @@
-/** The package's public entry points re-export the one shared contract. */
+/** The package's single public entry carries the whole shared contract. */
 
 import { expect, it } from 'vitest'
-import * as identity from '@deepseek-ai/dsh-experimental-liveshare-protocol/identity'
-import * as protocol from '@deepseek-ai/dsh-experimental-liveshare-protocol/protocol'
 import * as root from '@deepseek-ai/dsh-experimental-liveshare-protocol'
+import { MockIdentityProvider } from '../src/identity/mock.ts'
 
-it('publishes the mock identity provider only on its test-scoped entry', async () => {
-  const mock = await import('@deepseek-ai/dsh-experimental-liveshare-protocol/identity/mock')
-  expect(mock.MockIdentityProvider).toBeTypeOf('function')
-  expect('MockIdentityProvider' in root).toBe(false)
-})
-
-it('re-exports the protocol and identity contracts from the package root', () => {
-  expect(root.LIVESHARE_PROTOCOL_VERSION).toBe(protocol.LIVESHARE_PROTOCOL_VERSION)
-  expect(root.parseShareAccessState).toBe(protocol.parseShareAccessState)
-  expect(root.identityKeyOf).toBe(identity.identityKeyOf)
-  expect('MockIdentityProvider' in identity).toBe(false)
+it('publishes the wire, identity, carrier, and viewer-state contracts from the package root', () => {
+  expect(root.LIVESHARE_PROTOCOL_VERSION).toBeTypeOf('number')
+  expect(root.parseShareAccessState).toBeTypeOf('function')
+  expect(root.parseTunnelWorkerCommand).toBeTypeOf('function')
+  expect(root.identityKeyOf({ providerId: 'p', tenantId: 't', subjectId: 's' })).toBe('p:t:s')
+  expect(root.identityFromKey('p:t:s')).toEqual({ providerId: 'p', tenantId: 't', subjectId: 's' })
+  expect(root.identityFromKey('p:t')).toBeUndefined()
+  expect(root.identityFromKey('p::s')).toBeUndefined()
   expect(root.viewerCarrierScript).toBeTypeOf('function')
+  expect(root.VIEWER_STATE_REACH).toBeTypeOf('object')
 })
 
-it('re-exports the identity contract from its own entry', () => {
-  expect(identity.identityKeyOf({ providerId: 'p', tenantId: 't', subjectId: 's' })).toBe('p:t:s')
-  expect(identity.identityFromKey('p:t:s')).toEqual({ providerId: 'p', tenantId: 't', subjectId: 's' })
-  expect(identity.identityFromKey('p:t')).toBeUndefined()
-  expect(identity.identityFromKey('p::s')).toBeUndefined()
+it('keeps the mock identity provider out of the published surface', () => {
+  // Tests import the mock from its source module; no package entry exposes it.
+  expect('MockIdentityProvider' in root).toBe(false)
+  expect(MockIdentityProvider).toBeTypeOf('function')
 })

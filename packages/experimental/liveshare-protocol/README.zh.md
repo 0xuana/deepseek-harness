@@ -26,13 +26,13 @@ kind: "package-library"
 
 ### 何时使用
 
-凡是需要说 Liveshare 线路协议或解析某个 viewer 身份的代码，都从本包导入 `./protocol` 与 `./identity`：owner host 及其 gateway worker、Relay server 及其验收测试。查看页载体与查看页状态词汇从包根入口导入。这是一个库——没有 profile 会挂载它，也没有 `cordis.yml` 行引用它。
+凡是需要说 Liveshare 线路协议或解析某个 viewer 身份的代码，都导入本包：owner host 及其 gateway worker、Relay server 及其验收测试。包根入口同时携带帧编解码、身份契约、查看页载体与查看页状态词汇；mock provider 位于 `src/identity/mock.ts`，仅供测试使用，任何包入口都不导出它。这是一个库——没有 profile 会挂载它，也没有 `cordis.yml` 行引用它。
 
 ### 入口
 
 ```ts
-import { parseGatewayFrame, rawText, sendFrame } from '@deepseek-ai/dsh-experimental-liveshare-protocol/protocol'
-import { identityKeyOf, normalizeIdentity } from '@deepseek-ai/dsh-experimental-liveshare-protocol/identity'
+import { parseGatewayFrame, rawText, sendFrame } from '@deepseek-ai/dsh-experimental-liveshare-protocol'
+import { identityKeyOf, normalizeIdentity } from '@deepseek-ai/dsh-experimental-liveshare-protocol'
 ```
 
 查看页载体（`installViewerCarrier`）与查看页状态词汇通过根入口发布，而不是各自的子路径，因为 owner 页面的两个面会一起消费它们。
@@ -56,7 +56,7 @@ Relay 兼容性依靠声明版本、能力和明确拒绝，不提供逐发布�
 | [`src/index.ts`](src/index.ts) | 为只想一次导入的调用方复出两个面 |
 | [`src/tunnel-protocol.ts`](src/tunnel-protocol.ts) | owner/worker IPC 帧、gateway 帧及其编解码 |
 | [`src/viewer-carrier.ts`](src/viewer-carrier.ts) | 查看页载体脚本及其转发的 owner 页面路由；经根入口引入 |
-| [`src/viewer-states.ts`](src/viewer-states.ts) | 查看页状态词汇及其应答，由 `./protocol` 与根入口复出 |
+| [`src/viewer-states.ts`](src/viewer-states.ts) | 查看页状态词汇及其应答，由根入口复出 |
 | [`src/identity/types.ts`](src/identity/types.ts) | 与 provider 无关的身份三元组与 `IdentityProvider` 契约 |
 | [`src/identity/keys.ts`](src/identity/keys.ts) | 规范 ACL 身份键编解码，以及 adapter 存入身份前的 tenant 规范化 |
 | [`src/identity/mock.ts`](src/identity/mock.ts) | 供本地运行与测试使用的 loopback 身份 provider |
