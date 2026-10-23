@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Adds a Performance tab beside Chat and Trajectory. Turn rows expand into steps with context and output tokens, cache hit rate, first-token latency, model and tool time, output speed, and a total-time bar. Scrolling up pulls earlier turns through shared Session paging. The Trigger column names what opened the turn, including a team message's sender, and prompt images show a count pill with a hover preview in the shared viewer. The panel reads Session events and durable prompt images; it registers no tool, prompt section, or service.
+Adds a Statistics tab beside Chat and Trajectory. Turn rows expand into steps with context and output tokens, cache hit rate, first-token latency, model and tool time, output speed, and a total-time bar. Scrolling up pulls earlier turns through shared Session paging. The Trigger column names what opened the turn, including a team message's sender, and prompt images show a count pill with a hover preview in the shared viewer. The tab reads Session events and durable prompt images; it registers no tool, prompt section, or service.
 
 ## Table of Contents
 
@@ -83,7 +83,7 @@ Windows are bounded: when a step's `step/start` is outside the loaded window, it
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as the panel only reads Session events and renders them in the browser; it registers no tool, prompt section, or model input.
+None, as the tab only reads Session events and renders them in the browser; it registers no tool, prompt section, or model input.
 
 #### KV Cache effect
 
@@ -93,7 +93,7 @@ No effect. The package never constructs a model request and never mutates a prom
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **Not mounted by the default product.** The Web bundle refuses experimental packages by rule, so a profile or explicit composition must add the row.
+- **Not mounted by the default product.** The Web bundle refuses experimental packages by rule; the optional Developer tools bundle (`@deepseek-ai/dsh-experimental-inspector-profile`) mounts this view, or a profile can add the row explicitly.
 - **Trimmed windows lose start times.** When the loaded window begins mid-step, first-token, model time, and total time cannot be derived; the row says `start unknown` instead of estimating.
 - **Code-Mode dispatches merge by root-call context.** Inner calls carry no turn or step, so each root call opens its own context keyed by the root call id, and the builder merges its dispatches into the step that owns the runner. A window that lost the dispatch start still merges the calls but cannot show their measured duration.
 - **Browser evidence is a test-only overlay.** Package tests cover folding, aggregation, formatting, and the jsdom table; `apps/web/tests/client-ui-perf-panel.e2e.ts` mounts the plugin through a test-only overlay over the shipped Web surface and compares a committed ARIA golden. No recorded-session scenario exists because no shipped profile mounts the package yet.

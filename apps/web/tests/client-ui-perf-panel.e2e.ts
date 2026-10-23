@@ -1,4 +1,4 @@
-// Keyless assembled-browser coverage for the opt-in Performance view: the
+// Keyless assembled-browser coverage for the opt-in Statistics view: the
 // experimental client plugin is mounted only by the test overlay, so this Web
 // composition is the package's user-visible evidence outside the jsdom lane.
 import { fileURLToPath } from 'node:url'
@@ -49,7 +49,7 @@ function stream(firstTokenAt: number): AssistantStreamRecord[] {
   return [{ type: 'text-chunks', time0: firstTokenAt, index: 0, dt: [200], texts: ['Ready.'] }]
 }
 
-describe('Performance view overlay', () => {
+describe('Statistics view overlay', () => {
   it('mounts the experimental client plugin over the shipped Web surface', () => {
     expect(profileEntries(OVERLAY)).toEqual([{
       insert: [{ id: 'ui-client-ui-perf', name: '@deepseek-ai/dsh-experimental-client-ui-perf' }],
@@ -57,7 +57,7 @@ describe('Performance view overlay', () => {
   })
 })
 
-describe('web e2e: Performance view', () => {
+describe('web e2e: Statistics view', () => {
   let scaffold: WebScaffold
   let browser: Browser
   let page: Page
@@ -128,8 +128,8 @@ describe('web e2e: Performance view', () => {
 
   it('renders the measured context, timing, cache, and tool columns', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-client-ui-perf-panel'))
-    await page.getByRole('tab', { name: 'Performance', exact: true }).click()
-    const table = page.locator('table[aria-label="Performance"]')
+    await page.getByRole('tab', { name: 'Statistics', exact: true }).click()
+    const table = page.locator('table[aria-label="Statistics"]')
     await table.waitFor({ timeout: 10_000 })
     expect(await table.getByRole('columnheader', { name: 'Context', exact: true }).count()).toBe(1)
     expect(await table.getByRole('columnheader', { name: 'Output', exact: true }).count()).toBe(1)
@@ -148,7 +148,7 @@ describe('web e2e: Performance view', () => {
     expect(cells[8]).not.toBe('—')
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
-    const snapshot = await captureStableAria(page, 'table[aria-label="Performance"]', scaffold.workspaceCwd, {
+    const snapshot = await captureStableAria(page, 'table[aria-label="Statistics"]', scaffold.workspaceCwd, {
       replacements: [[cells[6]!, '{{ttft}}'], [cells[8]!, '{{tps}}']],
     })
     await compareOrRefreshGolden(PANEL_EXPECTED, snapshot, MODE)

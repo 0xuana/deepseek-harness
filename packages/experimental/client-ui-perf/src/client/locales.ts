@@ -5,7 +5,7 @@ export const NS = 'perf'
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
-  'view.perf': '性能',
+  'view.perf': '统计',
   'column.scope': '轮次 / 步骤',
   'column.scope.title': '轮次行是该轮的合计；点一行展开或折叠它的每一步',
   'column.prompt': '触发',
@@ -179,7 +179,7 @@ export type PerfTranslate = import('@deepseek-ai/dsh-client-ui-slots').Translate
 
 /** English dictionary, checked complete against the Chinese source of truth. */
 export const en: Record<PerfKey, string> = {
-  'view.perf': 'Performance',
+  'view.perf': 'Statistics',
   'column.scope': 'Turn / step',
   'column.scope.title': 'A turn row holds the turn total; click a row to expand or collapse its steps',
   'column.prompt': 'Trigger',
@@ -340,7 +340,7 @@ export const en: Record<PerfKey, string> = {
 
 /** Japanese dictionary, checked complete against the Chinese source of truth. */
 export const ja: Record<PerfKey, string> = {
-  'view.perf': 'パフォーマンス',
+  'view.perf': '統計',
   'column.scope': 'ターン / ステップ',
   'column.scope.title': 'ターン行はそのターンの合計です。行をクリックすると各ステップを展開または折りたたみます',
   'column.prompt': 'トリガー',

@@ -395,7 +395,7 @@ describe('browser plugin registration', () => {
     expect(registered.component).toBe(PerfView)
     expect(registered.options).toMatchObject({ id: 'perf', order: 40 })
     expect(registered.locale).toBe(NS)
-    expect(resolveSlotLabel(registered.options.label)).toBe('性能')
+    expect(resolveSlotLabel(registered.options.label)).toBe('统计')
     await bench.fiber.dispose()
     expect(bench.entries()).toEqual([])
     // The dictionary registration rides the plugin fiber effect; Definitions and
@@ -493,7 +493,7 @@ describe('locale dictionaries', () => {
   it('ships the same key set in both languages', () => {
     expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort())
     expect(Object.values(en).every(value => value !== '')).toBe(true)
-    expect(en['view.perf']).toBe('Performance')
+    expect(en['view.perf']).toBe('Statistics')
     expect(en['summary']).toContain('{turns}')
     expect(en['loadOlder']).toBe('Load earlier')
   })

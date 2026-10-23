@@ -1,4 +1,4 @@
-- table "Performance":
+- table "Statistics":
   - rowgroup:
     - row "Turn / step Trigger Execution Context Output Cache hit First token Model time Output speed Tool time Total time":
       - columnheader "Turn / step"
