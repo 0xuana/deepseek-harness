@@ -251,9 +251,11 @@ describe('prepared-route prompt admission', () => {
     const header = h.agent.session.snapshotEvents().filter(event => event.type === 'request/header').at(-1)
     expect(header?.data.reason).toBe(reason === 'explicit' ? 'series' : 'change')
     if (reason === 'tools') {
-      // A tool-schema change starts the prompt series without a system event; the header records
-      // the declaration change and tool history falls back to the full active set.
-      expect(request.tools?.map(tool => tool.name)).toContain('extra')
+      // A tool-schema change starts the prompt series without a system event. The header records
+      // the declaration change without `startsSeries`; the unsupported-route projection supplies
+      // the complete active set, while tool history keeps its incremental baseline.
+      expect(header?.data.startsSeries).toBeUndefined()
+      expect(request.tools?.map(tool => tool.name)).toEqual(['extra'])
     }
   })
 
@@ -279,6 +281,8 @@ describe('prepared-route prompt admission', () => {
     expect(systemTexts(request)).toEqual([
       [{ type: 'text', text: 'prompt one' }], [{ type: 'text', text: 'prompt two' }],
     ])
+    // The replacement shadows the previous request's last admitted message, so the shared wire
+    // prefix is everything before it.
     expect(request.messages.slice(0, previous.messages.length - 1)).toEqual(previous.messages.slice(0, -1))
   })
 
