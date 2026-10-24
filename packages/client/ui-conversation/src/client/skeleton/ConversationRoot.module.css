@@ -81,12 +81,32 @@
   padding-inline-start: max(0px, calc(var(--dsh-frame-leading-clearance, 0px) - 20px));
 }
 
+/* Header actions do not shrink, so on a narrow row they overflow the cluster.
+   The cluster clips them and fades its trailing edge while it overflows,
+   keeping the utilities unobstructed. The 4px padding, offset by the negative
+   margin, keeps focus rings inside the clip. */
 .titleCluster {
   display: flex;
   flex: 1;
   align-items: center;
   gap: 10px;
   min-width: 0;
+  margin: -4px;
+  padding: 4px;
+  overflow: hidden;
+  scroll-timeline: --title-cluster inline;
+  /* Longhands: the bundled lightningcss folds animation-timeline into the
+     animation shorthand, a form browsers reject. The timeline is active only
+     while the cluster overflows. */
+  animation-name: title-cluster-clipped;
+  animation-fill-mode: both;
+  animation-timeline: --title-cluster;
+}
+
+@keyframes title-cluster-clipped {
+  from, to {
+    mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+  }
 }
 
 /* The auto grid column collapses with an empty or CSS-hidden occupant.
