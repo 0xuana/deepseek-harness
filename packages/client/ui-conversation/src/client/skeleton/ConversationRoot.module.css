@@ -109,6 +109,13 @@
   }
 }
 
+/* Without scroll timelines overflow cannot be detected, so the cluster clips without a fade. */
+@supports not (animation-timeline: scroll()) {
+  .titleCluster {
+    animation: none;
+  }
+}
+
 /* The auto grid column collapses with an empty or CSS-hidden occupant.
    The occupant owns its trailing gap so hidden controls reserve no space. */
 .headerLeading {
