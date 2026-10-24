@@ -79,7 +79,7 @@ None unless the queued goal context is admitted. An admitted context extends the
 These limits define the current goal surface. They are current package constraints, not a goal-domain comparison or a task backlog.
 
 - **Preset-independent host state** — switching an active session to `minimal` leaves its host-owned goal intact. `/goal` and goal tools disappear, while this strip can still edit, pause, resume, or clear the goal.
-- **No round-budget control** — the strip cannot raise `maxGoalRounds`. Resuming a goal that used every round, such as one blocked by its round limit, fails with an inline error.
+- **No round-budget control** — the strip cannot raise `maxGoalRounds`. Resuming a goal that used every round, such as one blocked by its round limit, fails with an inline error; ask the agent to raise the goal's round limit first.
 
 <a id="dev-note"></a>
 ### Dev Note

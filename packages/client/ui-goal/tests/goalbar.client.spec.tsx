@@ -207,19 +207,12 @@ describe('GoalBar', () => {
     expect(screen.getByText('受阻的目标').closest('[title]')?.getAttribute('title')).toBe('No progress in 3 rounds')
   })
 
-  it('blocked goal: offers resume after the objective is edited', async () => {
+  it('blocked goal: offers resume and no pause', () => {
     const actions = makeActions()
-    const { rerender } = render(<GoalBar goal={makeGoal({ phase: 'blocked' })} {...actions} t={t} />)
-    fireEvent.click(screen.getByRole('button', { name: '编辑目标' }))
-    fireEvent.change(screen.getByRole('textbox', { name: '目标内容' }), { target: { value: 'Ship the fix' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存目标' }))
-    await waitFor(() => { expect(screen.queryByRole('textbox')).toBeNull() })
-    expect(actions.onEdit).toHaveBeenCalledWith('Ship the fix')
-
-    rerender(<GoalBar goal={makeGoal({ phase: 'blocked', revision: 2, objective: 'Ship the fix' })} {...actions} t={t} />)
+    render(<GoalBar goal={makeGoal({ phase: 'blocked' })} {...actions} t={t} />)
+    expect(screen.queryByRole('button', { name: '暂停目标' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '恢复目标' }))
     expect(actions.onResume).toHaveBeenCalledTimes(1)
-    expect(screen.queryByRole('button', { name: '暂停目标' })).toBeNull()
   })
 
   it('blocked goal without a reason carries no tooltip', () => {
