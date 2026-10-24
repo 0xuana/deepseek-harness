@@ -264,6 +264,7 @@ type ConversationTargetSources = {
 /** Real-stack bench: root Context + real SlotRegistry ring + the plugin fiber. */
 async function bench(snapshot = historySnapshot(NODES)) {
   const runtime = await SlotTestRuntime.create()
+  runtime.remote.provideNamespaces({ toolResults: {} })
   runtimes.push(runtime)
   const ctx = runtime.ctx
   const slots = runtime.slots

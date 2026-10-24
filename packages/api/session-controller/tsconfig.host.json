@@ -19,7 +19,8 @@
     "src/list.ts",
     "src/media-references.ts",
     "src/archived-session-gate.ts",
-    "src/skill-catalog.ts"
+    "src/skill-catalog.ts",
+    "src/tool-results.ts"
   ],
   "references": [
     {
@@ -114,6 +115,12 @@
     },
     {
       "path": "../../session/working-directory"
+    },
+    {
+      "path": "../../core/tools"
+    },
+    {
+      "path": "../../core/tool-executor-ptc"
     }
   ]
 }

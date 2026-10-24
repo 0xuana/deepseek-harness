@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import type { WatchToolResult } from './watch-tool-result.ts'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   CodeBlock,
@@ -388,6 +390,8 @@ function AssistantTimingPanel({
 
 /** Props for the trajectory ledger. */
 export interface TrajectoryTableProps {
+  /** Subscribe only while the raw result inspector is selected. */
+  watchToolResult?: WatchToolResult | undefined
   /** Browser-wide result mode, independent of record and inspector tab selection. */
   rawResult?: boolean
   /** Persist an explicit result mode selection. */
@@ -2088,6 +2092,7 @@ function OverviewSection({
  */
 export function TrajectoryTable({
   rawResult = false,
+  watchToolResult,
   onResultModeChange,
   t,
   stringWrapping,
@@ -2151,6 +2156,18 @@ export function TrajectoryTable({
   const selected = selectedTemplate === undefined
     ? undefined
     : currentRecord(selectedTemplate)
+  const resultSeq = activeTab === 'output' && rawResult ? selected?.cell.resultSeq : undefined
+  const [liveResult, setLiveResult] = useState<{ seq: number; owner: WatchToolResult; value: JsonValue | undefined }>()
+  useEffect(() => {
+    setLiveResult(undefined)
+    if (resultSeq === undefined || watchToolResult === undefined) return
+    let active = true
+    const dispose = watchToolResult(resultSeq, (value) => {
+      if (active) setLiveResult({ seq: resultSeq, owner: watchToolResult, value })
+    })
+    return () => { active = false; dispose() }
+  }, [resultSeq, watchToolResult])
+  const resultValue = liveResult?.seq === resultSeq && liveResult?.owner === watchToolResult ? liveResult?.value : undefined
   const selectedProgram = selected === undefined ? undefined : codeProgram(selected.cell)
   const thinkingExpanded = thinkingDisclosure?.recordId === selectedRecordId
     ? thinkingDisclosure.expanded
@@ -3539,8 +3556,8 @@ export function TrajectoryTable({
                           <IconCodeOutlineRegular size={12} />
                         </button>
                       </Tooltip>
-                      {rawResult && selected.cell.resultValue !== undefined && (
-                        <InspectorCopyButton text={JSON.stringify(selected.cell.resultValue, null, 2)}
+                      {rawResult && resultValue !== undefined && (
+                        <InspectorCopyButton text={JSON.stringify(resultValue, null, 2)}
                           label={t('copy.json')} t={t} />
                       )}
                     </span>
@@ -3548,12 +3565,12 @@ export function TrajectoryTable({
                 )}
                 <div id="trajectory-result-content">
                   {rawResult && (selected.cell.kind === 'tool' || selected.cell.kind === 'subtool')
-                    ? selected.cell.resultValue === undefined
+                    ? resultValue === undefined
                       ? <p className={css.noPayload}>{t('record.rawResultUnavailable')}</p>
-                      : selected.cell.resultValue !== null && typeof selected.cell.resultValue === 'object'
-                        ? <JsonTree data={selected.cell.resultValue} label={t('record.resultJson')}
+                      : resultValue !== null && typeof resultValue === 'object'
+                        ? <JsonTree data={resultValue} label={t('record.resultJson')}
                           labels={jsonTreeLabels(t)} stringWrapping={stringWrapping} />
-                        : <pre className={css.jsonPayload}>{JSON.stringify(selected.cell.resultValue)}</pre>
+                        : <pre className={css.jsonPayload}>{JSON.stringify(resultValue)}</pre>
                     : selectedProgram === undefined
                       ? <RecordPayload record={selected} direction="output" renderSlot={renderSlot} loadImage={loadImage} stringWrapping={stringWrapping} t={t} />
                       : <ProgramOutput record={selected} stringWrapping={stringWrapping} t={t} />}

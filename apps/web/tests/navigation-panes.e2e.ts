@@ -12,7 +12,9 @@ import { join } from 'node:path'
 import type { Browser, Page, Response } from 'playwright'
 import { chromium } from 'playwright'
 import { strFromU8, unzipSync } from 'fflate'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTestFailed, onTestFinished } from 'vitest'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { defineTool } from '@deepseek-ai/dsh-tools'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import { SESSION_FORMAT_VERSION, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import {
@@ -306,9 +308,12 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     await page.getByRole('tab', { name: 'Result' }).click()
     await expect.poll(() => page.getByText('NAVIGATION_OK', { exact: false }).count(), { timeout: 10_000 }).toBeGreaterThanOrEqual(1)
     expect(await page.locator('[data-timeline-span="message"][data-assistant-timing="true"]').count()).toBeGreaterThan(0)
+    await details.getByRole('button', { name: 'Raw result', exact: true }).click()
+    await page.getByText('Raw results are only available for live tool calls', { exact: true }).waitFor()
     const snapshot = (await captureStableAria(page, '[class*="viewArea"]', scaffold.workspaceCwd))
       .split(SEED_ID).join('{{seededId}}')
     await compareOrRefreshGolden(TRAJECTORY_EXPECTED, snapshot, MODE)
+    await details.getByRole('button', { name: 'Raw result', exact: true }).click()
     await details.getByRole('button', { name: 'Close details' }).click()
   }, 60_000)
 
@@ -630,4 +635,48 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
       'terminal-card.expected.md', 'timing.expected.md',
     ])
   })
+  it.skipIf(MODE === 'record')('inspects a live tool value without adding it to the Session journal', async () => {
+    await ensureSeedOpen(page)
+    await expect.poll(() => scaffold.ctx.agents.get(SessionId(SEED_ID)) !== undefined).toBe(true)
+    const agent = scaffold.ctx.agents.get(SessionId(SEED_ID))!
+    const unregister = scaffold.ctx.tools.register(defineTool({
+      name: 'live_result_probe', description: 'Live result inspection fixture.', parameters: {},
+      output: { schema: { type: 'json' }, render: () => [{ type: 'text', text: 'LIVE_RESULT_RENDERED' }] },
+      execute: async () => ({ answer: 42 }),
+    }))
+    onTestFinished(unregister)
+    const callId = ToolCallId('live-result-probe')
+    let resultEvent: SessionEvent | undefined
+    const off = scaffold.ctx.on('session/event', (_session, event) => {
+      if (event.type === 'tool/result' && event.data.message.toolCallId === callId) resultEvent = event
+    }, { global: true })
+    onTestFinished(() => { off() })
+    const batch = await scaffold.ctx.tools.execute({
+      agent, signal: new AbortController().signal, log: { turn: 2, step: 1 },
+      calls: [{ type: 'tool-call', id: callId, name: 'live_result_probe', arguments: '{}' }],
+    })
+    expect(batch.results[0]?.result.isError).toBe(false)
+    expect(resultEvent).toBeDefined()
+    expect(resultEvent?.data).not.toHaveProperty('value')
+    const abort = new AbortController()
+    const observed = scaffold.ctx.sessionToolResults.watch(
+      { sessionId: agent.id, seq: resultEvent!.seq }, abort.signal,
+    )[Symbol.asyncIterator]()
+    try {
+      expect((await observed.next()).value).toEqual({ available: true, value: { answer: 42 } })
+    } finally { abort.abort(); await observed.return?.() }
+
+    await page.getByRole('tab', { name: 'Trajectory' }).click()
+    await page.locator('tr[data-kind="tool"]').filter({ hasText: 'live_result_probe' }).click()
+    const details = page.getByRole('complementary', { name: 'Event details' })
+    await details.getByRole('tab', { name: 'Result', exact: true }).click()
+    await details.getByText('LIVE_RESULT_RENDERED', { exact: true }).waitFor()
+    await details.getByRole('button', { name: 'Raw result', exact: true }).click()
+    await expect.poll(() => details.getByRole('tabpanel').textContent()).toContain('answer:')
+    expect(await details.getByRole('tabpanel').textContent()).toContain('42')
+    expect(await details.getByText('Raw results are only available for live tool calls').count()).toBe(0)
+    await details.getByRole('button', { name: 'Raw result', exact: true }).click()
+    await details.getByText('LIVE_RESULT_RENDERED', { exact: true }).waitFor()
+  })
+
 })

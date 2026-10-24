@@ -49,4 +49,7 @@
     - tab "Result" [selected]
     - tab "Schema"
     - tab "Timing"
-  - tabpanel "Result": NAVIGATION_OK
+  - tabpanel "Result":
+    - text: Raw result
+    - button "Raw result" [pressed]
+    - paragraph: Raw results are only available for live tool calls

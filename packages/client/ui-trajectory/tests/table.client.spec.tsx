@@ -1135,13 +1135,17 @@ describe('TrajectoryTable', () => {
 
   it.each([null, false, 0, '', { answer: 42 }])('switches to the recorded value %j and retains the mode across records and tabs', (value) => {
     const turns: readonly TrajectoryTurnModel[] = [{ turn: 1, groups: [{ title: 'Step 1', cells: [
-      { index: 1, kind: 'tool', text: 'recorded', outputDetail: 'rendered answer', resultValue: value, timeSeconds: 0.1 },
+      { index: 1, kind: 'tool', text: 'recorded', outputDetail: 'rendered answer', resultSeq: 42, timeSeconds: 0.1 },
       { index: 2, kind: 'subtool', text: 'historical', outputDetail: 'old answer', timeSeconds: 0.1 },
     ] }] }]
     const changes = vi.fn()
+    const watchToolResult: NonNullable<import('../src/client/TrajectoryTable.tsx').TrajectoryTableProps['watchToolResult']> = (_seq, publish) => {
+      publish(value)
+      return () => {}
+    }
     function Harness() {
       const [raw, setRaw] = useState(false)
-      return <TrajectoryTable turns={turns} {...FOLD_PROPS} rawResult={raw}
+      return <TrajectoryTable turns={turns} {...FOLD_PROPS} rawResult={raw} watchToolResult={watchToolResult}
         onResultModeChange={(next) => { changes(next); setRaw(next) }} />
     }
     render(<Harness />)
@@ -1153,16 +1157,42 @@ describe('TrajectoryTable', () => {
       typeof value === 'object' && value !== null ? 'answer:' : JSON.stringify(value),
     )
     fireEvent.click(screen.getByRole('row', { name: /historical/ }))
-    expect(screen.getByText('No raw result was recorded')).toBeTruthy()
+    expect(screen.getByText('Raw results are only available for live tool calls')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Raw result' }).getAttribute('aria-pressed')).toBe('true')
     fireEvent.click(screen.getByRole('tab', { name: 'Summary' }))
     fireEvent.click(screen.getByRole('tab', { name: 'Result' }))
     fireEvent.click(screen.getByRole('row', { name: /recorded/ }))
-    expect(screen.queryByText('No raw result was recorded')).toBeNull()
+    expect(screen.queryByText('Raw results are only available for live tool calls')).toBeNull()
     expect(changes.mock.calls).toEqual([[true]])
     fireEvent.click(screen.getByRole('button', { name: 'Raw result' }))
     expect(screen.getByText('rendered answer')).toBeTruthy()
     expect(changes.mock.calls).toEqual([[true], [false]])
+  })
+
+  it('clears an unloaded result and ignores callbacks after inspector disposal', () => {
+    const callbacks: ((value: { live: boolean } | undefined) => void)[] = []
+    const dispose = vi.fn()
+    const watchToolResult: NonNullable<import('../src/client/TrajectoryTable.tsx').TrajectoryTableProps['watchToolResult']> = (_seq, publish) => {
+      callbacks.push(publish)
+      publish({ live: true })
+      return dispose
+    }
+    const turns: readonly TrajectoryTurnModel[] = [{ turn: 1, groups: [{ title: 'Step 1', cells: [
+      { index: 1, kind: 'tool', text: 'live result', outputDetail: 'rendered', resultSeq: 42, timeSeconds: 0.1 },
+      { index: 2, kind: 'tool', text: 'historical result', outputDetail: 'historical', timeSeconds: 0.1 },
+    ] }] }]
+    const view = render(<TrajectoryTable turns={turns} {...FOLD_PROPS} rawResult watchToolResult={watchToolResult} />)
+    fireEvent.click(screen.getByRole('row', { name: /live result/ }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Result' }))
+    expect(document.getElementById('trajectory-result-content')?.textContent).toContain('live:')
+    act(() => { callbacks[0]?.(undefined) })
+    expect(screen.getByText('Raw results are only available for live tool calls')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Raw result' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('row', { name: /historical result/ }))
+    expect(dispose).toHaveBeenCalledOnce()
+    act(() => { callbacks[0]?.({ live: true }) })
+    expect(screen.getByText('Raw results are only available for live tool calls')).toBeTruthy()
+    view.unmount()
   })
 
   it('renders a single-text JSON tool result as a JSON tree', () => {
