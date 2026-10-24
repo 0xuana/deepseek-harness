@@ -95,7 +95,7 @@ function isWorktreeFace(value: Record<string, unknown>): value is Record<string,
 }
 
 function isProgressFace(value: Record<string, unknown>): value is Record<string, unknown> & WorktreeProgressInjected {
-  return typeof value.stop === 'function' && typeof value.withdraw === 'function'
+  return typeof value.stop === 'function' && typeof value.retry === 'function' && typeof value.withdraw === 'function'
     && typeof value.restore === 'function' && typeof value.leave === 'function'
 }
 
@@ -149,6 +149,7 @@ async function base() {
     requestWorktree: vi.fn(async (_sessionId: SessionId, _from: string | null): Promise<RemoteResult<void>> => OK),
     cancelWorktree: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
     stopCreation: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
+    retryWorktree: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
     restoreWorktree: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
     continueInProject: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
     branches: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<ForgeBranches>> => ({ ok: true, value: BRANCHES })),
@@ -591,8 +592,9 @@ describe('mountForgePanel worktree actions', () => {
 
 describe('mountForgePanel worktree card actions', () => {
   it.each([
-    ['stops the creation that holds the message', 'stop' as const, 'stopCreation' as const],
-    ['withdraws the request after a failed creation', 'withdraw' as const, 'cancelWorktree' as const],
+    ['stops the attempt a message waits for', 'stop' as const, 'stopCreation' as const],
+    ['makes another attempt for the waiting message', 'retry' as const, 'retryWorktree' as const],
+    ['withdraws the request so the waiting message goes on', 'withdraw' as const, 'cancelWorktree' as const],
   ])('%s through the Remote and reports only a failure', async (_label, action, method) => {
     const f = await fixture()
     f.progress(S1)[action]()

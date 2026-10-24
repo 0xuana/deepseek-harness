@@ -138,12 +138,18 @@ export class WorktreeService extends Service {
    * @param agent - caller whose sandbox policy confines the commands.
    * @param request - recorded directory, branch, base commit, and source repository root.
    * @param signal - cancellation of the restoration.
+   * @param onPhase - receives each stage before it begins; it must not throw.
    * @returns the directory and whether the branch was created again.
    */
-  async restore(agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal): Promise<RestoredWorktree> {
+  async restore(
+    agent: Agent,
+    request: RestoreWorktreeRequest,
+    signal?: AbortSignal,
+    onPhase?: (phase: CreateWorktreePhase) => void,
+  ): Promise<RestoredWorktree> {
     const operationSignal = signal === undefined ? this.lifetime.signal : AbortSignal.any([this.lifetime.signal, signal])
     operationSignal.throwIfAborted()
-    const operation = this.restoreCheckout(agent, request, operationSignal)
+    const operation = this.restoreCheckout(agent, request, operationSignal, onPhase)
     this.pending.add(operation)
     try {
       return await operation
@@ -200,7 +206,9 @@ export class WorktreeService extends Service {
     agent: Agent,
     { path, branch, baseCommit, repositoryRoot }: RestoreWorktreeRequest,
     signal: AbortSignal,
+    onPhase: ((phase: CreateWorktreePhase) => void) | undefined,
   ): Promise<RestoredWorktree> {
+    onPhase?.('prepare')
     const policy = this.ctx.sandboxPolicy.resolve({ session: agent.session })
     const run = this.gitRunner(policy, signal)
     if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new Error(`worktree path already exists: ${path}`)
@@ -215,6 +223,7 @@ export class WorktreeService extends Service {
         ...branchRecreated ? ['-b', branch, '--', path, baseCommit] : ['--', path, branch],
       ])
       const overrides = await filterOverrides(run, path)
+      onPhase?.('checkout')
       await run(path, ['--work-tree', path, 'reset', '--hard', '--no-recurse-submodules', 'HEAD'], undefined, overrides)
       return { path, branchRecreated }
     } catch (error) {

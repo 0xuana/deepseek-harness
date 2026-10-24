@@ -98,7 +98,17 @@ function Checkout({ state, home, restore, copyPath, t }: {
           <IconCopyOutlineRegular size={14} />
         </button>
       </Tooltip>
-      {label.missing && <Button size="sm" variant="outline" onClick={restore}>{t('checkout.restore')}</Button>}
+      {label.missing && (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={state.worktree.restoration !== null}
+          icon={state.worktree.restoration === null ? undefined : <StateDot state="ongoing" size={14} />}
+          onClick={restore}
+        >
+          {t('checkout.restore')}
+        </Button>
+      )}
     </div>
   )
 }

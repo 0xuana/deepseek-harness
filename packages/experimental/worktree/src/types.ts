@@ -21,9 +21,10 @@ export interface CreatedWorktree {
 }
 
 /**
- * Stage of one creation, reported before it begins: `prepare` validates the
- * request, allocates the checkout directory, and creates the branch;
- * `checkout` writes the files and enters the checkout.
+ * Stage of one creation or restoration, reported before it begins: `prepare`
+ * validates the request, allocates the checkout directory, and creates the
+ * branch, which a restoration creates again only when it is gone; `checkout`
+ * writes the files and, for a creation, enters the checkout.
  */
 export type CreateWorktreePhase = 'prepare' | 'checkout'
 

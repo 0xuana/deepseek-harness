@@ -43,11 +43,11 @@ function hoverPath(section: HTMLElement): string | null {
   if (!(label instanceof HTMLElement)) throw new Error('no file label')
   vi.useFakeTimers()
   try {
-    fireEvent.mouseEnter(label)
+    fireEvent.pointerEnter(label)
     act(() => { vi.advanceTimersByTime(1000) })
     return within(document.body).getByRole('tooltip').textContent
   } finally {
-    fireEvent.mouseLeave(label)
+    fireEvent.pointerLeave(label)
     vi.useRealTimers()
   }
 }

@@ -31,9 +31,6 @@
       "path": "../../core/agent"
     },
     {
-      "path": "../../core/agent-controller"
-    },
-    {
       "path": "../../core/session"
     },
     {

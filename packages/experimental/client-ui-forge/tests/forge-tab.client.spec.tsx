@@ -145,7 +145,7 @@ describe('ForgeTab checkout', () => {
     const row = checkoutRow(b.view)
     if (row === null) throw new Error('no checkout row')
     expect(row.textContent).toBe(en['checkout.failed'])
-    fireEvent.mouseEnter(row)
+    fireEvent.pointerEnter(row)
     expect(b.view.getByRole('tooltip').textContent).toBe('git status failed (128): fatal')
   })
 
@@ -154,7 +154,7 @@ describe('ForgeTab checkout', () => {
     const row = checkoutRow(b.view)
     if (row === null) throw new Error('no checkout row')
     expect(row.textContent).toBe(`main${en['checkout.project']}`)
-    fireEvent.mouseEnter(row.querySelector(`.${css.checkoutName}`)!)
+    fireEvent.pointerEnter(row.querySelector(`.${css.checkoutName}`)!)
     expect(b.view.getByRole('tooltip').textContent).toBe('Project directory: ~/repo')
     // The copied path keeps the home directory the tooltip abbreviates.
     fireEvent.click(within(row).getByRole('button', { name: en['checkout.copyProjectPath'] }))
@@ -199,6 +199,15 @@ describe('ForgeTab checkout', () => {
     // A removed worktree still offers the path it was created at.
     fireEvent.click(within(row).getByRole('button', { name: en['checkout.copyWorktreePath'] }))
     expect(b.copyPath).toHaveBeenCalledWith('/work/repo-dsh')
+  })
+
+  it('turns the restore button into a disabled spinner while a restoration runs', () => {
+    const b = tab(removed(true, false, { restoration: { phase: 'prepare' } }))
+    const row = checkoutRow(b.view)
+    if (row === null) throw new Error('no checkout row')
+    const restore = within(row).getByRole('button', { name: en['checkout.restore'] })
+    expect(restore instanceof HTMLButtonElement && restore.disabled).toBe(true)
+    expect(restore.querySelector('svg[data-state="ongoing"]')).not.toBeNull()
   })
 
   it.each([

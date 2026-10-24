@@ -142,10 +142,16 @@
   cursor: pointer;
 }
 
-.iconButton:hover,
 .iconButton:focus-visible {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .iconButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .banner {
@@ -256,10 +262,12 @@
   -webkit-line-clamp: 1;
 }
 
-.changeTitle:hover {
-  color: var(--dsw-alias-label-primary);
-  text-decoration: underline;
-  text-underline-offset: 2px;
+@media (hover: hover) {
+  .changeTitle:hover {
+    color: var(--dsw-alias-label-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
 }
 
 .changeTitle:focus-visible,
@@ -413,9 +421,14 @@
   cursor: pointer;
 }
 
-.rowButton:hover,
 .rowButton[aria-expanded='true'] {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .rowButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .rowIcon {

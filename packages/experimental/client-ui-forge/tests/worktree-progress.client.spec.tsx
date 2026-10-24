@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
-/** Worktree card: a running creation, which can be stopped while a message waits for it; the last failed one; and a removed worktree. */
+/**
+ * Worktree card: a running creation, which can be stopped while a message waits for it; the failed or stopped attempt a
+ * message waits after; and a removed worktree.
+ */
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -18,6 +21,7 @@ const t = makeTranslate(en)
 function card(state: ForgePanelState | null) {
   const panel = createSnapshotStore<PanelSnapshot>({ state, disconnected: false })
   const stop = vi.fn<() => void>()
+  const retry = vi.fn<() => void>()
   const withdraw = vi.fn<() => void>()
   const restore = vi.fn(async (): Promise<string | undefined> => undefined)
   const leave = vi.fn<() => void>()
@@ -25,6 +29,7 @@ function card(state: ForgePanelState | null) {
     <WorktreeProgress
       usePanel={bindSnapshotSelector(panel)}
       stop={stop}
+      retry={retry}
       withdraw={withdraw}
       restore={restore}
       leave={leave}
@@ -35,7 +40,7 @@ function card(state: ForgePanelState | null) {
   const publish = (next: ForgePanelState | null): void => {
     act(() => { panel.set({ state: next, disconnected: false }) })
   }
-  return { view, stop, withdraw, restore, leave, root, publish }
+  return { view, stop, retry, withdraw, restore, leave, root, publish }
 }
 
 /** Glyph a step shows for its state. */
@@ -61,7 +66,7 @@ function details(view: ReturnType<typeof render>): string[][] | null {
 
 /** Names of the action buttons the card offers, in order. */
 function actions(view: ReturnType<typeof render>): string[] {
-  const names = [en['creation.skip'], en['creation.cancel']]
+  const names = [en['creation.retry'], en['creation.skip'], en['creation.cancel']]
   return view.getAllByRole('button').map(button => button.textContent).filter(name => names.includes(name))
 }
 
@@ -76,6 +81,7 @@ describe('WorktreeProgress visibility', () => {
     ['while a request waits for the first message', requested()],
     ['while the Session works in the worktree it created', ready({ directory: '/work/repo-dsh', worktree: worktree({ created: created() }) })],
     ['for a removal the panel reports without the worktree record', ready({ worktree: worktree({ missing: { branchExists: true } }) })],
+    ['for a failed attempt no message waits after', requested('main', { failure: failure() })],
   ])('renders nothing %s', (_label, state) => {
     expect(card(state).view.container.innerHTML).toBe('')
   })
@@ -147,7 +153,7 @@ describe('WorktreeProgress running creation', () => {
   })
 })
 
-describe('WorktreeProgress failure', () => {
+describe('WorktreeProgress waiting after a failed attempt', () => {
   it.each([
     ['the preparation', 'prepare' as const, [
       [en['creation.prepare'], 'failed', 'cross'],
@@ -157,8 +163,8 @@ describe('WorktreeProgress failure', () => {
       [en['creation.prepare'], 'done', 'check'],
       [en['creation.checkout'], 'failed', 'cross'],
     ]],
-  ])('marks failed %s and shows the reason and how to retry, without the disclosure', (_label, phase, expected) => {
-    const b = card(requested('main', { failure: failure({ phase }) }))
+  ])('marks failed %s and shows the reason, that the message waits, and another attempt, without the disclosure', (_label, phase, expected) => {
+    const b = card(requested('main', { failure: failure({ phase }), waiting: 'creation' }))
     expect(b.root()?.getAttribute('data-forge-creation')).toBe('failed')
     const region = b.view.getByRole('region', { name: en['creation.failed'] })
     expect(region.getAttribute('aria-busy')).toBe('false')
@@ -169,13 +175,13 @@ describe('WorktreeProgress failure', () => {
       [en['creation.base'], 'main'],
       [en['creation.error'], 'fatal: invalid reference: main'],
     ])
-    expect(within(region).getByText(en['creation.retryHint'])).toBeTruthy()
+    expect(within(region).getByText(en['creation.waiting'])).toBeTruthy()
     expect(b.view.queryByRole('button', { name: en['creation.details'] })).toBeNull()
-    expect(actions(b.view)).toEqual([en['creation.skip']])
+    expect(actions(b.view)).toEqual([en['creation.retry'], en['creation.skip']])
   })
 
   it('names no branch for a failure that came before one, and the current HEAD as its base', () => {
-    const b = card(requested(null, { failure: failure({ branch: null, from: null, message: 'connection lost' }) }))
+    const b = card(requested(null, { failure: failure({ branch: null, from: null, message: 'connection lost' }), waiting: 'creation' }))
     const region = b.view.getByRole('region', { name: en['creation.failed'] })
     expect(within(region).queryByText('dsh/0a1b2c3d')).toBeNull()
     expect(details(b.view)).toEqual([
@@ -184,17 +190,30 @@ describe('WorktreeProgress failure', () => {
     ])
   })
 
-  it('withdraws the request so the message can go without a worktree', () => {
-    const b = card(requested('main', { failure: failure() }))
+  it('makes another attempt, or withdraws the request so the message goes on without a worktree', () => {
+    const b = card(requested('main', { failure: failure(), waiting: 'creation' }))
+    fireEvent.click(b.view.getByRole('button', { name: en['creation.retry'] }))
     fireEvent.click(b.view.getByRole('button', { name: en['creation.skip'] }))
+    expect(b.retry).toHaveBeenCalledOnce()
     expect(b.withdraw).toHaveBeenCalledOnce()
     expect(b.stop).not.toHaveBeenCalled()
   })
 
+  it('shows a stopped attempt without steps, with the request\'s base and the same choices', () => {
+    const b = card(requested(null, { waiting: 'creation' }))
+    expect(b.root()?.getAttribute('data-forge-creation')).toBe('stopped')
+    const region = b.view.getByRole('region', { name: en['creation.stopped'] })
+    expect(region.getAttribute('aria-busy')).toBe('false')
+    expect(steps(b.view)).toEqual([])
+    expect(details(b.view)).toBeNull()
+    expect(within(region).getByText(en['creation.waiting'])).toBeTruthy()
+    expect(actions(b.view)).toEqual([en['creation.retry'], en['creation.skip']])
+  })
+
   it('collapses the details again when another attempt starts', () => {
-    const b = card(requested('main', { failure: failure() }))
+    const b = card(requested('main', { failure: failure(), waiting: 'creation' }))
     expect(details(b.view)).not.toBeNull()
-    b.publish(requested('main', { creation: creation() }))
+    b.publish(requested('main', { creation: creation(), waiting: 'creation' }))
     expect(b.root()?.getAttribute('data-forge-creation')).toBe('prepare')
     expect(details(b.view)).toBeNull()
     expect(b.view.getByRole('button', { name: en['creation.details'] }).getAttribute('aria-expanded')).toBe('false')
@@ -217,20 +236,35 @@ describe('WorktreeProgress removed worktree', () => {
     expect(region.getAttribute('aria-busy')).toBeNull()
   })
 
-  it('restores the worktree and stays busy until the Host answers', async () => {
+  it('follows its own restoration from the click until the Host answers, starting at the first step', async () => {
     const b = card(removed())
     const answer = Promise.withResolvers<string | undefined>()
     b.restore.mockReturnValueOnce(answer.promise)
-    const restore = b.view.getByRole('button', { name: en['missing.restore'] })
-    const leave = b.view.getByRole('button', { name: en['missing.leave'] })
 
-    fireEvent.click(restore)
+    fireEvent.click(b.view.getByRole('button', { name: en['missing.restore'] }))
     expect(b.restore).toHaveBeenCalledOnce()
-    expect([disabled(restore), disabled(leave)]).toEqual([true, true])
+    const region = b.view.getByRole('region', { name: en['restoration.title'] })
+    expect(region.getAttribute('aria-busy')).toBe('true')
+    expect(within(region).getByText('dsh/0a1b2c3d')).toBeTruthy()
+    expect(steps(b.view)).toEqual([
+      [en['restoration.prepare'], 'running', 'spinner'],
+      [en['creation.checkout'], 'waiting', 'ring'],
+    ])
+    expect(b.view.queryByRole('button', { name: en['missing.leave'] })).toBeNull()
 
     await act(async () => { answer.resolve(undefined) })
-    expect([disabled(restore), disabled(leave)]).toEqual([false, false])
+    expect(b.view.getByRole('button', { name: en['missing.leave'] })).toBeTruthy()
     expect(b.view.container.querySelector(`.${css.error}`)).toBeNull()
+  })
+
+  it('follows the steps of a restoration that another surface started', () => {
+    const b = card(removed(true, false, { restoration: { phase: 'checkout' } }))
+    expect(b.view.container.querySelector('[data-forge-restoration]')?.getAttribute('data-forge-restoration')).toBe('checkout')
+    expect(steps(b.view)).toEqual([
+      [en['restoration.prepare'], 'done', 'check'],
+      [en['creation.checkout'], 'running', 'spinner'],
+    ])
+    expect(b.view.queryByRole('button', { name: en['missing.restore'] })).toBeNull()
   })
 
   it('shows why a restore failed until the next attempt starts', async () => {
@@ -245,7 +279,7 @@ describe('WorktreeProgress removed worktree', () => {
     const retry = Promise.withResolvers<string | undefined>()
     b.restore.mockReturnValueOnce(retry.promise)
     fireEvent.click(restore)
-    expect(b.view.container.querySelector(`.${css.error}`)).toBeNull()
+    expect(b.view.getByRole('region', { name: en['restoration.title'] })).toBeTruthy()
     await act(async () => { retry.resolve(undefined) })
     expect(b.restore).toHaveBeenCalledTimes(2)
     expect(b.view.container.querySelector(`.${css.error}`)).toBeNull()
@@ -263,6 +297,15 @@ describe('WorktreeProgress removed worktree', () => {
     expect(b.restore).toHaveBeenCalledOnce()
     expect(b.view.container.querySelector(`.${css.error}`)?.textContent).toBe(reason)
     expect([disabled(restore), disabled(leave)]).toEqual([false, false])
+  })
+
+  it('says that a waiting message goes on once the worktree is restored or left', () => {
+    const waiting = card(removed(true, true))
+    expect(within(waiting.view.getByRole('region', { name: en['missing.title'] })).getByText(en['missing.waiting'])).toBeTruthy()
+    waiting.view.unmount()
+
+    const idle = card(removed())
+    expect(idle.view.queryByText(en['missing.waiting'])).toBeNull()
   })
 
   it('continues in the project', () => {

@@ -247,7 +247,7 @@ type SessionChangeRequestsListener = (changeRequests: readonly SessionChangeRequ
 
 ## Panel
 
-`ctx.forgePanel` is the Host Remote of the [forge panel](../../packages/experimental/client-ui-forge/README.md#use-this-package). Following a Session streams a `ForgePanelState`: a read-only Git inspection of the Session's current directory in its execution world, the code host recognized from the upstream remote or `origin`, the sign-in state of that host, the Session's bindings with their polled status and last snapshot, and its worktree request. Its actions list base branches, bind and hide URLs, refresh, mark a bound draft ready or merge a bound change request, request or withdraw a worktree, stop a running creation, and restore a removed worktree or leave it for the source checkout. A request is a `plugin:client-ui-forge/worktree` record. The panel listens to [Agent admission](../../packages/core/agent/README.md): it holds the first message of a Session with an open request while it creates the worktree through `ctx.worktrees`, refuses messages while the worktree the Session works in is gone, and keeps the last failed creation in the panel state. Each refusal carries a `ForgeAdmissionRefusal` reason, and the panel presents it while it follows the Session. The first step proposal creates the worktree for a message that entered without admission. Requests after the first turn starts are ignored. Changes to a Session's checkout run as maintenance of its Agent, so a message from another client waits for them.
+`ctx.forgePanel` is the Host Remote of the [forge panel](../../packages/experimental/client-ui-forge/README.md#use-this-package). Following a Session streams a `ForgePanelState`: a read-only Git inspection of the Session's current directory in its execution world, the code host recognized from the upstream remote or `origin`, the sign-in state of that host, the Session's bindings with their polled status and last snapshot, and its worktree request. Its actions list base branches, bind and hide URLs, refresh, mark a bound draft ready or merge a bound change request, request or withdraw a worktree, stop a running creation, and restore a removed worktree or leave it for the source checkout. A request is a `plugin:client-ui-forge/worktree` record. When a message enters a Session's inbox while its Agent is idle, the panel holds the message's turn with maintenance of the [Agent](../../packages/core/agent/README.md), started before the delivery wakes the Agent: it creates the worktree of an open request through `ctx.worktrees` and, after a failed or stopped attempt, waits for another attempt or the request's withdrawal; for a Session that works in its created worktree it checks that worktree and, when it is gone, waits until it is restored or left. The panel state names what a message waits for and the last failed attempt. The first step proposal creates the worktree for a message no hold took. Requests after the first turn starts are ignored. Changes to a Session's checkout run as maintenance of its Agent, so a message from another client waits for them.
 
 ```ts type-equiv
 /** Git facts for the checkout that contains the Session's current directory. */
@@ -324,11 +324,19 @@ interface ForgeWorktreeCreation {
   /** Base branch, or null for HEAD. */
   readonly from: string | null
   /**
-   * Whether a message waits for the creation before it enters the Session.
-   * Only such a creation can be stopped, which returns the message to its
-   * sender; a creation at the first step serves a message the Session already holds.
+   * Whether a message waits for the creation before its turn starts. Only
+   * such a creation can be stopped, after which the message keeps waiting; a
+   * creation at the first step serves a message the Session already holds.
    */
   readonly held: boolean
+}
+```
+
+```ts type-equiv
+/** One running restoration of the removed worktree a Session works in. */
+interface ForgeWorktreeRestoration {
+  /** Running step: `prepare` registers the checkout again, creating a missing branch, then `checkout` writes the files. */
+  readonly phase: 'prepare' | 'checkout'
 }
 ```
 
@@ -348,17 +356,11 @@ interface ForgeWorktreeFailure {
 
 ```ts type-equiv
 /**
- * Why the panel refuses a message at Agent admission; the refusal reason a
- * `session/prompt-rejected` error carries. The panel shows each refusal itself
- * while it follows the Session.
+ * What a message waits for before its turn starts: the creation of the
+ * requested worktree, or the restoration or leaving of the removed worktree
+ * the Session works in.
  */
-type ForgeAdmissionRefusal =
-  /** The requested worktree could not be created; the panel state carries the failure. */
-  | 'forge/worktree-creation-failed'
-  /** The creation the message waited for was stopped. */
-  | 'forge/worktree-creation-stopped'
-  /** The worktree the Session works in was removed. */
-  | 'forge/worktree-missing'
+type ForgeWorktreeWaiting = 'creation' | 'restoration'
 ```
 
 ```ts type-equiv
@@ -386,12 +388,17 @@ interface ForgePanelWorktree {
   /** Running creation, or null. */
   readonly creation: ForgeWorktreeCreation | null
   /**
-   * The failed attempt that returned the last message to its sender, or null.
-   * It clears when another attempt starts and when the request changes or is withdrawn.
+   * The last failed attempt of the creation a message waits for, or null. It
+   * clears when another attempt starts, when the request changes or is
+   * withdrawn, and when the wait ends.
    */
   readonly failure: ForgeWorktreeFailure | null
   /** The created worktree the Session works in when its directory is gone, or null. */
   readonly missing: ForgeMissingWorktree | null
+  /** Running restoration of the removed worktree, or null. */
+  readonly restoration: ForgeWorktreeRestoration | null
+  /** What a message of the Session waits for before its turn starts, or null while none waits. */
+  readonly waiting: ForgeWorktreeWaiting | null
 }
 ```
 
@@ -727,7 +734,7 @@ Source: [`packages/experimental/forge/src/index.ts`](../../packages/experimental
 
 ### `ctx.forgePanel` — `ForgePanelController`
 
-Serves the forge panel. Following a Session inspects the checkout of its current directory read-only in the Session's execution world, recognizes the code host of the upstream remote or `origin`, probes sign-in for that host, and polls the Session's bound change requests through `ctx.forge` until the last follower of that Session leaves. A worktree request makes the panel create a branch and checkout through an optional `ctx.worktrees` and enter it: at Agent admission of the Session's first message, which waits for the worktree, or at the first step proposal of a message that entered without admission. A failed or stopped creation returns the message to its sender. Admission also refuses messages while the worktree the Session works in is gone; that worktree can be checked out again or left for the source checkout. Changes to a Session's checkout run as Agent maintenance, so a message that arrives meanwhile waits for them.
+Serves the forge panel. Following a Session inspects the checkout of its current directory read-only in the Session's execution world, recognizes the code host of the upstream remote or `origin`, probes sign-in for that host, and polls the Session's bound change requests through `ctx.forge` until the last follower of that Session leaves. A worktree request makes the panel create a branch and checkout through an optional `ctx.worktrees` and enter it while the Session's first message waits in the inbox, or at the first step proposal of a message no wait took. After a failed or stopped attempt the message keeps waiting for another attempt or for the request to be withdrawn. A message also waits while the worktree the Session works in is gone, until that worktree is checked out again or left for the source checkout. Changes to a Session's checkout run as Agent maintenance, so a message that arrives meanwhile waits for them.
 
 ```ts cordis-catalog
 /**
@@ -871,9 +878,11 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 
 /**
  * Ask for a new worktree before the Session's first turn, replacing an open
- * request and forgetting a failed attempt. Admission of the next message, or
- * else the first step proposal, creates a branch from `from`, or from HEAD of
- * the current checkout when it is null, and enters its checkout.
+ * request and forgetting a failed attempt. While the next message waits in
+ * the inbox, or else at the first step proposal, the panel creates a branch
+ * from `from`, or from HEAD of the current checkout when it is null, and
+ * enters its checkout. A message that already waits after a failed or
+ * stopped attempt keeps waiting for {@link ForgePanelController.retryWorktree}.
  * @param session - Session without a started turn.
  * @param from - local base branch, or null for HEAD.
  * @param signal - request cancellation.
@@ -884,30 +893,41 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 @Remote async requestWorktree(session: Session, from: string | null, signal: AbortSignal): Promise<void>
 
 /**
- * Withdraw the open worktree request of a Session with its failed attempt; without a request the Session is unchanged.
+ * Withdraw the open worktree request of a Session with its failed attempt,
+ * which lets a waiting message go on in the current checkout; without a
+ * request the Session is unchanged. Withdrawing needs no worktree service.
  * @param session - Session without a started turn.
  * @param signal - request cancellation.
- * @throws `forgePanel/worktrees-unavailable` without a worktree service; `forgePanel/session-started`
- * after a turn started or the worktree was created; `forgePanel/session-busy` while the worktree is
- * being created.
+ * @throws `forgePanel/session-started` after a turn started or the worktree was created;
+ * `forgePanel/session-busy` while the worktree is being created.
  */
 @Remote async cancelWorktree(session: Session, signal: AbortSignal): Promise<void>
 
 /**
- * Stop the creation that holds a message of the Session at admission; the
- * message goes back to its sender and the request stays open. Without such a
- * creation the Session is unchanged.
+ * Stop the creation a message of the Session waits for; the message keeps
+ * waiting with the request still open. Without such a creation the Session
+ * is unchanged.
  * @param session - Session whose creation stops.
  * @param signal - request cancellation.
  */
 @Remote async stopCreation(session: Session, signal: AbortSignal): Promise<void>
 
 /**
+ * Make another attempt, with a new branch name, at the worktree a message
+ * of the Session waits for after a failed or stopped attempt.
+ * @param session - Session whose message waits.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/not-waiting` when no message waits or an attempt is running.
+ */
+@Remote async retryWorktree(session: Session, signal: AbortSignal): Promise<void>
+
+/**
  * Check out the created worktree of a Session again at its recorded
  * directory when that directory is gone: its branch when the branch still
  * exists, otherwise a new branch of the same name at the base commit. Changes
- * that were never committed are not recovered. Runs as Agent maintenance;
- * without a missing directory the Session is unchanged.
+ * that were never committed are not recovered. Runs as Agent maintenance,
+ * inside the wait of a message that waits for the restoration, which then
+ * goes on; without a missing directory the Session is unchanged.
  * @param session - Session whose worktree directory is gone.
  * @param signal - request cancellation, which aborts the restoration.
  * @throws `forgePanel/no-worktree` without a created worktree; `forgePanel/worktrees-unavailable`
@@ -919,7 +939,8 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 /**
  * Move a Session from its created worktree to the source checkout the
  * worktree came from; the Session no longer works in the worktree. Runs as
- * Agent maintenance.
+ * Agent maintenance, inside the wait of a message that waits for the removed
+ * worktree, which then goes on.
  * @param session - Session with a created worktree.
  * @param signal - request cancellation.
  * @throws `forgePanel/no-worktree` without a created worktree; `forgePanel/session-busy` while the

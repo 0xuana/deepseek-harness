@@ -72,7 +72,8 @@ export class SessionPanel {
    * @param config - Git limits and the sign-in probe deadline.
    * @param session - Session the panel describes.
    * @param worktreeStates - reads the `forgeWorktree` projection of the Session.
-   * @param creations - reads the running creation and the last failed one of the Session.
+   * @param creations - reads the running creation and restoration, the last failed creation, and what a message of the
+   * Session waits for.
    * @param onIdle - called when the last follower leaves.
    */
   constructor(
@@ -80,7 +81,7 @@ export class SessionPanel {
     private readonly config: PanelConfig,
     readonly session: Session,
     private readonly worktreeStates: ProjectionHandle<ForgeWorktreeState>,
-    private readonly creations: Pick<WorktreeCreations, 'of' | 'failureOf'>,
+    private readonly creations: Pick<WorktreeCreations, 'of' | 'restorationOf' | 'failureOf' | 'waitingOf'>,
     private readonly onIdle: () => void,
   ) {
     this.current = {
@@ -153,6 +154,11 @@ export class SessionPanel {
     if (!sameWorktree(worktree, this.current.worktree)) this.publish({ ...this.current, worktree })
   }
 
+  /** Forget the missing worktree once it was checked out again; the next publication carries it, and a reinspection confirms it. */
+  restored(): void {
+    this.missing = null
+  }
+
   /** Reinspect the checkout, such as after its directory was created again. */
   reinspect(): void {
     void this.inspect()
@@ -218,6 +224,8 @@ export class SessionPanel {
       creation: this.creations.of(this.session),
       failure: this.creations.failureOf(this.session),
       missing: this.missing,
+      restoration: this.creations.restorationOf(this.session),
+      waiting: this.creations.waitingOf(this.session),
     }
   }
 
@@ -354,7 +362,8 @@ export class SessionPanel {
 function sameWorktree(left: ForgePanelWorktree, right: ForgePanelWorktree): boolean {
   return left.editable === right.editable && left.blocker === right.blocker && left.request === right.request
     && left.created === right.created && left.creation === right.creation && left.failure === right.failure
-    && left.missing?.branchExists === right.missing?.branchExists
+    && left.missing?.branchExists === right.missing?.branchExists && left.restoration === right.restoration
+    && left.waiting === right.waiting
 }
 
 /**

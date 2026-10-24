@@ -27,8 +27,7 @@ export function FileCard({
   state: FileCardState
   progress?: number
   labels: FileCardLabels
-  /** Removes the file; a card without it offers no remove action. */
-  onRemove?: (() => void) | undefined
+  onRemove: () => void
   onRetry: () => void
 }) {
   const extension = fileExtension(name).toUpperCase().slice(0, 8)
@@ -40,7 +39,7 @@ export function FileCard({
   const retryable = state === 'error'
   return (
     <div
-      className={`${css.card}${retryable ? ` ${css.failed}` : ''}${onRemove === undefined ? '' : ` ${css.removable}`}`}
+      className={`${css.card}${retryable ? ` ${css.failed}` : ''}`}
       title={name}
     >
       <span className={css.icon} aria-hidden>
@@ -61,16 +60,14 @@ export function FileCard({
             <span className={css.meta}>{meta}</span>
           </span>
         )}
-      {onRemove !== undefined && (
-        <button
-          type="button"
-          className={retryable ? `${css.remove} ${css.removeFailed}` : css.remove}
-          aria-label={labels.remove}
-          onClick={onRemove}
-        >
-          <IconCloseFillRegular size={12} />
-        </button>
-      )}
+      <button
+        type="button"
+        className={retryable ? `${css.remove} ${css.removeFailed}` : css.remove}
+        aria-label={labels.remove}
+        onClick={onRemove}
+      >
+        <IconCloseFillRegular size={12} />
+      </button>
       {state === 'uploading' && (
         <span className={css.progressTrack} aria-hidden>
           <span

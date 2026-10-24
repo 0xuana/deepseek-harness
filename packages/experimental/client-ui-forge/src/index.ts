@@ -3,7 +3,6 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { AdmissionDecision } from '@deepseek-ai/dsh-agent-controller'
 import type {} from '@deepseek-ai/dsh-api-remote-access'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type { ForgeActionFailure, ForgeFailure, MergeMethod } from '@deepseek-ai/dsh-experimental-forge'
@@ -28,7 +27,8 @@ import type {
   Config, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeLocalDiff, ForgeLocalScope, ForgeMissingWorktree,
   ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState,
 } from './types.ts'
-import { forgeWorktreeProjection, refusal, WORKTREE_RECORD, WorktreeCreations } from './worktree.ts'
+import { forgeWorktreeProjection, messageOf, within, WORKTREE_RECORD, WorktreeCreations } from './worktree.ts'
+import type { HeldWork } from './worktree.ts'
 
 export type * from './types.ts'
 
@@ -49,11 +49,11 @@ type ControllerConfig = PanelConfig & { readonly maxBranches: number; readonly w
  * and polls the Session's bound change requests through `ctx.forge` until the
  * last follower of that Session leaves. A worktree request makes the panel
  * create a branch and checkout through an optional `ctx.worktrees` and enter
- * it: at Agent admission of the Session's first message, which waits for the
- * worktree, or at the first step proposal of a message that entered without
- * admission. A failed or stopped creation returns the message to its sender.
- * Admission also refuses messages while the worktree the Session works in is
- * gone; that worktree can be checked out again or left for the source
+ * it while the Session's first message waits in the inbox, or at the first
+ * step proposal of a message no wait took. After a failed or stopped attempt
+ * the message keeps waiting for another attempt or for the request to be
+ * withdrawn. A message also waits while the worktree the Session works in is
+ * gone, until that worktree is checked out again or left for the source
  * checkout. Changes to a Session's checkout run as Agent maintenance, so a
  * message that arrives meanwhile waits for them.
  */
@@ -114,14 +114,11 @@ export class ForgePanelController extends TypertRemoteService {
   protected async [Service.init](): Promise<void> {
     const ctx = this.home
     this.worktreeStates = await ctx.sessionProjections.register(forgeWorktreeProjection)
-    // Admission, step proposals, and Session events read the worktree state, so they start once its reader is ready.
+    // Inbox insertions, step proposals, and Session events read the worktree state, so they start once its reader is ready.
     this.creations = new WorktreeCreations(ctx, this.worktreeStates, this.config.worktreePrefix, (session) => {
       this.panels.get(session)?.updateWorktree()
     })
-    ctx.on('agent-controller/admission', async ({ agent, signal }, next) => {
-      const rejection = await this.admit(agent, signal)
-      return rejection ?? await next()
-    })
+    ctx.on('agent/inbox/inserted', ({ agent }) => { this.holdTurn(agent) })
     ctx.on('session/event', (session: Session, event: SessionEvent) => {
       this.panels.get(session)?.observe(event)
     })
@@ -357,9 +354,11 @@ export class ForgePanelController extends TypertRemoteService {
 
   /**
    * Ask for a new worktree before the Session's first turn, replacing an open
-   * request and forgetting a failed attempt. Admission of the next message, or
-   * else the first step proposal, creates a branch from `from`, or from HEAD of
-   * the current checkout when it is null, and enters its checkout.
+   * request and forgetting a failed attempt. While the next message waits in
+   * the inbox, or else at the first step proposal, the panel creates a branch
+   * from `from`, or from HEAD of the current checkout when it is null, and
+   * enters its checkout. A message that already waits after a failed or
+   * stopped attempt keeps waiting for {@link ForgePanelController.retryWorktree}.
    * @param session - Session without a started turn.
    * @param from - local base branch, or null for HEAD.
    * @param signal - request cancellation.
@@ -374,28 +373,31 @@ export class ForgePanelController extends TypertRemoteService {
     this.editableWorktree(session)
     this.creations.forget(session)
     appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from })
+    this.creations.recheck(session)
   }
 
   /**
-   * Withdraw the open worktree request of a Session with its failed attempt; without a request the Session is unchanged.
+   * Withdraw the open worktree request of a Session with its failed attempt,
+   * which lets a waiting message go on in the current checkout; without a
+   * request the Session is unchanged. Withdrawing needs no worktree service.
    * @param session - Session without a started turn.
    * @param signal - request cancellation.
-   * @throws `forgePanel/worktrees-unavailable` without a worktree service; `forgePanel/session-started`
-   * after a turn started or the worktree was created; `forgePanel/session-busy` while the worktree is
-   * being created.
+   * @throws `forgePanel/session-started` after a turn started or the worktree was created;
+   * `forgePanel/session-busy` while the worktree is being created.
    */
   @Remote
   async cancelWorktree(session: Session, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
-    if (this.editableWorktree(session).request === null) return
+    if (this.changeableWorktree(session).request === null) return
     this.creations.forget(session)
     appendPluginRecord(session, WORKTREE_RECORD, { action: 'cancel' })
+    this.creations.recheck(session)
   }
 
   /**
-   * Stop the creation that holds a message of the Session at admission; the
-   * message goes back to its sender and the request stays open. Without such a
-   * creation the Session is unchanged.
+   * Stop the creation a message of the Session waits for; the message keeps
+   * waiting with the request still open. Without such a creation the Session
+   * is unchanged.
    * @param session - Session whose creation stops.
    * @param signal - request cancellation.
    */
@@ -406,11 +408,27 @@ export class ForgePanelController extends TypertRemoteService {
   }
 
   /**
+   * Make another attempt, with a new branch name, at the worktree a message
+   * of the Session waits for after a failed or stopped attempt.
+   * @param session - Session whose message waits.
+   * @param signal - request cancellation.
+   * @throws `forgePanel/not-waiting` when no message waits or an attempt is running.
+   */
+  @Remote
+  async retryWorktree(session: Session, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    if (!this.creations.retry(session)) {
+      throw new RemoteError('forgePanel/not-waiting', 'No message waits for another attempt at the worktree', {})
+    }
+  }
+
+  /**
    * Check out the created worktree of a Session again at its recorded
    * directory when that directory is gone: its branch when the branch still
    * exists, otherwise a new branch of the same name at the base commit. Changes
-   * that were never committed are not recovered. Runs as Agent maintenance;
-   * without a missing directory the Session is unchanged.
+   * that were never committed are not recovered. Runs as Agent maintenance,
+   * inside the wait of a message that waits for the restoration, which then
+   * goes on; without a missing directory the Session is unchanged.
    * @param session - Session whose worktree directory is gone.
    * @param signal - request cancellation, which aborts the restoration.
    * @throws `forgePanel/no-worktree` without a created worktree; `forgePanel/worktrees-unavailable`
@@ -427,10 +445,10 @@ export class ForgePanelController extends TypertRemoteService {
       const operation = AbortSignal.any([signal, work])
       if (await this.home.fs.lstat(created.path, undefined, operation) !== undefined) return
       try {
-        await worktrees.restore(agent, created, operation)
+        await this.creations.restore(agent, worktrees, created, operation, () => { this.panels.get(session)?.restored() })
       } catch (error) {
         operation.throwIfAborted()
-        throw new RemoteError('forgePanel/restore-failed', error instanceof Error ? error.message : String(error), {}, { cause: error })
+        throw new RemoteError('forgePanel/restore-failed', messageOf(error), {}, { cause: error })
       }
     })
     this.panels.get(session)?.reinspect()
@@ -439,7 +457,8 @@ export class ForgePanelController extends TypertRemoteService {
   /**
    * Move a Session from its created worktree to the source checkout the
    * worktree came from; the Session no longer works in the worktree. Runs as
-   * Agent maintenance.
+   * Agent maintenance, inside the wait of a message that waits for the removed
+   * worktree, which then goes on.
    * @param session - Session with a created worktree.
    * @param signal - request cancellation.
    * @throws `forgePanel/no-worktree` without a created worktree; `forgePanel/session-busy` while the
@@ -458,32 +477,37 @@ export class ForgePanelController extends TypertRemoteService {
   /* oxlint-enable typescript/require-await */
 
   /**
-   * Hold a message at Agent admission while the Session's requested worktree
-   * is created, and reject it while the worktree the Session works in is gone.
-   * A check that cannot answer lets the message pass.
-   * @returns a decision that rejects the message, or undefined to pass it on.
+   * Hold the turn of a message entering a Session's inbox while the
+   * Session's requested worktree does not exist yet, or while the worktree
+   * the Session works in is checked and, when gone, until it is restored or
+   * left. The message is entering, so the delivery has not woken the Agent
+   * yet and its wake waits for the hold.
+   * @param agent - Agent whose inbox receives the message.
    */
-  private async admit(agent: Agent, signal: AbortSignal): Promise<AdmissionDecision | undefined> {
+  private holdTurn(agent: Agent): void {
     const session = agent.session
-    const presented = this.panels.has(session)
     const state = this.worktreeState(session)
     if (state.request !== null && state.created === null && !state.locked) {
-      return await this.creations.admit(agent, state.request.from, signal, presented)
+      this.creations.holdCreation(agent)
+    } else if (state.created !== null && within(state.created.path, this.home.workingDirectory.get(session))) {
+      this.creations.holdRestoration(agent, signal => this.missingFor(session, signal))
     }
+  }
+
+  /**
+   * Check whether the worktree the Session works in is gone.
+   * @param session - Session to check.
+   * @param signal - cancellation of the check.
+   * @returns the missing worktree, or null while it exists or once the Session works elsewhere.
+   * @throws when the filesystem or Git cannot answer.
+   */
+  private async missingFor(session: Session, signal: AbortSignal): Promise<ForgeMissingWorktree | null> {
+    const directory = this.home.workingDirectory.get(session)
     const panel = this.panels.get(session)
-    let missing: ForgeMissingWorktree | null
-    try {
-      missing = panel === undefined
-        ? await missingWorktree(this.home, this.config, session, state.created, this.home.workingDirectory.get(session), signal)
-        : await panel.checkMissing(signal)
-    } catch (_error) {
-      // Without an answer from the filesystem or Git the panel offers no restoration, so the message passes.
-      signal.throwIfAborted()
-      return undefined
-    }
-    return missing === null
-      ? undefined
-      : refusal('forge/worktree-missing', 'The worktree this Session works in was removed; restore it before sending', presented)
+    const missing = panel === undefined
+      ? await missingWorktree(this.home, this.config, session, this.worktreeState(session).created, directory, signal)
+      : await panel.checkMissing(signal)
+    return this.home.workingDirectory.get(session) === directory ? missing : null
   }
 
   /** Inspect the checkout of the Session's current directory, which local diffs read. */
@@ -508,6 +532,11 @@ export class ForgePanelController extends TypertRemoteService {
     if (this.home.get('worktrees') === undefined) {
       throw new RemoteError('forgePanel/worktrees-unavailable', 'No worktree service is mounted', {})
     }
+    return this.changeableWorktree(session)
+  }
+
+  /** The worktree state of a Session whose request may still change: no turn started, nothing created, and no attempt running. */
+  private changeableWorktree(session: Session): ForgeWorktreeState {
     const state = this.worktreeState(session)
     if (state.locked || state.created !== null) {
       throw new RemoteError('forgePanel/session-started', 'The Session has started, so its worktree can no longer change', {})
@@ -523,8 +552,17 @@ export class ForgePanelController extends TypertRemoteService {
     return created
   }
 
-  /** Run work as maintenance of the Session's Agent, which refuses while the Agent has other work. */
-  private async maintain(session: Session, work: (agent: Agent, signal: AbortSignal) => Promise<void>): Promise<void> {
+  /**
+   * Run work as maintenance of the Session's Agent: inside the wait of a
+   * message that waits for the removed worktree, else as a task of its own,
+   * which the Agent refuses while it has other work.
+   */
+  private async maintain(session: Session, work: HeldWork): Promise<void> {
+    const held = this.creations.within(session, work)
+    if (held !== undefined) {
+      await held
+      return
+    }
     const agent = this.home.agents.get(session.id)
     if (agent === undefined) throw new RemoteError('forgePanel/session-busy', 'The Session is not loaded', {})
     let running: Promise<void>

@@ -24,8 +24,10 @@ const MODE = webSnapshotMode()
 const PULL = 'https://github.com/octo/demo/pull/7'
 /** A draft change request that the double lets the panel mark ready and merge. */
 const DRAFT = 'https://github.com/octo/demo/pull/9'
-/** Message sent after the worktree is removed, which the composer keeps. */
+/** Message sent after the worktree is removed, which waits until the worktree is restored. */
 const FOLLOW_UP = 'Summarize the failed check'
+/** Reply to {@link FOLLOW_UP}, a model call appended after the borrowed scenario's single one. */
+const FOLLOW_UP_REPLY = 'RESTORED'
 const run = promisify(execFile)
 
 /**
@@ -189,9 +191,10 @@ interface PanelLaunch {
 /**
  * Launch the bundle against a GitHub checkout of `main` and `release` and open the New Session screen of that workspace.
  * @param failureShot - name of the screenshot saved when the test fails.
+ * @param followUp - whether the replay answers a second model call with {@link FOLLOW_UP_REPLY}.
  * @returns the scaffold, page, and checkout.
  */
-async function launchPanel(failureShot: string): Promise<PanelLaunch> {
+async function launchPanel(failureShot: string, followUp = false): Promise<PanelLaunch> {
   const resources: { scaffold?: WebScaffold; browser?: Browser } = {}
   const root = await mkdtemp(join(tmpdir(), 'dsh-forge-panel-'))
   onTestFinished(async () => {
@@ -210,10 +213,14 @@ async function launchPanel(failureShot: string): Promise<PanelLaunch> {
   await writeFile(join(root, 'contents.json'), JSON.stringify({ [`src/panel.ts@${HEAD7}`]: panelText }))
   const overlay = join(root, 'forge.patch.yml')
   await writeFile(overlay, `- id: forge-github\n  config: ${JSON.stringify({ ghCommand: gh })}\n`)
+  const override = join(root, 'replay.override.json')
+  // The borrowed scenario records one model call, so index 1 appends the reply to the follow-up.
+  if (followUp) await writeFile(override, JSON.stringify({ patches: [{ at: 1, entry: { kind: 'chunks', chunks: textReply(FOLLOW_UP_REPLY) } }] }))
   const scaffold = await launchWebScaffold({
     profile: { packages: [{ dir: BUNDLE, enabled: true }] },
     extraOverlayPath: overlay,
     replayFixture: FIXTURE,
+    ...followUp ? { replayOverride: override } : {},
     // The worktree notice, worktree records, and bindings are asserted separately from the borrowed conversation.
     compareReplaySession: false,
   })
@@ -242,13 +249,25 @@ async function launchPanel(failureShot: string): Promise<PanelLaunch> {
   return { scaffold, page, root, project, tripwire }
 }
 
+/** Stream chunks of a model reply that is one text block. */
+function textReply(text: string): unknown[] {
+  return [
+    { type: 'block-start', index: 0, blockType: 'text' },
+    { type: 'text-delta', index: 0, text },
+    { type: 'block-end', index: 0, block: { type: 'text', text } },
+    { type: 'usage', usage: { inputTokens: 50, outputTokens: 2, cacheReadTokens: 0, reasoningTokens: 0 } },
+    { type: 'finish', reason: { kind: 'stop' } },
+  ]
+}
+
 /**
  * Launch the panel and choose the worktree option of the fresh Session from `release`.
  * @param failureShot - name of the screenshot saved when the test fails.
+ * @param followUp - whether the replay answers a second model call.
  * @returns the scaffold, page, and checkout.
  */
-async function requestReleaseWorktree(failureShot: string): Promise<PanelLaunch> {
-  const launched = await launchPanel(failureShot)
+async function requestReleaseWorktree(failureShot: string, followUp = false): Promise<PanelLaunch> {
+  const launched = await launchPanel(failureShot, followUp)
   const { page } = launched
   const option = page.locator('[data-forge-worktree]')
   await option.waitFor({ timeout: 20_000 })
@@ -281,7 +300,7 @@ function worktreeRecords(events: readonly SessionEvent[]): unknown[] {
 }
 
 it.skipIf(MODE === 'record')('starts a Session in a worktree before its first message, follows its change request, and restores the removed worktree', async () => {
-  const { scaffold, page, root, project, tripwire } = await requestReleaseWorktree('web-e2e-forge-panel')
+  const { scaffold, page, root, project, tripwire } = await requestReleaseWorktree('web-e2e-forge-panel', true)
   const { settled } = await sendPrompt(page, scaffold)
   const sessionId = await settled
   await page.getByText('LIGHTHOUSE', { exact: true }).waitFor()
@@ -375,66 +394,50 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   await header.click()
   await expect.poll(() => header.getAttribute('aria-pressed')).toBe('false')
 
-  // Removing the worktree outside the Session returns the next message to the composer until the worktree is restored.
+  // Removing the worktree outside the Session holds the next message in the inbox until the worktree is restored.
   await git(project, 'worktree', 'remove', '--force', directory)
   const composer = page.locator('[data-composer-input]').first()
   await writeComposerDraft(page, composer, FOLLOW_UP)
-  const refused = page.waitForResponse('**/api/session/prompt')
+  const accepted = page.waitForResponse('**/api/session/prompt')
   await composer.press('Enter')
-  const envelope = await (await refused).json() as { readonly result: unknown }
-  expect(envelope.result).toMatchObject({
-    ok: false, error: { code: 'session/prompt-rejected', details: { reason: 'forge/worktree-missing', presented: true } },
-  })
+  const envelope = await (await accepted).json() as { readonly result: unknown }
+  expect(envelope.result).toMatchObject({ ok: true })
   const missing = page.locator('[data-forge-missing]')
   await missing.getByText(`可以在原位置恢复分支 ${branch} 的工作树。删除前未提交的修改无法恢复`, { exact: true }).waitFor()
+  await missing.getByText('恢复工作树或在项目目录继续后，消息会接着发送', { exact: true }).waitFor()
   await expect.poll(() => checkout.getAttribute('data-missing')).toBe('')
-  await page.locator('[data-composer-input][contenteditable="true"]').waitFor()
-  expect(await composer.textContent()).toContain(FOLLOW_UP)
-  // The card presents the refusal, so the composer adds no notice of its own.
-  expect(await page.getByRole('alert').filter({ hasText: 'was removed' }).count()).toBe(0)
-  expect((await readPersistedEvents(scaffold, sessionId)).filter(event => event.type === 'turn/start')).toHaveLength(1)
+  const turns = async (): Promise<number> => (await readPersistedEvents(scaffold, sessionId)).filter(event => event.type === 'turn/start').length
+  expect(await turns()).toBe(1)
   await missing.getByRole('button', { name: '恢复工作树', exact: true }).click()
   await missing.waitFor({ state: 'detached', timeout: 20_000 })
   await page.getByRole('alert').filter({ hasText: '工作树已恢复' }).waitFor()
   expect(await git(directory, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe(branch)
   expect(await git(directory, 'rev-parse', 'HEAD')).toBe(baseCommit)
   await expect.poll(() => checkout.getAttribute('data-missing')).toBeNull()
-  expect(await composer.textContent()).toContain(FOLLOW_UP)
+  // The waiting message goes on in the restored worktree.
+  await page.getByText(FOLLOW_UP_REPLY, { exact: true }).waitFor({ timeout: 20_000 })
+  expect(await turns()).toBe(2)
+  expect(scaffold.ctx.workingDirectory.get(session)).toBe(directory)
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])
 })
 
-it.skipIf(MODE === 'record')('returns the first message to the New Session composer when the worktree cannot be created, retries on the next send, and sends it without the worktree', async () => {
+it.skipIf(MODE === 'record')('keeps the first message waiting when the worktree cannot be created, tries again, and sends it without the worktree', async () => {
   const { scaffold, page, project, tripwire } = await requestReleaseWorktree('web-e2e-forge-panel-failure')
   await git(project, 'branch', '--quiet', '-D', 'release')
-  const { prompt, settled } = await sendPrompt(page, scaffold)
+  const { settled } = await sendPrompt(page, scaffold)
   const card = page.locator('[data-forge-creation="failed"]')
   const failure = card.getByRole('region', { name: '创建工作树失败', exact: true })
   await failure.getByText('原因', { exact: true }).waitFor({ timeout: 20_000 })
   const attempted = await failure.getByRole('definition').first().textContent()
   expect(attempted).toMatch(/^dsh-[0-9a-f]{8}-[0-9a-f]{4}$/)
-  await failure.getByText('再次发送消息即可重试', { exact: true }).waitFor()
-  const option = page.locator('[data-forge-worktree]')
-  const checkbox = option.getByRole('checkbox', { name: '工作树', exact: true })
-  const composer = page.locator('[data-composer-input]').first()
-  await page.locator('[data-composer-input][contenteditable="true"]').waitFor()
-  expect(await composer.textContent()).toBe(prompt)
-  expect(await checkbox.isChecked()).toBe(true)
-  expect(await checkbox.isDisabled()).toBe(false)
-  await option.getByRole('button', { name: '基于 release', exact: true }).waitFor()
-  // The card presents the refusal, so the composer adds no notice of its own.
-  expect(await page.getByRole('alert').filter({ hasText: 'could not be created' }).count()).toBe(0)
+  await failure.getByText('消息会在工作树建好后发送', { exact: true }).waitFor()
 
-  // Sending again tries again with a new branch name.
-  await composer.press('Enter')
+  // Retry makes another attempt with a new branch name while the message keeps waiting.
+  await card.getByRole('button', { name: '重试', exact: true }).click()
   await expect.poll(() => failure.getByRole('definition').first().textContent(), { timeout: 20_000 }).not.toBe(attempted)
-  await page.locator('[data-composer-input][contenteditable="true"]').waitFor()
-  expect(await composer.textContent()).toBe(prompt)
 
   await card.getByRole('button', { name: '不使用工作树', exact: true }).click()
-  await card.waitFor({ state: 'detached' })
-  await expect.poll(() => checkbox.isChecked()).toBe(false)
-  await composer.press('Enter')
   const sessionId = await settled
   await page.getByText('LIGHTHOUSE', { exact: true }).waitFor()
   await card.waitFor({ state: 'detached' })

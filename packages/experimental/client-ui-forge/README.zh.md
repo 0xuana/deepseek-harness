@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-这个可选的双端包展示 Session 创建或推送的变更请求及其变更，并让新 Session 在自己的 Git worktree 中开始。宿主端是 `forgePanel` Remote：它以只读方式检查 Session 的检出，检查代码托管平台的登录状态，为单个 Session 或会话列表以流的形式推送[已绑定变更请求](../forge-session/README.zh.md)及其轮询状态，读取 diff，并在第一条消息于 Agent 接纳阶段等待时创建所请求的 worktree。客户端增加一个侧边栏标签页、一个变更视图、一个标题栏按钮、一个新会话选项、一张创建卡片、会话列表中的图标，以及 toast 提示。
+这个可选的双端包展示 Session 创建或推送的变更请求及其变更，并让新 Session 在自己的 Git worktree 中开始。宿主端是 `forgePanel` Remote：它以只读方式检查 Session 的检出、识别代码托管平台并检查登录状态，为单个 Session 或会话列表以流的形式推送[已绑定变更请求](../forge-session/README.zh.md)及其轮询状态，读取本地变更与变更请求的 diff，并在第一条消息于 Session 的收件箱中等待时创建所请求的 worktree。客户端增加一个侧边栏标签页、一个变更视图、标题栏中的入口、一个新会话选项、一张创建卡片、会话列表中的图标，以及操作结果的 toast 提示。
 
 ## 目录
 
@@ -27,9 +27,9 @@ kind: "package-reference"
 
 在插件页启用 [forge 套件](../forge-bundle/README.zh.md)；它把本包与 forge 注册表、GitHub 提供方、Session 绑定以及它自己的 [worktree 服务](../worktree/README.zh.md)组合在一起。
 
-- **工作树选项**——在新会话页面上，“工作树”位于工作区与模式选择器那一行的右端。勾选后显示基准分支，默认为当前分支；菜单列出最近的本地分支。不在 Git 检出中、Session 为只读，或检出及其 Git 目录不在 Session 的可写根内（例如项目本身就是链接 worktree）时，该选项不可用，提示中说明原因。发送第一条消息后，消息以“正在发送”的状态留在新会话页的输入框里，同时从基准分支在仓库的 `.agents/worktrees/` 下创建分支 `dsh-<Session id 前 8 位十六进制数>-<4 位随机十六进制数>`，并把它的检出设为 Session 的工作目录；worktree 建好后宿主才接收这条消息。
-- **创建卡片**——创建 worktree 期间，输入框上方的卡片显示新分支以及“创建分支”“检出文件”两个步骤；“更多详情”会列出分支与基准。“取消”停止创建，让消息回到可编辑状态，勾选保留。某次尝试失败时，消息回到可编辑状态，卡片显示原因：再次发送消息即换一个新分支名重试；“不使用工作树”撤回请求，下一次发送就在当前检出中进行。
-- **工作树已被删除**——Session 所在的 worktree 在 Session 之外被删除后，输入框上方的卡片会说明这一点；在恢复或离开该 worktree 之前，宿主会把每条消息退回输入框。“恢复工作树”（标签页中的“恢复”与之相同）在原目录重新检出该分支；分支也已删除时，从它开始时的提交重新创建分支。“在项目目录继续”把 Session 移回源检出。此期间标签页顶部一行显示警示图标。
+- **工作树选项**——在新会话页面上，“工作树”位于工作区与模式选择器那一行的右端。勾选后显示基准分支，默认为当前分支；菜单列出最近的本地分支。不在 Git 检出中、Session 为只读，或检出及其 Git 目录不在 Session 的可写根内（例如项目本身就是链接 worktree）时，该选项不可用，提示中说明原因。发送第一条消息后，消息立即交给 Session 并在那里等待，同时从基准分支在仓库的 `.agents/worktrees/` 下创建分支 `dsh-<Session id 前 8 位十六进制数>-<4 位随机十六进制数>`，并把它的检出设为 Session 的工作目录；worktree 建好后这条消息的这一轮才开始。
+- **创建卡片**——创建 worktree 期间，输入框上方的卡片显示新分支以及“创建分支”“检出文件”两个步骤；“更多详情”会列出分支与基准。“取消”停止这次尝试。尝试被停止或失败后，消息继续等待，失败时卡片显示原因：“重试”换一个新分支名再试；“不使用工作树”撤回请求，消息在当前检出中继续发送。
+- **工作树已被删除**——Session 所在的 worktree 在 Session 之外被删除后，输入框上方的卡片会说明这一点；此期间发送的消息会等待、不开始这一轮，直到该 worktree 被恢复或离开，卡片也会说明消息之后会接着发送。“恢复工作树”（标签页中的“恢复”与之相同）在原目录重新检出该分支；分支也已删除时，从它开始时的提交重新创建分支；恢复期间卡片显示“准备工作树”“检出文件”两个步骤，标签页中的“恢复”变为加载状态。“在项目目录继续”把 Session 移回源检出。此期间标签页顶部一行显示警示图标。
 - **标题栏按钮**——Session 有已绑定的变更请求、或其目录位于 Git 检出中时出现，用来显示或隐藏标签页。打开状态的变更请求存在检查失败、被要求修改或冲突时，按钮带红点。
 - **会话列表**——Session 在面板为它创建的 worktree 中工作时，会话行的时间之后显示分支图标；另有一个图标显示它最需要关注的变更请求的状态，依次为需要处理、打开、草稿、尚未轮询、已合并、已关闭。打开中的变更请求图标保持会话行的浅色，并用圆点标出检查进行中、已通过或失败；已合并与已关闭的保留各自的状态颜色。会话行的悬浮卡片写出 worktree 分支及其起点，再列出最多三个变更请求的编号、标题、状态与检查，并说明还有多少个。重启后，下次轮询之前显示重启前已知的状态。
 - **标签页**——顶部一行显示当前检出的分支（分离 HEAD 时为缩写提交），项目目录前显示目录图标、worktree 前显示分支图标，并说明检出的类型（Session 创建的 worktree 及其基准、其他 worktree 或项目目录）；它的提示给出路径，宿主主目录缩写为 `~`，旁边的按钮复制完整路径；worktree 已被删除时提供“恢复”。其下每张变更请求卡片显示状态图标、标题（点击在浏览器中打开）与编号；图标区分打开、草稿、已合并与已关闭，打开中的变更请求（草稿除外）检查失败、被要求修改或有冲突时显示为“需要处理”，与标题栏按钮的红点一致。卡片右上角还提供“在浏览器中打开”“复制变更请求链接”与“从本会话移除”，移除后的 toast 提供“撤销”。折叠的卡片还显示打开的变更请求的检查，以及被要求修改、冲突、草稿中最需要注意的一项；已合并或已关闭的则显示结束时间。展开的卡片显示源分支与目标分支，下面每项一行：打开的变更请求依次是检查（点击该行弹出检查列表，失败的排在前面，带耗时与链接）、评审结论与未解决讨论数、合并状态，已合并或已关闭的显示结束时间；最后是变更行数，点击该行打开变更视图。打开中的草稿还提供“标记为可评审”；主机现在就会合并的变更请求提供“合并”，其菜单列出仓库允许的合并方式并选中用户常用的一种，点“确认合并”后合并卡片显示的那个 head。每次操作的结果都以 toast 报告；该 head 之后有新提交时不会合并。恰好有一个已绑定的变更请求处于打开状态时，它的卡片默认展开。刷新会重新检查检出与登录状态，并立即再次轮询每个变更请求；检查与登录状态确认结束前，刷新图标持续旋转。缺少登录时，横幅显示 `gh auth login` 命令。
@@ -50,7 +50,7 @@ kind: "package-reference"
 
 检查运行 `rev-parse --show-toplevel`、`rev-parse --path-format=absolute --git-common-dir`、`rev-parse --path-format=absolute --git-dir`、`symbolic-ref --short HEAD`、`rev-parse --short HEAD`、`rev-parse --abbrev-ref @{upstream}` 与 `remote -v`；`branches` 运行 `symbolic-ref` 与 `for-each-ref --count=<maxBranches>`。之后，检查会为变更卡片统计 `branch` 范围的规模：找出分叉点，对它运行 `diff --numstat -z -M`，并列出未跟踪文件。每个命令都在 Session 的只读沙箱策略下运行，禁用可选的索引写入、钩子、文件系统监视器、提示与对象的延迟获取，移除继承的 Git 选择器与携带密钥的变量，并各自受 `gitTimeoutMs` 时限与每个输出流的 `maxOutputBytes` 上限约束。Git 打印的顶层目录、Git 目录与公共 Git 目录经 `ctx.fs` 解析为工作目录服务记录的规范进程路径；Git 目录与公共 Git 目录不同的检出是链接 worktree。工作树选项在 `danger-full-access` 沙箱模式下可用，在 `read-only` 下不可用，在 `workspace-write` 下只有两个目录都位于 Session 沙箱策略的规范工作区根内时才可用。
 
-worktree 请求是一条 `plugin:client-ui-forge/worktree` 记录，由 `forgeWorktree` 投影折叠：请求与撤回在第一个 `turn/start` 或创建之前生效；在第一个 `step/start` 之前，未完成请求的第一条 `created` 记录生效。该投影还从 Session 头部与每个 `working-directory/change` 记录 Session 的目录；它的客户端视图随 Session 摘要下发，在该目录就是所创建的 worktree 或位于其下时为该 worktree，否则为 null。一轮开始或 worktree 已创建之后，`requestWorktree` 与 `cancelWorktree` 以 `forgePanel/session-started` 拒绝；没有 `worktrees` 服务时以 `forgePanel/worktrees-unavailable` 拒绝；分支名为空时以 `forgePanel/invalid-branch` 拒绝；两者都会忘掉失败的尝试。一个 `agent-controller/admission` 监听器在 Session 有未完成请求时暂留消息，同时以 Session 所属 Agent 的维护任务运行一次尝试，使用新分支名，因此其他客户端此时发来的消息会等它完成；它在面板状态中发布正在进行的阶段并设置 `held`，记录带源仓库根目录的 `created`，然后放行消息。失败的尝试以 `failure` 留在面板状态中，带有分支、基准、失败步骤与原因，直到下一次尝试开始或请求变更，消息则以 `forge/worktree-creation-failed` 被拒绝。`stopCreation` 与 Agent 的取消以 `forge/worktree-creation-stopped` 拒绝消息，发送方的取消原样传出。在所创建 worktree 中工作的 Session，其每条消息在 worktree 缺失时以 `forge/worktree-missing` 被拒绝；检查无法给出结果时放行。有面板跟随该 Session 时，拒绝标记为 `presented`。worktree 服务把工作目录通知排进队列，由第一步认领。一个 `agent/pre-step` 监听器在请求仍未完成的 Session 的第 1 步创建 worktree，覆盖未经接纳就进入的消息；它把通知移入本步提议的消息，失败时这一轮结束、请求保留。`restoreWorktree` 与 `continueInProject` 同样以维护任务运行。套件把它的 `worktrees` 服务隔离，因此同时启用 Git Worktrees 时会有两个互不影响的服务。`track` 以 `forgePanel/unrecognized-url` 拒绝没有提供方识别的 URL。`markReady` 与 `merge` 只作用于该 Session 中由提供方服务的可见绑定，否则以 `forgePanel/not-bound` 拒绝；`merge` 带上卡片显示的 head 提交，head 已变化时以 `forgePanel/stale-head` 拒绝，其他拒绝都是带主机原因的 `forgePanel/action-failed`。
+worktree 请求是一条 `plugin:client-ui-forge/worktree` 记录，由 `forgeWorktree` 投影折叠：请求与撤回在第一个 `turn/start` 或创建之前生效；在第一个 `step/start` 之前，未完成请求的第一条 `created` 记录生效。该投影还从 Session 头部与每个 `working-directory/change` 记录 Session 的目录；它的客户端视图随 Session 摘要下发，在该目录就是所创建的 worktree 或位于其下时为该 worktree，否则为 null。一轮开始或 worktree 已创建之后，`requestWorktree` 以 `forgePanel/session-started` 拒绝；没有 `worktrees` 服务时以 `forgePanel/worktrees-unavailable` 拒绝；分支名为空时以 `forgePanel/invalid-branch` 拒绝；`cancelWorktree` 只以第一种拒绝，也不需要 `worktrees` 服务；两者都会忘掉失败的尝试。消息进入有未完成请求的 Session 的收件箱时，一个 `agent/inbox/inserted` 监听器在这次投递唤醒 Agent 之前启动 Session 所属 Agent 的维护任务，因此 Agent 会暂存唤醒，等这次暂留结束后才开始这条消息的这一轮。暂留使用新分支名进行一次尝试，在面板状态中发布正在进行的阶段，设置 `held`，`waiting` 为 `creation`，并记录带源仓库根目录的 `created`。尝试失败（其分支、基准、失败步骤与原因以 `failure` 留在面板状态中）或经 `stopCreation` 停止后，暂留继续等待：`retryWorktree` 再做一次尝试，没有消息等待或已有尝试进行时以 `forgePanel/not-waiting` 拒绝；撤回请求则让消息在当前检出中继续。Agent 空闲且 Session 在所创建 worktree 中工作时，进入的每条消息都会启动一次暂留，检查该 worktree 是否缺失；缺失期间暂留以 `waiting` 为 `restoration` 等待，`restoreWorktree` 或 `continueInProject` 在暂留内运行，之后放行消息；检查无法给出结果时立即放行。Agent 的取消与 Remote 的停止都会结束暂留；Agent 正在运行一轮或其他维护任务时进入的消息不会被暂留。worktree 服务把工作目录通知排进队列，由第一步认领。一个 `agent/pre-step` 监听器在请求仍未完成的 Session 的第 1 步创建 worktree，覆盖没有被暂留的消息；它把通知移入本步提议的消息，失败时这一轮结束、请求保留。没有消息等待时，`restoreWorktree` 与 `continueInProject` 以各自的维护任务运行；`restoreWorktree` 以 `restoration` 发布正在进行的步骤，并在结束恢复的同一状态中清除 `missing`。套件把它的 `worktrees` 服务隔离，因此同时启用 Git Worktrees 时会有两个互不影响的服务。`track` 以 `forgePanel/unrecognized-url` 拒绝没有提供方识别的 URL。`markReady` 与 `merge` 只作用于该 Session 中由提供方服务的可见绑定，否则以 `forgePanel/not-bound` 拒绝；`merge` 带上卡片显示的 head 提交，head 已变化时以 `forgePanel/stale-head` 拒绝，其他拒绝都是带主机原因的 `forgePanel/action-failed`。
 
 每次检查还会判断 worktree 是否缺失：Session 的目录位于所创建的 worktree 内，`ctx.fs.lstat` 在那里找不到目录，再由源仓库中的 `show-ref` 判断分支是否还在。
 
@@ -58,13 +58,13 @@ Session 在所创建的 worktree 中工作时，`localDiff` 以它的 `baseCommi
 
 `changeRequestStates` 为会话列表推送调用方可读的、已列出的 Session 所绑定的每个变更请求的最近编号、标题、状态、草稿标记、检查汇总、评审结论与可合并性：先是一个 `baseline` 帧，之后是 `changed` 帧。所有流共用一次运行，最后一条流结束时运行停止。它经 `sessionQuery` 列出 Session 而不加载它们，已加载 Session 的可见绑定取自 `ctx.forgeSession`，其他 Session 的取自缓存的 `forgeChangeRequests` 摘要；它跟随已加载 Session 的绑定变化，并经 `ctx.forge.watch` 轮询每个已绑定的变更请求，直到它合并或关闭。每个变化了的状态以其 URL 的 SHA-256 摘要为键存入 `forge_panel_change_requests` 存储域，没有任何已列出 Session 绑定的已存状态会被删除；写入失败时记录日志，状态仍保留在内存中。宿主缺少 Session 查询、投影缓存、存储或 Session 存储服务时，流以失败结束。
 
-浏览器入口先挂载 Remote，再挂载界面。每个 Session 一条流，同时供给标签页、标题栏按钮、新会话选项与创建卡片；第一个订阅方出现时打开，最后一个离开时关闭，传输重置后重新打开，并为下一个订阅方保留最后的状态。新会话选项填入 `conversation.hero.options`，worktree 卡片填入 `conversation.input.dock`。worktree 卡片显示正在进行的创建，有消息在等待时“取消”调用 `stopCreation`；或显示最近一次失败，“不使用工作树”调用 `cancelWorktree`。等待中的消息由输入框自己显示为正在发送，被拒绝的消息留在输入框里。标签页用 Remote 宿主信息中的宿主主目录缩短路径，每次传输重置后重新读取。标签页把自己是否可见报告给标题栏按钮的按下状态。toast 位于 `shell.overlay` 条目中，因此比标签页存在得更久。只要 `sidebar.session.row.trailing` 中的会话行图标或 `sidebar.session.row.hover` 中的悬浮卡片部分有一个已挂载，就由同一条变更请求状态流供给它们；两者都从会话列表的摘要值中读取 Session 的 worktree 与绑定。变更请求卡片接收变更请求、它的快照与可选操作，其他界面可以复用。变更视图是 `forge-changes` 资源标签页类型：它的地址 `dsh-resource://forge-changes/<session>/local` 与 `dsh-resource://forge-changes/<session>/change/<url>` 指明来源，导航参数可以指定要滚动到的文件。它的正文用 slot store 按标签页保存范围与布局选择，经 Remote 读取，并用共享的代码高亮器高亮各行；标签页标题显示变更图标与视图名称。
+浏览器入口先挂载 Remote，再挂载界面。每个 Session 一条流，同时供给标签页、标题栏按钮、新会话选项与创建卡片；第一个订阅方出现时打开，最后一个离开时关闭，传输重置后重新打开，并为下一个订阅方保留最后的状态。新会话选项填入 `conversation.hero.options`，worktree 卡片填入 `conversation.input.dock`。worktree 卡片显示正在进行的创建，有消息在等待时“取消”调用 `stopCreation`；或显示消息等待时失败或被停止的那次尝试，“重试”调用 `retryWorktree`，“不使用工作树”调用 `cancelWorktree`。标签页用 Remote 宿主信息中的宿主主目录缩短路径，每次传输重置后重新读取。标签页把自己是否可见报告给标题栏按钮的按下状态。toast 位于 `shell.overlay` 条目中，因此比标签页存在得更久。只要 `sidebar.session.row.trailing` 中的会话行图标或 `sidebar.session.row.hover` 中的悬浮卡片部分有一个已挂载，就由同一条变更请求状态流供给它们；两者都从会话列表的摘要值中读取 Session 的 worktree 与绑定。变更请求卡片接收变更请求、它的快照与可选操作，其他界面可以复用。变更视图是 `forge-changes` 资源标签页类型：它的地址 `dsh-resource://forge-changes/<session>/local` 与 `dsh-resource://forge-changes/<session>/change/<url>` 指明来源，导航参数可以指定要滚动到的文件。它的正文用 slot store 按标签页保存范围与布局选择，经 Remote 读取，并用共享的代码高亮器高亮各行；标签页标题显示变更图标与视图名称。
 
 | 源码 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `forgePanel` Remote 与按 Session 的面板 |
 | [`src/panel.ts`](src/panel.ts) | 面板状态、检查调度与登录检查 |
-| [`src/worktree.ts`](src/worktree.ts) | worktree 记录、投影，以及在接纳阶段与第一步创建 worktree |
+| [`src/worktree.ts`](src/worktree.ts) | worktree 记录、投影、等待中的消息，以及在第一步创建 worktree |
 | [`src/states.ts`](src/states.ts) | 会话列表用的变更请求状态 |
 | [`src/git.ts`](src/git.ts) | 受限的只读 Git 命令 |
 | [`src/parse.ts`](src/parse.ts) | Git 输出解析与远端顺序 |
@@ -111,7 +111,8 @@ Session 在所创建的 worktree 中工作时，`localDiff` 以它的 `baseCommi
 - **会话列表中未打开的 Session**——会话列表从缓存的摘要中读取未加载 Session 的 worktree 与绑定：没有缓存摘要的 Session 两者都不显示；此版本之前最后使用的 Session 要打开之后才显示其 worktree。
 - **检查触发时机**——检出只在 Session 的工具结果与目录变化之后检查；Session 之外的改动要等到刷新或下一个工具结果才会出现。
 - **只负责创建**——面板只在 Session 的第一步之前创建 worktree，从不删除或清理；失败或被取消的尝试可能留下分支或检出。分支名取自 Session id 与随机数字，而不是 Session 标题，因为那时标题还不存在。
-- **不经接纳的发送方**——只有 Web Session Remote 经 agent controller 的 `agent-controller/admission` 阶段投递消息。其他发送方发出的第一条消息会直接开始这一轮，worktree 在第一步创建；发往已删除 worktree 的消息照常进入，其中的工具会因目录不存在而失败。
+- **一轮进行中的消息**——Agent 正在运行一轮或其他维护任务时进入的消息不会被暂留：所请求的 worktree 改为在第一步创建，失败时这一轮结束且不带这条消息；已删除的 worktree 不会被检查，工作目录服务会把 Session 移回项目目录。
+- **等待中的消息**——消息等待期间，Agent 以空闲状态处于维护任务中，输入框不提供停止；只有卡片上的操作、Agent 的取消或 Remote 的停止能放行它，等待 Agent 空闲的调用方也会一并等待。
 - **恢复**——恢复会从分支重新检出；分支也已删除时，从它开始时的提交重新创建。从未提交的修改随被删除的目录一起丢失。
 - **链接 worktree 项目**——项目本身是链接 worktree 时该选项不可用：在 workspace-write 下它的 Git 目录位于可写根之外，新分支与之后的提交都无法写入。
 - **变更范围**——待办：单个提交与上一轮的范围。“分支”范围需要一个默认分支与 HEAD 有共同历史的远端，或 Session 创建的 worktree。

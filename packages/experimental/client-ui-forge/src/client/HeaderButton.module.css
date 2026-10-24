@@ -10,10 +10,16 @@
 }
 
 /* The forge tab is visible; the pressed fill outranks the Button's hover fill. */
-.trigger[aria-pressed='true'],
-.trigger[aria-pressed='true']:hover:not(:disabled) {
+.trigger[aria-pressed='true'] {
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-interactive-bg-active);
+}
+
+@media (hover: hover) {
+  .trigger[aria-pressed='true']:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+    background: var(--dsw-alias-interactive-bg-active);
+  }
 }
 
 .dot {

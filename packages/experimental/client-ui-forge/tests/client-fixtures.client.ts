@@ -119,9 +119,15 @@ export function failure(overrides: Partial<ForgeWorktreeFailure> = {}): ForgeWor
   return { branch: 'dsh/0a1b2c3d', from: 'main', phase: 'prepare', message: 'fatal: invalid reference: main', ...overrides }
 }
 
-/** Worktree facts of a Session that can no longer request a worktree, has no blocker, and has no creation, failure, or worktree. */
+/**
+ * Worktree facts of a Session that can no longer request a worktree, has no blocker, and has no creation, failure,
+ * worktree, or waiting message.
+ */
 export function worktree(overrides: Partial<ForgePanelWorktree> = {}): ForgePanelWorktree {
-  return { editable: false, blocker: null, request: null, created: null, creation: null, failure: null, missing: null, ...overrides }
+  return {
+    editable: false, blocker: null, request: null, created: null, creation: null, failure: null, missing: null, restoration: null,
+    waiting: null, ...overrides,
+  }
 }
 
 /** Ready panel state of `/work/repo` recognized as `octo/demo`, signed in, without change requests, a worktree, or local changes. */
@@ -143,11 +149,16 @@ export function requested(from: string | null = 'main', overrides: Partial<Forge
   return ready({ worktree: worktree({ editable: true, request: { from }, ...overrides }) })
 }
 
-/** Panel state of a Session that works in the worktree it created at `/work/repo-dsh` after that directory was removed. */
-export function removed(branchExists = true): ForgePanelState {
+/**
+ * Panel state of a Session that works in the worktree it created at `/work/repo-dsh` after that directory was removed.
+ * @param branchExists - whether the worktree's branch remains.
+ * @param waiting - whether a message waits for the worktree to be restored or left.
+ * @param overrides - further worktree facts, such as a running restoration.
+ */
+export function removed(branchExists = true, waiting = false, overrides: Partial<ForgePanelWorktree> = {}): ForgePanelState {
   return ready({
     directory: '/work/repo-dsh',
     checkout: { state: 'failed', message: 'fatal: cannot change to \'/work/repo-dsh\': No such file or directory' },
-    worktree: worktree({ created: created(), missing: { branchExists } }),
+    worktree: worktree({ created: created(), missing: { branchExists }, waiting: waiting ? 'restoration' : null, ...overrides }),
   })
 }
