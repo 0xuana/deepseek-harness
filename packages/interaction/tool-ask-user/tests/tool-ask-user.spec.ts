@@ -206,7 +206,8 @@ describe('ask_user_question tool', () => {
     expect(parameters.properties.questions.items.properties.options.items.properties).not.toHaveProperty('value')
     expect(parameters.properties.questions.items.properties.options.items.properties).not.toHaveProperty('recommended')
     expect(parameters.properties.questions.items.properties.options.items.properties).not.toHaveProperty('preview')
-    expect(schema?.description).toContain('A submitted skipped question is an answer item with empty selected and no custom')
+    expect(schema?.description).toContain('An answer item with empty selected and no custom means the user skipped that question: '
+      + 'continue without it, do not ask it again, and do not treat the skip as permission.')
   })
 
   it('lets Cordis select the exact legacy blocking tool instead of the timed tool', async () => {
