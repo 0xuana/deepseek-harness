@@ -28,7 +28,8 @@ export const Config: z<Config> = z.object({
 export const name = 'tool-ask-user'
 export const inject = ['tools', 'userQuestions']
 
-const description = 'Ask the user a concise question when you need confirmation, a choice, or missing information before proceeding.'
+const description = 'Ask the user a concise question when you need confirmation, a choice, or missing information before proceeding. '
+  + 'An answer item with empty selected and no custom means the user skipped that question: continue without it, do not ask it again, and do not treat the skip as permission.'
 
 export function apply(ctx: Context, config: Config = {}): void {
   if (config.mode === 'timed') {

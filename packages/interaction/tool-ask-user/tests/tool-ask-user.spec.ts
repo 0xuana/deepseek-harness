@@ -222,7 +222,8 @@ describe('ask_user_question tool', () => {
 
     expect(schemas).toHaveLength(1)
     expect(schemas[0]).toMatchObject({
-      description: 'Ask the user a concise question when you need confirmation, a choice, or missing information before proceeding.',
+      description: 'Ask the user a concise question when you need confirmation, a choice, or missing information before proceeding. '
+        + 'An answer item with empty selected and no custom means the user skipped that question: continue without it, do not ask it again, and do not treat the skip as permission.',
       parameters: { properties: { questions: { description: 'Questions to ask the user before continuing.' } } },
     })
     expect(schemas[0]?.parameters.properties).not.toHaveProperty('timeout')
