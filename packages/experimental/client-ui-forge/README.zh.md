@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-这个可选的双端包展示 Session 创建或推送的变更请求及其变更，并让新 Session 在自己的 Git worktree 中开始。宿主端是 `forgePanel` Remote：它以只读方式检查 Session 的检出、识别代码托管平台并检查登录状态，为单个 Session 或会话列表以流的形式推送[已绑定变更请求](../forge-session/README.zh.md)及其轮询状态，读取本地变更与变更请求的 diff，并在第一条消息于 Session 的收件箱中等待时创建所请求的 worktree。客户端增加一个侧边栏标签页、一个变更视图、标题栏中的入口、一个新会话选项、一张创建卡片、会话列表中的图标，以及操作结果的 toast 提示。
+这个可选的双端包展示 Session 创建或推送的变更请求及其变更，并让新 Session 在自己的 Git worktree 中开始。宿主端是 `forgePanel` Remote：它以只读方式检查 Session 的检出，检查代码托管平台的登录状态，为单个 Session 或会话列表以流的形式推送[已绑定变更请求](../forge-session/README.zh.md)及其轮询状态，读取 diff，并在第一条消息于 Session 的收件箱中等待时创建所请求的 worktree。客户端增加一个侧边栏标签页、一个变更视图、标题栏中的入口、一个新会话选项、一张创建卡片、会话列表中的图标，以及 toast 提示。
 
 ## 目录
 
