@@ -82,38 +82,28 @@
 }
 
 /* Header actions do not shrink, so on a narrow row they overflow the cluster.
-   The cluster clips them and fades its trailing edge while it overflows,
-   keeping the utilities unobstructed. The 4px padding, offset by the negative
-   margin, keeps focus rings inside the clip. */
+   The cluster clips them, hit testing included, so the next control keeps
+   every click. The trailing padding spans the gap before that control and
+   holds the fade: content that fits ends before it, and only overflowing
+   content reaches it. The 4px block and start padding, offset by negative
+   margins, keeps focus rings inside the clip. `clip` rather than `hidden`
+   keeps the cluster from becoming a scroll container that focus could scroll. */
 .titleCluster {
   display: flex;
   flex: 1;
   align-items: center;
   gap: 10px;
   min-width: 0;
-  margin: -4px;
-  padding: 4px;
-  overflow: hidden;
-  scroll-timeline: --title-cluster inline;
-  /* Longhands: the bundled lightningcss folds animation-timeline into the
-     animation shorthand, a form browsers reject. The timeline is active only
-     while the cluster overflows. */
-  animation-name: title-cluster-clipped;
-  animation-fill-mode: both;
-  animation-timeline: --title-cluster;
+  --title-cluster-fade: 20px;
+  margin: -4px calc(-1 * var(--title-cluster-fade)) -4px -4px;
+  padding: 4px var(--title-cluster-fade) 4px 4px;
+  overflow: clip;
+  mask-image: linear-gradient(to left, transparent calc(0.3 * var(--title-cluster-fade)), #000 var(--title-cluster-fade));
 }
 
-@keyframes title-cluster-clipped {
-  from, to {
-    mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
-  }
-}
-
-/* Without scroll timelines overflow cannot be detected, so the cluster clips without a fade. */
-@supports not (animation-timeline: scroll()) {
-  .titleCluster {
-    animation: none;
-  }
+/* Without utilities the corner's 8px margin is the gap the fade spans. */
+.titleCluster:has(+ .headerUtilities:empty) {
+  --title-cluster-fade: 8px;
 }
 
 /* The auto grid column collapses with an empty or CSS-hidden occupant.
