@@ -23,7 +23,7 @@ import Testing
     #expect(try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: path) == observed)
 }
 
-@Test(arguments: [ENOENT, EIO, ENODEV, EPERM, EACCES, ENAMETOOLONG, EOVERFLOW, ENOMEM, ENOBUFS])
+@Test(arguments: [ENOENT, ESRCH, EIO, ENODEV, EPERM, EACCES, ENAMETOOLONG, EOVERFLOW, ENOMEM, ENOBUFS])
 func liveBundleIdentitySurvivesAnUnavailableExecutablePath(error: Int32) throws {
     let identity = try NativePlatform.identity(getpid())
     let expectedPath = try #require(NativePlatform.executablePath(identity.pid))
@@ -39,7 +39,7 @@ func liveBundleIdentitySurvivesAnUnavailableExecutablePath(error: Int32) throws 
     #expect(queries == 1)
 }
 
-@Test(arguments: [ENOENT, EIO, ENODEV, EPERM, EACCES, ENAMETOOLONG, EOVERFLOW, ENOMEM, ENOBUFS])
+@Test(arguments: [ENOENT, ESRCH, EIO, ENODEV, EPERM, EACCES, ENAMETOOLONG, EOVERFLOW, ENOMEM, ENOBUFS])
 func missingBundleAndPathReportsThePathFailureWithoutRetry(error: Int32) throws {
     let identity = try NativePlatform.identity(getpid())
     var queries = 0

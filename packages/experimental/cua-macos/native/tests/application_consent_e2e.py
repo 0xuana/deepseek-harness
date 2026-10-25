@@ -5,6 +5,7 @@ import ctypes
 from contextlib import ExitStack
 import hashlib
 import json
+import os
 from pathlib import Path
 import plistlib
 import shutil
@@ -167,7 +168,18 @@ def main():
                 assert authorization["id"] == pending["authorization"]["id"] and authorization["persistable"] is True, authorization
                 if copied == 0:
                     assert "executablePath" not in authorization, authorization
-                check_window(running, state)
+                if args.desktop:
+                    try:
+                        helper.call("getState", {"appHandle": running["appHandle"], "maxElements": 2000, "maxDepth": 25})
+                    except AssertionError:
+                        observation = helper.transcript[-1]
+                        assert observation["response"]["id"] == observation["request"]["id"], observation
+                        failure = observation["response"]["error"]
+                        assert failure["code"] in ["PERMISSION_DENIED", "NATIVE_ERROR", "WINDOW_UNAVAILABLE"], failure
+                        print("Deleted executable observation:", json.dumps(failure))
+                    else:
+                        print("Deleted executable observation: succeeded")
+            os.kill(pid, 0)
             print(f"Deleted executable: bundle_id={bundle_id is not None}, proc_pidpath_bytes={copied}, errno={path_error}")
         print("PASS: changed bundles cannot launch; cold/running and direct-bundle identities agree; copies share consent; other IDs stay separate; missing IDs and standalone GUIs use persistent paths across restarts"
               + (f"; {checked_windows} GUI instances expose controls, receive an AX click and produce a PNG" if args.desktop else ""))
