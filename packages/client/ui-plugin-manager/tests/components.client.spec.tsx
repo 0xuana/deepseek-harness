@@ -1217,6 +1217,7 @@ describe('PluginManagerPage', () => {
     })
 
     it.each([
+      '@deepseek-ai/dsh-cua-bundle',
       '@deepseek-ai/dsh-experimental-session-search',
       '@deepseek-ai/dsh-experimental-ralph-bundle',
       '@acme/shipped-exploration',
@@ -1245,6 +1246,33 @@ describe('PluginManagerPage', () => {
       act(() => { navigation.actions.setView({ kind: 'more' }) })
       set({ packages: [other, { ...entry, installed: true, availability: 'profile' }] })
       expect(card()).not.toBeNull()
+    })
+
+    it.each([en, zh])('hides unsupported CUA by default and retains installed or selected entries for management', (dict) => {
+      const name = '@deepseek-ai/dsh-cua-bundle'
+      const entry = pkg({ name, installed: false, enabled: false, optional: true, listedByDefault: false,
+        error: { code: 'unsupported-platform' } })
+      const other = pkg({ name: '@deepseek-ai/dsh-experimental-session-titles-bundle', installed: false, optional: true, enabled: false })
+      const { actions, set, setLanguage } = renderTab({ packages: [other, entry] })
+      setLanguage(dict)
+      const card = () => document.querySelector(`[data-plugin-package="${name}"]`)
+      expect(card()).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: dict.moreAction }))
+      expect(card()).toBeNull()
+      for (const availability of ['profile', 'missing'] as const) {
+        const installed = { ...entry, installed: true, availability, installTarget: { spec: `${name}@1.0.0`, version: '1.0.0' } }
+        set({ packages: [other, installed] })
+        expect(card()).not.toBeNull()
+        expect(screen.getByText(dict.reasonUnsupportedPlatform)).toBeTruthy()
+        expect(screen.getByRole('switch', { name: dict.enableToggle.replace('{name}', name) })).toHaveProperty('disabled', true)
+      }
+      set({ packages: [other, { ...entry, enabled: true }] })
+      fireEvent.click(screen.getByRole('button', { name: dict.openDetail.replace('{name}', name) }))
+      const toggle = screen.getByRole('switch', { name: dict.enableToggle.replace('{name}', name) })
+      expect(toggle).toHaveProperty('disabled', false)
+      expect(screen.getByText(`${dict.reasonLabel}: ${dict.reasonUnsupportedPlatform}`)).toBeTruthy()
+      fireEvent.click(toggle)
+      expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith(name, false)
     })
 
     it.each([en, zh])('keeps disabled CUA on the secondary page with experimental labels', (dict) => {
@@ -1277,8 +1305,7 @@ describe('PluginManagerPage', () => {
 
     it.each([
       '@deepseek-ai/dsh-experimental-session-titles-bundle',
-      '@deepseek-ai/dsh-creation-recommendations',
-      '@deepseek-ai/dsh-plugin-recommendations',
+      '@deepseek-ai/dsh-personalized-recommendations',
     ])('returns %s details to the secondary page and retains it across React remounts', (name) => {
       const b = renderTab({ packages: [pkg({ name, official: true, enabled: false })] })
       fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
@@ -1296,8 +1323,7 @@ describe('PluginManagerPage', () => {
 
     it.each([
       '@deepseek-ai/dsh-experimental-tool-worktree',
-      '@deepseek-ai/dsh-creation-recommendations',
-      '@deepseek-ai/dsh-plugin-recommendations',
+      '@deepseek-ai/dsh-personalized-recommendations',
     ])('pins enabled %s onto the main list and removes it when disabled', (first) => {
       const team = '@deepseek-ai/dsh-experimental-agent-team-profile'
       const second = '@deepseek-ai/dsh-experimental-cot-translation-bundle'
