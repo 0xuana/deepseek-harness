@@ -94,7 +94,7 @@ describe('HistoryController passive reads', () => {
       message: createMessage({ role: 'assistant', content: [{ type: 'text', text: 'latest' }], source: { kind: 'model', provider: 'p', model: 'm' } }),
       stream: [],
     }, { surfaceOp: 'append' })
-    const page = await f.history.history({ address: f.address }, f.abort.signal)
+    const page = await f.history.events({ address: f.address }, f.abort.signal)
     expect(page.cursor).toBe(f.session.seq - 1)
     expect(page.records.at(-1)?.event.seq).toBe(f.session.seq - 1)
   })
@@ -144,7 +144,7 @@ describe('HistoryController passive reads', () => {
     const f = await fixture()
     // A cross-realm or opaque source may reject with the code alone; the message falls back.
     vi.spyOn(f.ctx.sessionQuery, 'observeSession').mockRejectedValue({ code: 'SESSION_QUERY_ABORTED' })
-    await expect(f.history.history({ address: f.address }, f.abort.signal)).rejects.toMatchObject({
+    await expect(f.history.events({ address: f.address }, f.abort.signal)).rejects.toMatchObject({
       code: 'gateway/cancelled', message: 'Session read was cancelled',
     })
   })

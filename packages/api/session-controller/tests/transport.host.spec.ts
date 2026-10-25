@@ -614,7 +614,7 @@ describe('Session history and Web follow', () => {
       { version: SESSION_FORMAT_VERSION, id: corruptId, createdAt: 1, cwd: '/workspace', isSeeded: false },
       [event('fixture/start', SessionSeq(0)), event('fixture/gap', SessionSeq(2))],
     )
-    await expect(corrupt.history.history({
+    await expect(corrupt.history.events({
       address: { kind: 'session', sessionId: corruptId }, throughSeq: 1,
     }, signal())).rejects.toMatchObject({ code: 'SESSION_QUERY_CORRUPT_SESSION' })
     for (const maxMessages of [0, 0.5]) {
@@ -675,7 +675,7 @@ describe('Session history and Web follow', () => {
         events: [],
       }),
     }) as never)
-    await expect(first.history.history({ address, throughSeq: -1 }, signal()))
+    await expect(first.history.events({ address, throughSeq: -1 }, signal()))
       .rejects.toMatchObject({ code: 'session/not-found' })
 
     const second = await setup()
@@ -689,7 +689,7 @@ describe('Session history and Web follow', () => {
         events: [],
       }),
     }) as never)
-    await expect(second.history.history({ address, throughSeq: -1 }, signal()))
+    await expect(second.history.events({ address, throughSeq: -1 }, signal()))
       .rejects.toMatchObject({ code: 'session/not-found' })
   })
 
@@ -704,7 +704,7 @@ describe('Session history and Web follow', () => {
       isSeeded: false,
     }
     cold(ordinaryBench.ctx, ordinaryHeader, [event('turn/start', SessionSeq(0), { turn: 1 })])
-    await expect(ordinaryBench.history.history({
+    await expect(ordinaryBench.history.events({
       address: { kind: 'session', sessionId: ordinaryId },
       throughSeq: 0,
     }, signal())).resolves.toMatchObject({
@@ -730,18 +730,18 @@ describe('Session history and Web follow', () => {
     }
     const missing = await setup()
     cold(missing.ctx, childHeader, [])
-    await expect(missing.history.history({ address: childAddress, throughSeq: -1 }, signal()))
+    await expect(missing.history.events({ address: childAddress, throughSeq: -1 }, signal()))
       .rejects.toMatchObject({ code: 'subagent/catalog-diagnostic', details: { reason: 'corrupt' } })
 
     const corrupt = await setup()
     cold(corrupt.ctx, childHeader, [event('subagent/descriptor', SessionSeq(0), { version: 'bad' })])
-    await expect(corrupt.history.history({ address: childAddress, throughSeq: 0 }, signal()))
+    await expect(corrupt.history.events({ address: childAddress, throughSeq: 0 }, signal()))
       .rejects.toMatchObject({ code: 'subagent/catalog-diagnostic', details: { reason: 'corrupt' } })
 
     const ordinaryChild = await setup()
     const { origin: _origin, ...ordinaryChildHeader } = childHeader
     cold(ordinaryChild.ctx, ordinaryChildHeader, [])
-    await expect(ordinaryChild.history.history({ address: childAddress, throughSeq: -1 }, signal()))
+    await expect(ordinaryChild.history.events({ address: childAddress, throughSeq: -1 }, signal()))
       .rejects.toMatchObject({ code: 'subagent/unauthorized' })
   })
 
@@ -791,7 +791,7 @@ describe('Session history and Web follow', () => {
     const session = ordinary.ctx.sessions.create(SessionId('projected'), { meta: { cwd: '/workspace' } })
     session.append('turn/start', { turn: 1 })
     const ordinarySnapshot = vi.spyOn(ordinary.ctx.sessionProjections, 'snapshot')
-    const ordinaryPage = await ordinary.history.history({
+    const ordinaryPage = await ordinary.history.events({
       address: { kind: 'session', sessionId: session.id },
       throughSeq: 0,
     }, signal())
@@ -808,7 +808,7 @@ describe('Session history and Web follow', () => {
       mode: 'continuable', provider: 'test', label: 'child',
     }))
     const childSnapshot = vi.spyOn(child.ctx.sessionProjections, 'snapshot')
-    const page = await child.history.history({
+    const page = await child.history.events({
       address: {
         kind: 'subagent',
         parentSessionId,

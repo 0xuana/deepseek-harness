@@ -527,7 +527,7 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote('page')
   page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionEventsPage> {
-    return this.historyController.history(request, signal)
+    return this.historyController.events(request, signal)
   }
 
   /**
@@ -538,7 +538,7 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote
   events(request: SessionPageRequest, signal: AbortSignal): Promise<SessionEventsPage> {
-    return this.historyController.history(request, signal)
+    return this.historyController.events(request, signal)
   }
 
   /**

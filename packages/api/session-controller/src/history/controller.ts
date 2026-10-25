@@ -30,12 +30,12 @@ export class HistoryController {
   }
 
   /**
-   * Read a passive history page at an exact event cut.
-   * @param request - Session identity and optional historical cut and page window.
+   * Read a passive page of Session events at an exact cut.
+   * @param request - Session identity and optional cut and page window.
    * @param signal - read cancellation.
    * @returns a page at the supplied cut, or the observed log end when omitted.
    */
-  async history(request: SessionPageRequest, signal: AbortSignal): Promise<SessionEventsPage> {
+  async events(request: SessionPageRequest, signal: AbortSignal): Promise<SessionEventsPage> {
     const spec = resolveHistoryRequest(request)
     try {
       return await this.usingObservation({ sessionId: addressId(request.address), projection: request.address.kind === 'subagent' }, signal, (observation) => {
