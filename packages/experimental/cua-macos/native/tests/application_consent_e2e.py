@@ -1,5 +1,6 @@
-"""Verify bundle consent across cold and running application copies without desktop input."""
+"""Verify bundle and executable-path consent, optionally with fixture-only GUI operations."""
 import argparse
+import base64
 from contextlib import ExitStack
 import hashlib
 import json
@@ -11,12 +12,13 @@ import tempfile
 import uuid
 
 from capabilities_e2e import stop_application, wait_for_state
-from native_test_support import BINARY, ROOT, NativeHelper
+from native_test_support import BINARY, ROOT, NativeHelper, stop
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--helper", type=Path, default=BINARY)
+    parser.add_argument("--desktop", action="store_true", help="Read, click and capture owned fixture windows; requires existing system grants")
     args = parser.parse_args()
     transcript = []
     with tempfile.TemporaryDirectory(prefix="dsh-cua-consent-") as temporary, ExitStack() as cleanup:
@@ -28,6 +30,21 @@ def main():
         expected = hashlib.sha256(("macos:bundle-id:" + identifier).encode()).hexdigest()
         helper = NativeHelper(transcript, args.helper)
         cleanup.callback(helper.stop)
+        if args.desktop:
+            assert helper.call("getCapabilities", {})["permissions"] == {"accessibility": True, "screenRecording": True}
+
+        def check_window(app, state_path):
+            if not args.desktop:
+                return
+            state = wait_for_state(state_path, lambda value: value["pid"] == app["pid"] and value["windowId"] > 0)
+            owner = {"appHandle": app["appHandle"], "windowId": state["windowId"]}
+            observed = helper.call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
+            pad = next(item for item in observed["elements"] if item["role"] == "AXButton" and item["title"] == "Input receiver")
+            helper.call("click", {"appHandle": app["appHandle"], "snapshotId": observed["snapshotId"], "elementIndex": pad["index"]})
+            wait_for_state(state_path, lambda value: value["axPresses"] == state["axPresses"] + 1)
+            captured = helper.call("screenshot", owner)
+            assert base64.b64decode(captured["data"], validate=True).startswith(b"\x89PNG\r\n\x1a\n")
+
         register = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
         def fixture(name, bundle_id):
             app = root / (name + ".app")
@@ -93,9 +110,37 @@ def main():
                 authorization = running["authorization"]
                 expected_path = hashlib.sha256(("macos:executable-path:" + authorization["executablePath"]).encode()).hexdigest()
                 assert authorization["id"] == expected_path, authorization
+            check_window(running, state)
         assert identities[0] == identities[1] == expected, identities
         assert identities[2] != expected, identities
-        print("PASS: changed bundles cannot launch; cold/running identities agree; copies share consent; other IDs stay separate; missing IDs use persistent paths")
+
+        app, executable, state, _ = fixture("Direct bundle", identifier)
+        pending = helper.call("getApp", {"selector": str(app)})
+        process = subprocess.Popen([str(executable)], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        cleanup.callback(stop, process)
+        wait_for_state(state, lambda value: value["pid"] == process.pid and value["windowId"] > 0)
+        running = helper.call("getApp", {"selector": str(process.pid)})
+        assert running["authorization"]["id"] == pending["authorization"]["id"] == expected, running["authorization"]
+        check_window(running, state)
+
+        standalone_ids = []
+        for index in range(2):
+            state = root / f"standalone-{index}.json"
+            process = subprocess.Popen([str(binary), str(state), "--background"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            cleanup.callback(stop, process)
+            try:
+                wait_for_state(state, lambda value: value["pid"] == process.pid and value["windowId"] > 0)
+                running = helper.call("getApp", {"selector": str(process.pid)})
+                authorization = running["authorization"]
+                assert running.get("bundleId") is None and authorization["persistable"] is True, authorization
+                assert Path(authorization["executablePath"]).samefile(binary), authorization
+                standalone_ids.append(authorization["id"])
+                check_window(running, state)
+            finally:
+                stop(process)
+        assert standalone_ids[0] == standalone_ids[1], standalone_ids
+        print("PASS: changed bundles cannot launch; cold/running and direct-bundle identities agree; copies share consent; other IDs stay separate; missing IDs and standalone GUIs use persistent paths across restarts"
+              + ("; all seven GUI instances expose controls, receive an AX click and produce a PNG" if args.desktop else ""))
 
 
 if __name__ == "__main__":
