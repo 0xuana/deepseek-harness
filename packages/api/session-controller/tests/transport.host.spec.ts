@@ -117,7 +117,7 @@ describe('Session history and Web follow', () => {
       value: { type: 'event', event: { type: 'turn/end', seq: 1 } },
     })
 
-    const page = await history.history(
+    const page = await history.events(
       { address: { kind: 'session', sessionId: session.id }, throughSeq: 1 },
       new AbortController().signal,
     )
@@ -370,7 +370,7 @@ describe('Session history and Web follow', () => {
       address: { kind: 'session', sessionId: session.id },
     }, abort.signal)[Symbol.asyncIterator]()
     await expect(iterator.next()).resolves.toMatchObject({ done: false, value: { type: 'snapshot', cursor: -1 } })
-    await expect(history.history({
+    await expect(history.events({
       address: { kind: 'session', sessionId: session.id }, throughSeq: -1,
     }, signal())).resolves.toMatchObject({ records: [], hasMore: false })
     abort.abort()
@@ -518,7 +518,7 @@ describe('Session history and Web follow', () => {
     }))
     const signal = new AbortController().signal
 
-    await expect(history.history({
+    await expect(history.events({
       address: {
         kind: 'subagent',
         parentSessionId,
@@ -529,17 +529,17 @@ describe('Session history and Web follow', () => {
     }, signal)).resolves.toMatchObject({
       records: [{ type: 'event', event: { type: 'subagent/descriptor' } }],
     })
-    await expect(history.history({
+    await expect(history.events({
       address: { kind: 'subagent', parentSessionId, childSessionId, mode: 'unknown' },
       throughSeq: 0,
     }, signal)).resolves.toMatchObject({
       records: [{ type: 'event', event: { type: 'subagent/descriptor' } }],
     })
-    await expect(history.history({
+    await expect(history.events({
       address: { kind: 'subagent', parentSessionId: SessionId('other-parent'), childSessionId, mode: 'unknown' },
       throughSeq: 0,
     }, signal)).rejects.toMatchObject({ code: 'subagent/unauthorized' })
-    await expect(history.history({
+    await expect(history.events({
       address: {
         kind: 'subagent',
         parentSessionId: SessionId('other-parent'),
@@ -548,7 +548,7 @@ describe('Session history and Web follow', () => {
       },
       throughSeq: 0,
     }, signal)).rejects.toMatchObject({ code: 'subagent/unauthorized' })
-    await expect(history.history({
+    await expect(history.events({
       address: {
         kind: 'subagent',
         parentSessionId,
@@ -557,7 +557,7 @@ describe('Session history and Web follow', () => {
       },
       throughSeq: 0,
     }, signal)).rejects.toMatchObject({ code: 'subagent/unauthorized' })
-    await expect(history.history({
+    await expect(history.events({
       address: { kind: 'session', sessionId: childSessionId },
       throughSeq: 0,
     }, signal)).rejects.toMatchObject({ code: 'session/agent-busy' })
@@ -573,7 +573,7 @@ describe('Session history and Web follow', () => {
       inspect: () => Promise.reject(failure),
     }) as never)
 
-    await expect(history.history({
+    await expect(history.events({
       address: { kind: 'session', sessionId },
       throughSeq: -1,
     }, new AbortController().signal)).rejects.toMatchObject({
@@ -602,9 +602,9 @@ describe('Session history and Web follow', () => {
       { address, throughSeq: -1, turnWindow: { minMessages: 50, minTurns: 0 } },
       { address, throughSeq: -1, turnWindow: { minMessages: 50, minTurns: 1.5 } },
     ]) {
-      await expect(history.history(request, signal())).rejects.toMatchObject({ code: 'gateway/bad-request' })
+      await expect(history.events(request, signal())).rejects.toMatchObject({ code: 'gateway/bad-request' })
     }
-    await expect(history.history({ address, throughSeq: 0 }, signal()))
+    await expect(history.events({ address, throughSeq: 0 }, signal()))
       .rejects.toMatchObject({ code: 'gateway/bad-request' })
 
     const corrupt = await setup()
@@ -636,7 +636,7 @@ describe('Session history and Web follow', () => {
   it('reports missing ordinary and subagent sources without fabricating inspection failures', async () => {
     const { ctx, history } = await setup()
     const ordinary = { kind: 'session' as const, sessionId: SessionId('missing') }
-    await expect(history.history({ address: ordinary, throughSeq: -1 }, signal()))
+    await expect(history.events({ address: ordinary, throughSeq: -1 }, signal()))
       .rejects.toMatchObject({ code: 'session/not-found' })
 
     const inspect = vi.fn(() => Promise.resolve(undefined))
@@ -646,9 +646,9 @@ describe('Session history and Web follow', () => {
       stat,
       inspect,
     }) as never)
-    await expect(history.history({ address: ordinary, throughSeq: -1 }, signal()))
+    await expect(history.events({ address: ordinary, throughSeq: -1 }, signal()))
       .rejects.toMatchObject({ code: 'session/not-found' })
-    await expect(history.history({
+    await expect(history.events({
       address: {
         kind: 'subagent',
         parentSessionId: SessionId('parent'),
@@ -772,7 +772,7 @@ describe('Session history and Web follow', () => {
     } as never)
     const { history } = controllers(ctx, vi.fn())
 
-    await expect(history.history({
+    await expect(history.events({
       address: {
         kind: 'subagent',
         parentSessionId,
@@ -835,13 +835,13 @@ describe('Session history and Web follow', () => {
       sourceEventSeqs: [SessionSeq(1), firstReply.seq, SessionSeq(3), SessionSeq(4), summary.seq],
     })
 
-    const page = await history.history({
+    const page = await history.events({
       address: { kind: 'session', sessionId: session.id }, throughSeq: replacement.seq, maxMessages: 2,
     }, signal())
     expect(page.records.map(entry => entry.event.seq))
       .toEqual([3, 4, 5, replacement.seq])
     expect(page.hasMore).toBe(true)
-    const before = await history.history({
+    const before = await history.events({
       address: { kind: 'session', sessionId: session.id }, throughSeq: replacement.seq, beforeSeq: 3, maxMessages: 1,
     }, signal())
     expect(before.records.map(entry => entry.event.seq)).toEqual([2])
@@ -855,7 +855,7 @@ describe('Session history and Web follow', () => {
       surfaceOp: 'append', sourceEventSeqs: [source.seq],
     })
 
-    const page = await history.history({
+    const page = await history.events({
       address: { kind: 'session', sessionId: session.id }, throughSeq: 1, maxMessages: 1,
     }, signal())
     expect(page.records.map(entry => entry.event.seq)).toEqual([0, 1])
