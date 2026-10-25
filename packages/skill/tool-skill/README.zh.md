@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-agent 可以在会话期间发现并加载 skill。在首次请求前，如果存在模型可调用 skill 且 `skill` 工具可见，agent 会收到一份持久目录，列出可用 skill 的名称与有长度上限的描述，并可用 `skill` 工具加载完整指令。用户可以用 `/name` 调用某个用户可调用的 skill，把相同的指令注入该步骤。目录变更会追加一份完整替换，其中空目录会停用旧名称；可配置 `catalogDescriptionMaxLength` 来限制每条描述的长度。
+agent 可以在会话期间发现并加载 skill。在首次请求前，如果存在模型可调用 skill 且 `skill` 工具可见，agent 会收到一份持久目录，列出可用 skill 的名称与有长度上限的描述，并可用 `skill` 工具加载完整指令。用户可以用 `/name` 调用某个用户可调用的 skill，把相同的指令注入该步骤。目录变更会追加一份替换，其中空目录会停用旧名称；发现不完整时会发布可用子集并附带警告；可配置 `catalogDescriptionMaxLength` 来限制每条描述的长度。
 
 ## 目录
 
@@ -82,7 +82,7 @@ agent 可以在会话期间发现并加载 skill。在首次请求前，如果�
 
 ### 目录生命周期
 
-在每次符合条件的 `agent/pre-step`，插件都会快照调用会话的 skill 目录，应用 `skill` 工具的精确可见性，过滤出模型可调用的 skill，并把条目 digest 与会话日志中最新可见的 `skill-catalog` 消息做比较。digest 变化时，它把包含完整替换目录的持久用户角色消息交给 `enter` 决策；空替换会显式停用较早的名称。提供方快照不完整时不发送任何内容，并为下一次 pre-step 保留最后一份可用视图。可见性检查针对本插件所注册的精确工具定义，因此作用域内同名的遮蔽项会同时移除 schema 及其指引；该插件既可全局挂载，也可挂在单个 agent 的组合内。
+在每次符合条件的 `agent/pre-step`，插件都会快照调用会话的 skill 目录，应用 `skill` 工具的精确可见性，过滤出模型可调用的 skill，并把条目 digest 与会话日志中最新可见的 `skill-catalog` 消息做比较。digest 变化时，它把包含完整替换目录的持久用户角色消息交给 `enter` 决策；空替换会显式停用较早的名称。快照不完整时仍会发布可读条目，并附带发现警告和持久化的 `incomplete: true` 来源元数据，即使已无可用条目。完整性也参与 digest，因此恢复后即使条目相同也会清除警告；不完整观测会重试而非缓存。可见性检查针对本插件所注册的精确工具定义，因此作用域内同名的遮蔽项会同时移除 schema 及其指引；该插件既可全局挂载，也可挂在单个 agent 的组合内。
 
 ### 调用边界
 
@@ -111,7 +111,13 @@ agent 可以在会话期间发现并加载 skill。在首次请求前，如果�
 
 #### 模型看到什么
 
-如果存在模型可调用 skill，且可见的正是这个 `skill` 工具，agent 会在第一个请求之前收到下方目录模板，其中包含每个已排序 skill 的一条随数据而定的条目。该目录是一条持久的用户角色消息。后续成员关系、描述或可见性的变化会使用同一个 `<available_skills>` 信封追加完整替换；删除所有 skill 时，会追加一个空信封，并明确指示不得使用旧名称。模板的结尾一句是防止双重加载的规则：用户显式的手势边界（下文的 pre-step 监听器）会把同一份 `renderSkillContent` 输出（共享自 `@deepseek-ai/dsh-skill`）内联注入，目录则告诉模型遵循该块，而不是再经工具重新加载该 skill；替换目录模板的两个分支——包括清空后的目录——都携带同一条防双重加载规则。
+如果存在模型可调用 skill，且可见的正是这个 `skill` 工具，agent 会在第一个请求之前收到下方目录模板，其中包含每个已排序 skill 的一条随数据而定的条目。该目录是一条持久的用户角色消息。后续成员关系、描述、可见性或完整性的变化会使用同一个 `<available_skills>` 信封追加替换；删除所有 skill 时，会追加一个空信封，并明确指示不得使用旧名称。模板的结尾一句是防止双重加载的规则：用户显式的手势边界（下文的 pre-step 监听器）会把同一份 `renderSkillContent` 输出（共享自 `@deepseek-ai/dsh-skill`）内联注入，目录则告诉模型遵循该块，而不是再经工具重新加载该 skill；替换目录模板的两个分支——包括清空后的目录——都携带同一条防双重加载规则。
+
+##### 发现不完整提示
+
+```markdown
+Some skills could not be checked. Listed skills remain available; missing names may be temporarily unavailable. Discovery will be retried on the next request.
+```
 
 ##### Skill 目录模板
 
@@ -130,7 +136,7 @@ A user may also invoke a skill directly; its <skill_content> block then appears 
 
 #### Token 影响
 
-重复输入成本随 skill 数量和 `catalogDescriptionMaxLength` 增长；当列表为空或工具被隐藏或遮蔽时，不会发送初始目录 token。每次实际目录变更都会添加一条保留的完整替换消息。
+重复输入成本随 skill 数量和 `catalogDescriptionMaxLength` 增长；当发现完整且列表为空，或工具被隐藏或遮蔽时，不会发送初始目录 token。每次条目或完整性变化都会添加一条保留的替换消息；发现不完整时会附带警告。
 
 #### KV Cache 影响
 
