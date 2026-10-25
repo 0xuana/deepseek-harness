@@ -69,7 +69,7 @@ it('requires another user decision after the permission page permits asking agai
   await expect(f.access.run(f.client, handle, signal, async () => null)).rejects.toThrow('APP_ACCESS_REQUIRED')
 })
 
-it('persists a signed identity and revokes it before further dispatch', async () => {
+it('persists a reusable identity and revokes it before further dispatch', async () => {
   const f = await setup('Always allow')
   await f.access.select(f.agent, f.client, handle, identity, signal)
   expect(f.grants()).toEqual([{ id: identity.id, name: identity.name, executablePath: identity.executablePath }])

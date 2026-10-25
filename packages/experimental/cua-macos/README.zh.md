@@ -40,12 +40,12 @@ export DSH_CUA_HELPER="$cua_native_root/.build/release/dsh-cua-native"
 pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.yml --dump-config
 ```
 
-配置输出命令不发起模型请求。执行真实任务时，将 `--dump-config` 替换为任务提示，并配置该 profile 的模型凭据。配置挂载 computer-use 注册表和本 provider；使用前需移除已有的竞争 provider。负责执行的宿主或辅助进程需要辅助功能权限来读取 AX 和输入，需要屏幕录制权限来截图。`getCapabilities` 查询权限和锁屏状态，不弹出系统授权窗口。桌面会话锁定或不可用时，界面观察与输入会在分派前拒绝，需由用户解锁 macOS 后继续。`listApps` 和 `cua.getState` 列出运行中的应用。`findApps(query)` 按名称、bundle ID 或绝对路径搜索 macOS 标准应用目录。`getApp` 按唯一名称、bundle ID、路径或运行中的 PID 选择应用，取得应用许可后，在需要时后台启动尚未运行的应用。启动前先确认可执行文件身份，授权后在启动前后再次核对；没有 Bundle ID 的应用只能取得所选实例的会话许可。helper 等待应用完成启动后才返回其 PID。返回的对象读取初始 AX，不自动激活应用。启动被取消时，应用可能已经运行。模型指引要求先在后台观察和输入，不在初始化或每次动作前激活应用。窗口隐藏或最小化时，先尝试 `app.show()` 或 `window.show()`，再重新观察。它请求取消隐藏和恢复最小化，不主动激活、抬起窗口或切换桌面空间；应用级恢复选择焦点窗口、主窗口或唯一 AX 窗口。结果通过 `windowId` 指明选中的窗口，未选中时为 null；`foregroundChanged` 比较操作前后的前台应用和最上层窗口，无法取得完整观察时为 null，返回后仍可能发生焦点变化。恢复失败或窗口仍不可用时，说明需要前台的步骤，再调用 `app.activate()` 或窗口的 `raise` 动作并重新观察。必须使用前台时，以完成任务为先。应用收到输入后仍可能改变焦点，后台投递不保证用户操作始终不受干扰。
+配置输出命令不发起模型请求。执行真实任务时，将 `--dump-config` 替换为任务提示，并配置该 profile 的模型凭据。配置挂载 computer-use 注册表和本 provider；使用前需移除已有的竞争 provider。负责执行的宿主或辅助进程需要辅助功能权限来读取 AX 和输入，需要屏幕录制权限来截图。`getCapabilities` 查询权限和锁屏状态，不弹出系统授权窗口。桌面会话锁定或不可用时，界面观察与输入会在分派前拒绝，需由用户解锁 macOS 后继续。`listApps` 和 `cua.getState` 列出运行中的应用。`findApps(query)` 按名称、bundle ID 或绝对路径搜索 macOS 标准应用目录。`getApp` 按唯一名称、bundle ID、路径或运行中的 PID 选择应用，取得应用许可后，在需要时后台启动尚未运行的应用。授权前从磁盘读取应用的 Bundle ID 和可执行路径，在启动前后重新读取并核对；没有 Bundle ID 的应用只能取得所选实例的会话许可。helper 等待应用完成启动后才返回其 PID。返回的对象读取初始 AX，不自动激活应用。启动被取消时，应用可能已经运行。模型指引要求先在后台观察和输入，不在初始化或每次动作前激活应用。窗口隐藏或最小化时，先尝试 `app.show()` 或 `window.show()`，再重新观察。它请求取消隐藏和恢复最小化，不主动激活、抬起窗口或切换桌面空间；应用级恢复选择焦点窗口、主窗口或唯一 AX 窗口。结果通过 `windowId` 指明选中的窗口，未选中时为 null；`foregroundChanged` 比较操作前后的前台应用和最上层窗口，无法取得完整观察时为 null，返回后仍可能发生焦点变化。恢复失败或窗口仍不可用时，说明需要前台的步骤，再调用 `app.activate()` 或窗口的 `raise` 动作并重新观察。必须使用前台时，以完成任务为先。应用收到输入后仍可能改变焦点，后台投递不保证用户操作始终不受干扰。
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
 | `agentPreset` | `ptc` | 仅为绑定该 preset 的 Agent 注册工具和指引；`false` 表示全局注册。 |
-| `allowedApps` | `[]` | 旧的已签名应用许可，只导入 profile 存储一次。 |
+| `allowedApps` | `[]` | 旧路径和签名许可，只导入 profile 存储一次供撤销，不授予新 Bundle ID 身份访问权限。 |
 | `helperPath` | 包内可执行文件 | 可选的原生可执行文件绝对路径覆盖。 |
 | `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
@@ -219,6 +219,8 @@ Use selectText only on controls advertising selectionWritable. It selects a uniq
 - 后台输入依赖私有 SkyLight 符号，macOS 升级可能使其不可用，需在目标系统版本验证。
 - 实测 Blender Unicode 输入曾出现分派成功但界面未显示文本，后台 AppKit 的 Command+A 曾未选中全文。输入后必须检查应用状态；工具返回成功只表示已分派。
 - 原生二进制需要本地构建，签名和桌面分发留待后续。[权限页面](../cua/README.zh.md)提供 macOS 申请入口和应用授权撤销；桌面安装包的权限归属留待后续处理。
+- 已保存许可的条目显示一个已批准副本的名称、路径和图标，不枚举共享身份的所有安装副本。删除该副本后图标可能不可用，撤销仍作用于同一身份的所有副本。
+- macOS 无法提供运行中应用的 Bundle ID 时，该进程仅获得实例范围内的许可。冷启动按 Bundle ID 获批后，如果运行进程无法确认该标识，会返回 `STALE_APP`。
 - 持久 PTC 是对外部运行环境的假设，本包不实现它。真实模型任务成功率需要在原生测试和协议测试之外单独评估。
 
 -----

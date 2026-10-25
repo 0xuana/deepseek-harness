@@ -709,7 +709,7 @@ it('stores revocation without entering the HMR configuration queue', async () =>
   await blocked
 })
 
-it('stores signed application consent separately from configuration', async () => {
+it('stores persistable application consent separately from configuration', async () => {
   const f = await permissionProfile(), { profile } = f
   expect(f.ctx.settings.describe().find(row => row.ns === 'cua')).toBeUndefined()
   await f.ctx.plugin(UserQuestions)
@@ -740,7 +740,7 @@ it('rejects an application handle before any helper or consent has been acquired
   expect(native.request).not.toHaveBeenCalled()
 })
 
-it('uses configured signed application grants without requesting a human answer', async () => {
+it('uses configured application grants for a matching identity without requesting a human answer', async () => {
   const f = await setup()
   await f.provider.dispose()
   const grant = { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app' }

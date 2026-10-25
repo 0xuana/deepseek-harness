@@ -1,7 +1,7 @@
 // Consent follows the native bundle identifier; handles still identify one process instance.
+import AppKit
 import CryptoKit
 import Foundation
-import AppKit
 
 enum ApplicationAuthorization {
     // Versions and copies with the same bundle identifier share consent, regardless of signing.
@@ -25,6 +25,10 @@ enum ApplicationAuthorization {
     }
 
     static func describeInstalled(_ app: InstalledApplication) throws -> JSONValue {
+        guard let current = InstalledApplication.read(URL(fileURLWithPath: app.path)),
+              current.bundleID == app.bundleID, current.executablePath == app.executablePath else {
+            throw NativeFailure(code: "STALE_APP", message: "Application changed after selection; select it again")
+        }
         let persistentID = bundleIdentity(app.bundleID)
         let id: String
         if let persistentID { id = persistentID }

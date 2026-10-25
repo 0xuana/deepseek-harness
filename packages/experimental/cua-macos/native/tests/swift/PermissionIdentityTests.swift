@@ -35,6 +35,26 @@ import Testing
     #expect(encoded.utf8.count <= 65536)
 }
 
+@Test func unbundledRunningProcessesCannotReceivePersistentConsent() throws {
+    let process = Process()
+    let input = Pipe()
+    process.executableURL = URL(fileURLWithPath: "/bin/cat")
+    process.standardInput = input
+    process.standardOutput = FileHandle.nullDevice
+    try process.run()
+    defer {
+        input.fileHandleForWriting.closeFile()
+        if process.isRunning { process.terminate() }
+        process.waitUntilExit()
+    }
+    let identity = try NativePlatform.identity(process.processIdentifier)
+    let executable = try #require(NativePlatform.executablePath(identity.pid))
+    let authorization = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: executable)
+    #expect(authorization["persistable"] == .bool(false))
+    #expect(authorization["id"].string?.count == 64)
+    #expect(try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: executable) == authorization)
+}
+
 @Test func resolvesTheCurrentProcessResponsibility() throws {
     let responsible = try #require(NativePlatform.responsiblePID(getpid()))
     #expect(responsible > 0)

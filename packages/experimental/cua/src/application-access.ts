@@ -157,7 +157,7 @@ export class ApplicationAccess {
         try {
           result = await questions.ask({ agent, signal, questions: [{ id: 'cua-app-access',
             question: `Allow computer use to launch if needed, read, capture, and control ${identity.name}?`,
-            detail: 'Session access applies only to this conversation.',
+            detail: applicationAccessDisplay.detail.en,
             options, intent: {
               kind: 'approval', approve: 'Allow for this session', reject: 'Deny',
               ...(identity.persistable && this.options.store.persistent ? { always: 'Always allow' } : {}),

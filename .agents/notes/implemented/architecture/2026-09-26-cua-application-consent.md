@@ -26,7 +26,7 @@ Revocation invalidates the Agent connections that retain the application's handl
 
 **Trust model instructions or hide controls.** Retained objects and direct tool calls can still reach native operations. The executor must enforce the decision at dispatch.
 
-**Persist application names or unsigned paths.** A replacement can reuse both. The original signing policy rejected that reuse; [bundle-ID consent](2026-10-25-cua-bundle-id-consent.md) records the current choice to share permission between installations.
+**Persist application names or unsigned paths.** A replacement can reuse both. [Bundle-ID consent](2026-10-25-cua-bundle-id-consent.md) owns the identity choices and the decision to share permission between installations.
 
 **Add an approval database or Session control stream.** User Questions already owns interactive answers. The existing domain service provides durable state without introducing a dedicated database or Session control stream; storage tradeoffs are owned by the profile consent decision.
 

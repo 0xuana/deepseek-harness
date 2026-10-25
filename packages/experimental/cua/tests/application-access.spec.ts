@@ -79,15 +79,15 @@ it.each([
   expect(question).toMatchObject({
     id: 'cua-app-access',
     question: 'Allow computer use to launch if needed, read, capture, and control Test application?',
-    detail: 'Session access applies only to this conversation.',
+    detail: 'Allowing or denying applies to every version and copy sharing the same application identity. Session access and denial apply only to this conversation.',
     intent: { kind: 'approval', approve: 'Allow for this session', reject: 'Deny',
       subject: { name: 'Test application' }, display: {
         question: { en: 'Allow computer use to launch, read, capture and control this application?',
           zh: '允许 Computer Use 启动、读取、截图和控制此应用吗？',
           ja: 'Computer Use によるこのアプリの起動、読み取り、画面キャプチャ、操作を許可しますか？' },
-        detail: { en: 'Session access applies only to this conversation.',
-          zh: '会话授权仅在当前对话中生效。',
-          ja: 'セッションの許可はこの会話にのみ適用されます。' },
+        detail: { en: 'Allowing or denying applies to every version and copy sharing the same application identity. Session access and denial apply only to this conversation.',
+          zh: '允许或拒绝会应用于同一应用标识的所有版本和副本。会话许可和拒绝仅在当前对话中生效。',
+          ja: '許可または拒否は、同じアプリ識別子を持つすべてのバージョンとコピーに適用されます。セッションの許可と拒否はこの会話にのみ適用されます。' },
         approve: { en: 'Allow for this session', zh: '本会话允许', ja: 'このセッションで許可',
           es: 'Permitir durante esta sesión', fr: 'Autoriser pour cette session', de: 'Für diese Sitzung zulassen',
           ru: 'Разрешить для этого сеанса', pt: 'Permitir nesta sessão' },
@@ -138,7 +138,7 @@ it.each(['Allow for this session', 'Always allow'])('shares %s across installati
   expect(dispatch).not.toHaveBeenCalled()
 })
 
-it('does not extend a legacy grant to a new identity at the same executable path', async () => {
+it('does not reuse a saved grant for another identity at the same executable path', async () => {
   const { persistable: _persistable, ...grant } = identity
   const f = await setup('Deny', { initial: [grant] })
   const changed = { ...identity, id: ApplicationAuthorizationResult.shape.id.parse('b'.repeat(64)) }

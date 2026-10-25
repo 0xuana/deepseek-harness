@@ -105,6 +105,8 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 运行 `python3 packages/experimental/cua-macos/native/tests/shared_helper_e2e.py --helper /absolute/helper`，通过测试自建的 AppKit fixture 核实并发启动、共享服务 PID、独立句柄、同一应用交接、请求级截图期限、连接清理和信号退出。需要已有辅助功能和屏幕录制权限。`--without-desktop` 将检查限定为协议与进程生命期。
 
+在已解锁的 macOS GUI 会话中运行 `python3 packages/experimental/cua-macos/native/tests/application_consent_e2e.py --helper /absolute/helper`，需要可用的 Apple Swift 编译器。它创建并清理自己的 AppKit 应用，验证启动前拒绝已改变的应用元数据、启动前后身份一致，以及同 ID 的两个副本同时运行。测试不读取 AX、不截图、不发送输入，因此不需要辅助功能或屏幕录制权限。
+
 在 GUI 登录会话中运行 `python3 packages/experimental/cua-macos/native/tests/launcher_identity_e2e.py --helper /absolute/helper`，验证由 Launch Services 启动的应用先启动另一个 GUI 启动器，再启动 helper。helper 识别外层责任应用，并在启动器退出后保留其名称和图标。检查只使用测试自建的两个应用和 helper，结束后清理对应的 Launch Services 注册，不申请辅助功能或屏幕录制权限。
 
 构建并解锁 Mac 后运行 `python3 packages/experimental/cua-macos/native/tests/axless_e2e.py`，验证应用移除并恢复 AX 根节点的窗口。检查需要已有辅助功能/屏幕录制权限，会拒绝过期元素索引，捕获无 AX 窗口，通过 fixture 状态文件核实坐标点击，并检查恢复。不会修改系统权限设置。

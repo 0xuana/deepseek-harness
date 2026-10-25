@@ -1,7 +1,7 @@
 /** Application identities admitted from native selection or saved provider configuration. */
 import type { Branded } from '@deepseek-ai/dsh-brand'
 
-/** Platform-issued digest identifying an application or one process or pending executable instance. */
+/** Helper-computed digest of platform application information, a process instance or a pending executable. */
 export type CuaApplicationId = Branded<'CuaApplicationId'>
 /** Identity shown to the human before application access is granted. */
 export interface CuaApplicationGrant {

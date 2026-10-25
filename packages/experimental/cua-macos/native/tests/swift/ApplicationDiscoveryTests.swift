@@ -77,3 +77,33 @@ private func fixtureApplication(_ directory: URL, name: String, identifier: Stri
     try Data("new version".utf8).write(to: URL(fileURLWithPath: first.executablePath))
     #expect(try ApplicationAuthorization.describeInstalled(first)["id"] == approved["id"])
 }
+
+@Test(arguments: ["identifier", "missing-identifier", "executable", "missing-plist"])
+func changedBundleMetadataInvalidatesACachedSelection(change: String) throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("dsh-cua-apps-" + UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let selected = try fixtureApplication(root, name: "Fixture", identifier: "test.dsh.consent." + UUID().uuidString)
+    let url = URL(fileURLWithPath: selected.path)
+    let plist = url.appendingPathComponent("Contents/Info.plist")
+    let cachedBundle = try #require(Bundle(url: url))
+    #expect(cachedBundle.bundleIdentifier == selected.bundleID)
+    _ = try ApplicationAuthorization.describeInstalled(selected)
+    var info = try #require(PropertyListSerialization.propertyList(from: Data(contentsOf: plist), format: nil) as? [String: String])
+    switch change {
+    case "identifier": info["CFBundleIdentifier"] = "test.dsh.replacement"
+    case "missing-identifier": info.removeValue(forKey: "CFBundleIdentifier")
+    case "executable":
+        info["CFBundleExecutable"] = "replacement"
+        try Data("replacement".utf8).write(to: url.appendingPathComponent("Contents/MacOS/replacement"))
+    default: break
+    }
+    if change == "missing-plist" { try FileManager.default.removeItem(at: plist) }
+    else { try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: plist) }
+    do {
+        _ = try ApplicationAuthorization.describeInstalled(selected)
+        Issue.record("Cached application metadata allowed a changed bundle")
+    } catch let error as NativeFailure {
+        #expect(error.code == "STALE_APP")
+    }
+    withExtendedLifetime(cachedBundle) {}
+}
