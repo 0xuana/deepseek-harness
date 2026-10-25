@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-25-cua-bundle-id-consent.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-25-cua-bundle-id-consent.md
+/agent-note-macos-consent-shared-by-bundle-identifier:
+  en: 41cd1b8e2629e049
+  zh: f1bcef434b6d247f
+/agent-note-macos-consent-shared-by-bundle-identifier/problem:
+  en: bb387fc89c1c578c
+  zh: 947456baea45cc95
+/agent-note-macos-consent-shared-by-bundle-identifier/decision:
+  en: d90b9e9f30a4295a
+  zh: eb95ddb432055c8c
+/agent-note-macos-consent-shared-by-bundle-identifier/alternatives-considered:
+  en: 3a81ab1d7f93ecf3
+  zh: a226ffe1bc0702dd
+/agent-note-macos-consent-shared-by-bundle-identifier/consequences:
+  en: b5e08afa1888180b
+  zh: c8728a1125f52450

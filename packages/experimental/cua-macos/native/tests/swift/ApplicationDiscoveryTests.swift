@@ -4,13 +4,14 @@ import Foundation
 import Testing
 @testable import CuaNative
 
-private func fixtureApplication(_ directory: URL, name: String, identifier: String) throws -> InstalledApplication {
+private func fixtureApplication(_ directory: URL, name: String, identifier: String?) throws -> InstalledApplication {
     let app = directory.appendingPathComponent(name + ".app")
     let contents = app.appendingPathComponent("Contents")
     let executable = contents.appendingPathComponent("MacOS/app")
     try FileManager.default.createDirectory(at: executable.deletingLastPathComponent(), withIntermediateDirectories: true,
                                             attributes: [.posixPermissions: 0o700])
-    let info = ["CFBundleIdentifier": identifier, "CFBundleName": name, "CFBundleExecutable": "app", "CFBundlePackageType": "APPL"]
+    var info = ["CFBundleName": name, "CFBundleExecutable": "app", "CFBundlePackageType": "APPL"]
+    if let identifier { info["CFBundleIdentifier"] = identifier }
     try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: contents.appendingPathComponent("Info.plist"))
     try Data("fixture executable".utf8).write(to: executable)
     return try #require(InstalledApplication.read(app))
@@ -47,13 +48,32 @@ private func fixtureApplication(_ directory: URL, name: String, identifier: Stri
     }
 }
 
-@Test func unsignedPendingIdentityChangesWhenTheExecutableChanges() throws {
+@Test(arguments: [nil, ""] as [String?]) func unidentifiedPendingIdentityChangesWhenTheExecutableChanges(identifier: String?) throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("dsh-cua-apps-" + UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
-    let app = try fixtureApplication(root, name: "Fixture", identifier: "test.dsh.identity." + UUID().uuidString)
+    let app = try fixtureApplication(root, name: "Fixture", identifier: identifier)
     let before = try ApplicationAuthorization.describeInstalled(app)
     #expect(before["persistable"] == .bool(false))
     try Data("replacement executable".utf8).write(to: URL(fileURLWithPath: app.executablePath))
     let after = try ApplicationAuthorization.describeInstalled(app)
     #expect(before["id"] != after["id"])
+}
+
+@Test func unsignedVersionsShareConsentOnlyForTheSameBundleIdentifier() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("dsh-cua-apps-" + UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let identifier = "test.dsh.consent." + UUID().uuidString
+    let first = try fixtureApplication(root, name: "Editor One", identifier: identifier)
+    let second = try fixtureApplication(root, name: "Editor Two", identifier: identifier)
+    let other = try fixtureApplication(root, name: "Other", identifier: identifier + ".other")
+    let differentCase = try fixtureApplication(root, name: "Case", identifier: identifier.uppercased())
+    let approved = try ApplicationAuthorization.describeInstalled(first)
+    #expect(approved["persistable"] == .bool(true))
+    let copy = try ApplicationAuthorization.describeInstalled(second)
+    #expect(copy["id"] == approved["id"])
+    #expect(copy["executablePath"] != approved["executablePath"])
+    #expect(try ApplicationAuthorization.describeInstalled(other)["id"] != approved["id"])
+    #expect(try ApplicationAuthorization.describeInstalled(differentCase)["id"] != approved["id"])
+    try Data("new version".utf8).write(to: URL(fileURLWithPath: first.executablePath))
+    #expect(try ApplicationAuthorization.describeInstalled(first)["id"] == approved["id"])
 }

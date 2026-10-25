@@ -36,7 +36,7 @@ struct ApplicationCatalogSnapshot: Sendable {
         }
         return ApplicationCatalogSnapshot(applications: apps, frontPID: NSWorkspace.shared.frontmostApplication?.processIdentifier)
     }
-    /// A bounded PNG for human recognition; authorization continues to use executable/signing identity.
+    /// A bounded PNG for human recognition, separate from application authorization.
     static func icon(at path: String) -> String? {
         guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 64, pixelsHigh: 64,
                                             bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,

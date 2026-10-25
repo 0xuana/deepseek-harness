@@ -120,6 +120,33 @@ it('reuses session consent across application handles and connections without gr
   await expect(f.access.run(replacement, 'restarted-app' as CuaAppHandle, signal, async () => 'read')).resolves.toBe('read')
 })
 
+it.each(['Allow for this session', 'Always allow'])('shares %s across installation paths and revokes both handles', async (choice) => {
+  const f = await setup(choice)
+  const copy = { ...identity, name: 'Second version', executablePath: '/Applications/Fixture Beta.app/Contents/MacOS/Fixture' }
+  const secondHandle = 'second-installation' as CuaAppHandle
+  await f.access.select(f.agent, f.client, handle, identity, signal)
+  await f.access.select(f.agent, f.client, secondHandle, copy, signal)
+  expect(f.answer).toHaveBeenCalledOnce()
+  for (const selected of [handle, secondHandle]) {
+    await expect(f.access.run(f.client, selected, signal, async () => 'read')).resolves.toBe('read')
+  }
+  await f.access.revoke(identity.id)
+  const dispatch = vi.fn(async () => 'must not run')
+  for (const selected of [handle, secondHandle]) {
+    await expect(f.access.run(f.client, selected, signal, dispatch)).rejects.toThrow('APP_ACCESS_REVOKED')
+  }
+  expect(dispatch).not.toHaveBeenCalled()
+})
+
+it('does not extend a legacy grant to a new identity at the same executable path', async () => {
+  const { persistable: _persistable, ...grant } = identity
+  const f = await setup('Deny', { initial: [grant] })
+  const changed = { ...identity, id: ApplicationAuthorizationResult.shape.id.parse('b'.repeat(64)) }
+  await expect(f.access.select(f.agent, f.client, handle, changed, signal)).rejects.toThrow('APP_ACCESS_DENIED')
+  expect(f.answer).toHaveBeenCalledOnce()
+  expect(f.grants()).toEqual([grant])
+})
+
 it('does not repeatedly ask after an application is denied', async () => {
   const f = await setup('Deny')
   await expect(f.access.select(f.agent, f.client, handle, identity, signal)).rejects.toThrow('APP_ACCESS_DENIED')
@@ -145,13 +172,13 @@ it('preserves an unavailable answerer error without granting access', async () =
   expect(f.grants()).toEqual([])
 })
 
-it('refuses a forged Always allow answer for an unsigned application', async () => {
+it('refuses a forged Always allow answer for a nonpersistable application', async () => {
   const f = await setup('Always allow')
   await expect(f.access.select(f.agent, f.client, handle, { ...identity, persistable: false }, signal)).rejects.toThrow('APP_ACCESS_DENIED')
   expect(f.save).not.toHaveBeenCalled()
 })
 
-it('reuses only saved signed identities when a task or helper is replaced', async () => {
+it('reuses only saved persistable identities when a task or helper is replaced', async () => {
   const { persistable: _persistable, ...grant } = identity
   const f = await setup('Deny', { initial: [grant] })
   await f.access.select(f.agent, f.client, handle, identity, signal)

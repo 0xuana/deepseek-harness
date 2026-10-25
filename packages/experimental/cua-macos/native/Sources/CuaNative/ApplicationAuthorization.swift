@@ -1,11 +1,10 @@
-// Native application identity is verified before the Host asks for consent.
+// Consent follows the native bundle identifier; handles still identify one process instance.
 import CryptoKit
 import Foundation
-import Security
+import AppKit
 
 enum ApplicationAuthorization {
-    // Signed applications retain decisions across restarts only at the same executable path
-    // and with the same designated requirement. Unsigned/ad-hoc code gets process-only consent.
+    // Versions and copies with the same bundle identifier share consent, regardless of signing.
     static func describe(_ identity: ProcessIdentity, name: String, expectedExecutablePath: String?) throws -> JSONValue {
         try NativePlatform.verify(identity)
         guard let executablePath = NativePlatform.executablePath(identity.pid), let expectedExecutablePath else {
@@ -15,55 +14,38 @@ enum ApplicationAuthorization {
         guard path == URL(fileURLWithPath: expectedExecutablePath).resolvingSymlinksInPath().path else {
             throw NativeFailure(code: "STALE_APP", message: "Application executable changed during selection; select the application again")
         }
-        let requirement = signingRequirement(identity.pid)
-        let authority = requirement ?? "process:\(identity.pid):\(identity.startedSeconds):\(identity.startedMicroseconds)"
-        let id = SHA256.hash(data: Data((path + "\n" + authority).utf8)).map { String(format: "%02x", $0) }.joined()
+        let persistentID = bundleIdentity(NSRunningApplication(processIdentifier: identity.pid)?.bundleIdentifier)
+        let process = "process:\(identity.pid):\(identity.startedSeconds):\(identity.startedMicroseconds)"
+        let id = persistentID ?? digest(path + "\n" + process)
         try NativePlatform.verify(identity)
         return .object([
             "id": .string(id), "name": .string(name), "executablePath": .string(path),
-            "persistable": .bool(requirement != nil),
+            "persistable": .bool(persistentID != nil),
         ])
     }
 
     static func describeInstalled(_ app: InstalledApplication) throws -> JSONValue {
-        var code: SecStaticCode?
-        let url = URL(fileURLWithPath: app.executablePath)
-        let created = SecStaticCodeCreateWithPath(URL(fileURLWithPath: app.path) as CFURL, SecCSFlags(), &code)
-        let requirement = created == errSecSuccess ? code.flatMap { signingRequirement($0) } : nil
-        let authority: String
-        if let requirement { authority = requirement }
+        let persistentID = bundleIdentity(app.bundleID)
+        let id: String
+        if let persistentID { id = persistentID }
         else {
-            let handle = try FileHandle(forReadingFrom: url)
+            let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: app.executablePath))
             defer { try? handle.close() } // FileHandle also owns closure if an OS close error is reported.
             var hash = SHA256()
             while let data = try handle.read(upToCount: 64 * 1024), !data.isEmpty { hash.update(data: data) }
-            authority = "executable:" + hash.finalize().map { String(format: "%02x", $0) }.joined()
+            let executable = "executable:" + hash.finalize().map { String(format: "%02x", $0) }.joined()
+            id = digest(app.executablePath + "\n" + executable)
         }
-        let id = SHA256.hash(data: Data((app.executablePath + "\n" + authority).utf8)).map { String(format: "%02x", $0) }.joined()
         return .object(["id": .string(id), "name": .string(app.name), "executablePath": .string(app.executablePath),
-                        "persistable": .bool(requirement != nil)])
+                        "persistable": .bool(persistentID != nil)])
     }
 
-    private static func signingRequirement(_ code: SecStaticCode) -> String? {
-        guard SecStaticCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSStrictValidate), nil) == errSecSuccess else { return nil }
-        var info: CFDictionary?
-        guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
-              let values = info as? [String: Any], let flags = values[kSecCodeInfoFlags as String] as? NSNumber,
-              !SecCodeSignatureFlags(rawValue: flags.uint32Value).contains(.adhoc) else { return nil }
-        var requirement: SecRequirement?
-        var text: CFString?
-        guard SecCodeCopyDesignatedRequirement(code, SecCSFlags(), &requirement) == errSecSuccess, let requirement,
-              SecRequirementCopyString(requirement, SecCSFlags(), &text) == errSecSuccess else { return nil }
-        return text as String?
+    private static func bundleIdentity(_ identifier: String?) -> String? {
+        guard let identifier, !identifier.isEmpty else { return nil }
+        return digest("macos:bundle-id:" + identifier)
     }
 
-    private static func signingRequirement(_ pid: Int32) -> String? {
-        var code: SecCode?
-        guard SecCodeCopyGuestWithAttributes(nil, [kSecGuestAttributePid as String: pid] as CFDictionary,
-                                            SecCSFlags(), &code) == errSecSuccess, let code,
-              SecCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSStrictValidate), nil) == errSecSuccess else { return nil }
-        var staticCode: SecStaticCode?
-        guard SecCodeCopyStaticCode(code, SecCSFlags(), &staticCode) == errSecSuccess, let staticCode else { return nil }
-        return signingRequirement(staticCode)
+    private static func digest(_ value: String) -> String {
+        SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 }

@@ -127,7 +127,7 @@ export class ApplicationAccess {
    * @param agent Live agent whose session owns the decision.
    * @param client Helper that issued the handle.
    * @param handle Helper handle for a running instance or an approved pending launch.
-   * @param identity Native executable/signing identity.
+   * @param identity Platform-provided application or process-instance identity.
    * @param signal Calling tool lifetime.
    * @param icon Native application icon for the permission card; never saved as an identity.
    * @returns Completion after consent; refusals reject before launch, AX, screenshots, or input.

@@ -436,7 +436,7 @@ actor AXWorker {
         let actual = try ApplicationAuthorization.describe(identity, name: app.name, expectedExecutablePath: app.executablePath)
         if original["persistable"] == .bool(true), actual["id"] != original["id"] {
             forget(plan.handle)
-            throw NativeFailure(code: "STALE_APP", message: "Launched application does not match the approved signing identity")
+            throw NativeFailure(code: "STALE_APP", message: "Launched application does not match the approved application identity")
         }
         targets[plan.handle] = .running(identity)
         var value: [String: JSONValue] = ["appHandle": .string(plan.handle), "pid": .number(Double(pid)), "name": .string(app.name)]
