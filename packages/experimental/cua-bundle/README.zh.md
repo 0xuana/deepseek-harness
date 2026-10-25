@@ -1,5 +1,5 @@
 ---
-description: "从插件页开启实验性 Computer Use 并配置 PTC。"
+description: "开启可选 macOS Computer Use 及权限页面。"
 kind: "package-bundle"
 ---
 
@@ -35,11 +35,11 @@ pnpm dsh web
 
 开关将组合包选择保存到 profile 的 `package.json`。Computer Use 仅安装在 PTC 会话中。通过「添加插件」、可见卡片或详情页启用时，系统权限未就绪会显示设置引导。详情页提供“设为 PTC”按钮来修改新会话默认模式，已有会话保留原 preset。开关保持 PTC 执行方式和其他设置不变。详情页的“设为持久化”按钮单独开启 PTC 跨调用的内存状态保留，作用范围和重载行为见[权限页面](../cua/README.zh.md)。提供方加载时准备本机组件，已有与源码摘要匹配的可执行文件时直接复用。
 
-关闭会卸载提供方，并从其 Agent 作用域中撤回 CUA 工具。用户选择的默认值、执行器配置和变量均保留。再次开启不会重建执行器。用户显式从 per-call 切换为持久化执行时，HMR 会重载共享执行器，可能中断正在执行的 PTC 调用。
+关闭会卸载提供方，并从其 Agent 作用域中撤回 CUA 工具。执行器配置、新会话默认值和已保存的授权保留。
 
 Computer Use 仅支持 macOS DSH Host。原生提供方是仅在 macOS 安装的可选依赖，共享 CUA 和 Client 包仍随安装提供。其他 Host 默认不在插件列表和模型推荐中展示此组合包，并在保存设置前拒绝启用。profile 显式安装的依赖和已保存的选择仍保留管理入口。已选中的组合包会在启动时跳过并报告原因，仍可取消选择；已保存的用户设置保留。其他操作系统上的浏览器可以连接受支持的 Mac Host。
 
-准备失败时，已保存的选择和 PTC 设置保留，CUA 操作暂不可用。刷新或重新打开插件页查看组件诊断，修复后重启 DSH。
+准备失败时，已保存的选择保留，CUA 操作不可用。刷新或重新打开插件页查看组件诊断，修复后重启 DSH。
 
 显式启用会进行只读权限检查，可能启动 helper，但不会打开系统授权弹窗。[权限页面](../cua/README.zh.md) 提供系统申请入口、设置跳转和自动检测。任务访问应用前会单独询问用户。应用授权保存在按 profile 隔离的存储域中。会话授权跨 turn、连接、DSH 重启和 Computer Use 启停保留，只在原对话中生效。可以在同一页面撤销授权。
 
@@ -51,7 +51,7 @@ Computer Use 仅支持 macOS DSH Host。原生提供方是仅在 macOS 安装的
 <details>
 <summary>维护者说明</summary>
 
-组合包 patch 通过 `agentPreset: ptc` 挂载共享原生提供方和权限界面。直接将导出的 `cordis.patch.yml` 用作覆盖层时不会经过组合包准入；行级条件会在其他 Host 上跳过可选的 macOS 提供方。仅加载共享条目不能提供计算机控制。提供方在现有 Agent 作用域中注册工具，其他 preset 不获得 CUA 工具或指引，preset 文档保持不变。详情页按钮复用现有设置表单，仅在用户点击后保存 `agent-preset-registry.selectedDefault: ptc`，保留部署级 `default`。即使旧授权配置没有声明作用域字段，提供方也默认只为 PTC 会话注册工具。[CUA](../cua/README.zh.md)负责注册和销毁。
+组合包 patch 通过 `agentPreset: ptc` 挂载原生提供方和权限界面。直接将导出的 `cordis.patch.yml` 用作覆盖层时不会经过组合包准入；行级条件会在其他 Host 上跳过可选的 macOS 提供方。仅加载共享条目不能提供计算机控制。工具通过现有 Agent 作用域注册，preset 文档保持不变。详情页按钮复用现有设置表单，仅在点击后保存 `agent-preset-registry.selectedDefault: ptc`。[CUA](../cua/README.zh.md)负责注册和销毁。
 
 </details>
 
@@ -67,7 +67,7 @@ Computer Use 仅支持 macOS DSH Host。原生提供方是仅在 macOS 安装的
 <a id="model-experience"></a>
 ## 模型体验
 
-### Computer Use and persistent PTC
+### Computer Use in PTC sessions
 
 #### What the model sees
 
@@ -75,7 +75,7 @@ Computer Use 仅支持 macOS DSH Host。原生提供方是仅在 macOS 安装的
 
 #### Token effect
 
-CUA 生效时添加其指引。关闭撤回这些指引，保留已配置的 PTC 说明。
+CUA 生效时添加其指引。关闭撤回这些指引，现有 PTC 执行说明保留。
 
 #### KV Cache effect
 
@@ -86,7 +86,7 @@ CUA 生效和卸载会改变 PTC SDK 与系统指引，后续请求使用更新�
 <a id="known-limitations-and-deferred-work"></a>
 
 - 源码 Web 与 Desktop 共用 macOS 权限控件。桌面安装包的 helper 分发、签名和权限归属留待后续处理。
-- PTC 执行方式由 profile 共享。未启用 HMR 的 Host 在重启时应用已保存的变更。Coding Tools 关闭时，现有预设界面会将新会话默认值恢复为 `standard`；设置持久化执行方式仍保留 Coding Tools 关闭状态。
+- PTC 执行方式由 profile 共享，需单独配置。未启用 HMR 的 Host 在重启时应用已保存的变更。
 
 <a id="dev-note"></a>
 ### 开发备注
