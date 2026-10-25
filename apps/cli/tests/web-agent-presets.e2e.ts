@@ -726,6 +726,41 @@ describe('the shipped Web composition', () => {
   })
 })
 
+describe('preset-selected delegation through the Web Loader', () => {
+  it('exposes configured delegation tools when each preset switch resolves', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-delegation-switch-'))
+    try {
+      const configured = await bootWeb(root, loadOverlayPatches('delegation-switch',
+        join(REPO_ROOT, 'apps/cli/tests/profiles/subagent-preset-switch.overlay.yml')))
+      try {
+        const adapter = new MinimalCompactionAdapter()
+        configured.llm.registerAdapter(['preset-switch'], adapter)
+        const { agent } = await configured.agents.create({
+          sessionId: SessionId(`configured-switch-${randomUUID()}`),
+          agentOptions: { provider: 'preset-switch', model: 'preset-switch' },
+          setup: owner => configured.agentPresets.mount(owner, 'delegate-a').then(() => undefined),
+        })
+        const views: Array<{ preset: string; names: string[] }> = []
+        for (const preset of ['delegate-b', 'delegate-a', 'delegate-b', 'delegate-a', 'ptc', 'standard', 'delegate-a']) {
+          await configured.agentPresets.select(agent, preset)
+          views.push({ preset, names: toolNames(configured, agent) })
+        }
+        agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Reply with Ready.' }], source: { kind: 'user' } }))
+        await agent.whenIdle()
+        for (const { preset, names } of views) {
+          expect(names, `tools after selecting ${preset}`).toEqual(expect.arrayContaining(['subagent', 'subagent_fork']))
+        }
+        const request = adapter.requests.find(request => request.purpose === undefined)
+        expect(request?.tools?.map(tool => tool.name)).toEqual(expect.arrayContaining(['subagent', 'subagent_fork']))
+        expect(request?.tools?.find(tool => tool.name === 'subagent'))
+          .toHaveProperty('parameters.properties.agent_preset.enum', ['standard', 'ptc', 'minimal'])
+        const header = agent.session.snapshotEvents().find(event => event.type === 'request/header')
+        expect(header?.data.header.tools).toEqual(request?.tools)
+      } finally { await configured.fiber.dispose() }
+    } finally { await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
+  })
+})
+
 describe.each(['web', 'desktop'] as const)('%s native subagent bundles', (surface) => {
   const products = ['codex', 'claude-code'] as const
   type Product = typeof products[number]

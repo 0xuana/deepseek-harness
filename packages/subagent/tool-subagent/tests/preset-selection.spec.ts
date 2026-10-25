@@ -10,8 +10,10 @@ import Include from '@deepseek-ai/cordis-plugin-include'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
-import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentRuntime, { applyChildComposition } from '@deepseek-ai/dsh-subagent'
+import { assembleContextFor } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -259,6 +261,76 @@ describe('spawn preset selection', () => {
     expect(ctx.tools.get('shared_delegate', key)).toBeUndefined()
     expect(ctx.tools.get('shared_delegate', ptc.agent)).toBe(expected.ptc)
   })
+
+  it('exposes delegation schemas as soon as a configured preset switch completes', async () => {
+    const { ctx } = await setup({})
+    await ctx.agentPresets.register({ id: 'explorer', plugins: [] })
+    for (const id of ['planning', 'coding']) {
+      await ctx.agentPresets.register({ id, plugins: [{
+        name: 'cordis:subagentTool', config: {
+          provider: 'custom-spawn', toolName: 'switch_delegate',
+          allowedAgentPresets: ['writer', 'reviewer', 'explorer'],
+        },
+      }] })
+    }
+    const adapter = new MockAdapter([textResponse('Ready.')])
+    ctx.llm.registerAdapter(['mock'], adapter)
+    const { agent } = await ctx.agents.create({
+      sessionId: SessionId('switch-ready'),
+      agentOptions: { provider: 'mock', model: 'mock' },
+      setup: async (owner) => { await ctx.agentPresets.mount(owner, 'planning') },
+    })
+    const views: Array<{ preset: string; names: string[] }> = []
+    for (const preset of ['coding', 'planning', 'coding', 'planning']) {
+      await ctx.agentPresets.select(agent, preset)
+      views.push({ preset, names: ctx.tools.schemas(agent).map(schema => schema.name) })
+    }
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Reply with Ready.' }], source: { kind: 'user' } }))
+    await agent.whenIdle()
+    for (const { preset, names } of views) expect(names, `tools after selecting ${preset}`).toContain('switch_delegate')
+    const request = adapter.requests[0]
+    expect(request?.tools?.map(tool => tool.name)).toContain('switch_delegate')
+    const header = agent.session.snapshotEvents().find(event => event.type === 'request/header')
+    expect(header?.data.header.tools).toEqual(request?.tools)
+  })
+
+  it.each(['agent restriction', 'inherited historical filter', 'selected historical filter'] as const)(
+    'hides preset delegation from schemas, guidance, and execution with %s', async (mode) => {
+      const { ctx, onStart } = await setup({})
+      await ctx.agentPresets.register({ id: 'delegating', plugins: [{
+        name: 'cordis:subagentTool', config: { provider: 'custom-spawn', agentPreset: 'reviewer' },
+      }] })
+      const create = (id: string) => ctx.agents.create({
+        sessionId: SessionId(id),
+        setup: async (owner) => { await ctx.agentPresets.mount(owner, 'delegating') },
+      })
+      const parent = await create('restricted-parent')
+      const peer = await create('unrestricted-peer')
+      const subject = mode === 'agent restriction' ? parent : await ctx.agents.create({
+        sessionId: SessionId('restricted-child'),
+        setup: owner => applyChildComposition(owner, parent.agent, {
+          ...mode === 'selected historical filter' ? { agentPreset: 'delegating' } : {},
+          toolFilter: { deny: ['subagent'] },
+        }),
+      })
+      const removeRestriction = mode === 'agent restriction'
+        ? subject.agent.ctx.tools.restrict({ deny: ['subagent'] }) : undefined
+      expect(ctx.tools.schemas(subject.agent).map(schema => schema.name)).not.toContain('subagent')
+      const assembly = await ctx.systemPrompt.assemble(assembleContextFor(subject.agent))
+      expect(assembly.sections.find(section => section.name === 'tool:subagent')?.text).toBe('')
+      const denied = await callSubagent(ctx, args, { agent: subject.agent })
+      expect(denied.isError).toBe(true)
+      expect(denied.error?.info?.code).toBe('UNKNOWN_TOOL')
+      expect(onStart).not.toHaveBeenCalled()
+      expect(ctx.tools.schemas(peer.agent).map(schema => schema.name)).toContain('subagent')
+      expect((await callSubagent(ctx, args, { agent: peer.agent })).isError).not.toBe(true)
+      expect(onStart).toHaveBeenCalledTimes(1)
+      if (removeRestriction !== undefined) {
+        removeRestriction()
+        expect(ctx.tools.schemas(subject.agent).map(schema => schema.name)).toContain('subagent')
+      }
+    },
+  )
 
   it('switches to a preset with a missing child reference and retries delegation after declaration', async () => {
     const { ctx } = await setup({})
