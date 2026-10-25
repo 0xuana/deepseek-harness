@@ -747,9 +747,9 @@ describe('ConversationRoot resident composer', () => {
     })
     const tooltipFor = (label: string): string | null => {
       const span = within(b.view.getByRole('tab', { name: label })).getByText(label)
-      fireEvent.mouseEnter(span)
+      fireEvent.pointerEnter(span)
       const tooltip = screen.queryByRole('tooltip', { hidden: true })?.textContent ?? null
-      fireEvent.mouseLeave(span)
+      fireEvent.pointerLeave(span)
       return tooltip
     }
     expect(tooltipFor('Chat')).toBeNull()

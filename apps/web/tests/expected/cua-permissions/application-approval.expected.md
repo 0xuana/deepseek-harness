@@ -1,0 +1,8 @@
+- text: Waiting for approval
+- group "Approval details":
+  - strong: Fixture
+  - text: Allow computer use to launch, read, capture and control this application?
+  - paragraph: Session access applies only to this conversation.
+- button "Reject"
+- button "Allow for this session"
+- button "Always allow"
