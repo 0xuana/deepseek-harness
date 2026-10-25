@@ -48,15 +48,21 @@ private func fixtureApplication(_ directory: URL, name: String, identifier: Stri
     }
 }
 
-@Test(arguments: [nil, ""] as [String?]) func unidentifiedPendingIdentityChangesWhenTheExecutableChanges(identifier: String?) throws {
+@Test(arguments: [nil, ""] as [String?]) func applicationsWithoutBundleIdentifiersRetainPathConsentAcrossUpdates(identifier: String?) throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("dsh-cua-apps-" + UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     let app = try fixtureApplication(root, name: "Fixture", identifier: identifier)
     let before = try ApplicationAuthorization.describeInstalled(app)
-    #expect(before["persistable"] == .bool(false))
+    #expect(before["persistable"] == .bool(true))
     try Data("replacement executable".utf8).write(to: URL(fileURLWithPath: app.executablePath))
     let after = try ApplicationAuthorization.describeInstalled(app)
-    #expect(before["id"] != after["id"])
+    #expect(before["id"] == after["id"])
+    let copy = try fixtureApplication(root, name: "Other installation", identifier: identifier)
+    #expect(try ApplicationAuthorization.describeInstalled(copy)["id"] != before["id"])
+    let alias = root.appendingPathComponent("Alias.app")
+    try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: URL(fileURLWithPath: app.path))
+    let linked = try #require(InstalledApplication.read(alias))
+    #expect(try ApplicationAuthorization.describeInstalled(linked)["id"] == before["id"])
 }
 
 @Test func unsignedVersionsShareConsentOnlyForTheSameBundleIdentifier() throws {

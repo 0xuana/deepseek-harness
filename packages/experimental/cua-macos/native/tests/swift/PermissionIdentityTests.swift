@@ -15,14 +15,12 @@ import Testing
     }
 }
 
-@Test func refusesApplicationConsentWithoutAnExecutableLocation() throws {
+@Test func readsTheProcessPathWhenTheCatalogHasNoExecutableLocation() throws {
     let identity = try NativePlatform.identity(getpid())
-    do {
-        _ = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: nil)
-        Issue.record("Missing executable metadata was accepted")
-    } catch let error as NativeFailure {
-        #expect(error.code == "APP_UNAVAILABLE")
-    }
+    let path = try #require(NativePlatform.executablePath(identity.pid))
+    let observed = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: nil)
+    #expect(observed["persistable"] == .bool(true))
+    #expect(try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: path) == observed)
 }
 
 @MainActor @Test func applicationIconsUseBoundedNativePNGs() throws {
@@ -35,24 +33,28 @@ import Testing
     #expect(encoded.utf8.count <= 65536)
 }
 
-@Test func unbundledRunningProcessesCannotReceivePersistentConsent() throws {
-    let process = Process()
-    let input = Pipe()
-    process.executableURL = URL(fileURLWithPath: "/bin/cat")
-    process.standardInput = input
-    process.standardOutput = FileHandle.nullDevice
-    try process.run()
-    defer {
-        input.fileHandleForWriting.closeFile()
-        if process.isRunning { process.terminate() }
-        process.waitUntilExit()
+@Test func unbundledRunningProcessesReceivePersistentPathConsent() throws {
+    var records: [JSONValue] = []
+    for _ in 0..<2 {
+        let process = Process()
+        let input = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/bin/cat")
+        process.standardInput = input
+        process.standardOutput = FileHandle.nullDevice
+        try process.run()
+        defer {
+            input.fileHandleForWriting.closeFile()
+            if process.isRunning { process.terminate() }
+            process.waitUntilExit()
+        }
+        let identity = try NativePlatform.identity(process.processIdentifier)
+        let executable = try #require(NativePlatform.executablePath(identity.pid))
+        let authorization = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: executable)
+        #expect(authorization["persistable"] == .bool(true))
+        #expect(authorization["id"].string?.count == 64)
+        records.append(authorization)
     }
-    let identity = try NativePlatform.identity(process.processIdentifier)
-    let executable = try #require(NativePlatform.executablePath(identity.pid))
-    let authorization = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: executable)
-    #expect(authorization["persistable"] == .bool(false))
-    #expect(authorization["id"].string?.count == 64)
-    #expect(try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: executable) == authorization)
+    #expect(records[0] == records[1])
 }
 
 @Test func resolvesTheCurrentProcessResponsibility() throws {

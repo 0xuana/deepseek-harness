@@ -9,9 +9,9 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-Application grants use the case-sensitive native bundle identifier. Versions and copies at different paths share permission and revocation, regardless of signing. Applications without a bundle identifier remain limited to conversation-scoped access. The profile storage and conversation scopes are unchanged.
+Application grants use the case-sensitive native bundle identifier. Versions and copies at different paths share permission and revocation, regardless of signing. Applications without a bundle identifier use their canonical executable path and can also receive always-allow grants. Restarting or replacing the executable at that path retains consent; moving it requires renewed consent. The profile storage and conversation scopes are unchanged.
 
-This affects macOS users with saved path/signature grants, including grants imported from the legacy `allowedApps` configuration. Those grants do not match the new identities. They remain visible and removable but do not authorize other installations automatically. Old and new records can show the same name and path; the permission page does not distinguish them. Another program declaring an approved bundle identifier inherits permission; this policy does not authenticate publishers.
+This affects macOS users with saved path/signature grants, including grants imported from the legacy `allowedApps` configuration. Those grants do not match the new identities. They remain visible and removable but do not authorize other installations automatically. Old and new records can show the same name and path; the permission page does not distinguish them. Another program declaring an approved bundle identifier or replacing an executable at an approved fallback path inherits permission; this policy does not authenticate publishers.
 
 ## Migration
 

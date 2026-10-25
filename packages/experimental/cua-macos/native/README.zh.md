@@ -57,7 +57,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 稳定错误码包括 `INVALID_REQUEST`（信封无效）、`INVALID_ARGUMENT`（参数无效）、`UNSUPPORTED`（操作未知）、`APP_UNAVAILABLE`、`AMBIGUOUS_APP`、`STALE_APP`、`STALE_SNAPSHOT`、`WINDOW_UNAVAILABLE`、`WINDOW_CHANGED`、`PERMISSION_DENIED`、`FOREGROUND_REQUIRED`（悬停目标不是未被遮挡的前台窗口）、`PANEL_NOT_READY`（输入前系统面板接收方尚不可用）及 `NATIVE_ERROR`（其余操作系统失败）。错误不保证已分派的部分输入被回滚，Host 不得自动重试输入。
 
-应用选择向 Host 返回授权记录：区分大小写的 Bundle ID 加上 `macos:bundle-id:` 前缀后计算的 SHA-256 摘要、显示名称、可执行路径和可持久化标记。相同标识的所有安装副本共用授权，包括未签名和临时签名的应用。缺少非空 Bundle ID 时，运行中实例使用进程生命期身份，未启动应用使用可执行文件摘要，两者都不能获得长期授权。Host 从模型结果中移除此记录，并在启动、观察和输入前取得用户许可。此管道协议用于可信 Host 传输，无法隔离另一个已获授权的 shell 进程。
+应用选择向 Host 返回授权记录：区分大小写的 Bundle ID 加上 `macos:bundle-id:` 前缀后计算的 SHA-256 摘要、显示名称、可执行路径和可持久化标记。相同标识的所有安装副本共用授权，包括未签名和临时签名的应用。缺少非空 Bundle ID 时，运行中和未启动应用都对 `macos:executable-path:` 与解析符号链接后的可执行路径计算 SHA-256，仍可保存长期授权。进程号和启动时间只校验存活句柄，不进入已保存身份。Host 从模型结果中移除此记录，并在启动、观察和输入前取得用户许可。此管道协议用于可信 Host 传输，无法隔离另一个已获授权的 shell 进程。
 
 协议声明从[共享协议](../../cua/src/protocol.ts)生成。在仓库根目录运行 `pnpm exec tsx packages/experimental/cua-macos/native/generate-protocol.ts`，包测试检查生成的 JSON 和 Swift 字段/枚举表。模型参数不包含 Host 资源上限和私有启动续接操作。
 
@@ -105,7 +105,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 运行 `python3 packages/experimental/cua-macos/native/tests/shared_helper_e2e.py --helper /absolute/helper`，通过测试自建的 AppKit fixture 核实并发启动、共享服务 PID、独立句柄、同一应用交接、请求级截图期限、连接清理和信号退出。需要已有辅助功能和屏幕录制权限。`--without-desktop` 将检查限定为协议与进程生命期。
 
-在已解锁的 macOS GUI 会话中运行 `python3 packages/experimental/cua-macos/native/tests/application_consent_e2e.py --helper /absolute/helper`，需要可用的 Apple Swift 编译器。它创建并清理自己的 AppKit 应用，验证启动前拒绝已改变的应用元数据、启动前后身份一致，以及同 ID 的两个副本同时运行。测试不读取 AX、不截图、不发送输入，因此不需要辅助功能或屏幕录制权限。
+在已解锁的 macOS GUI 会话中运行 `python3 packages/experimental/cua-macos/native/tests/application_consent_e2e.py --helper /absolute/helper`，需要可用的 Apple Swift 编译器。它创建并清理自己的 AppKit 应用，验证启动前拒绝已改变的应用元数据、启动前后身份一致，同 ID 的两个副本同时运行，以及缺少 Bundle ID 的应用可以获得持久路径许可。测试不读取 AX、不截图、不发送输入，因此不需要辅助功能或屏幕录制权限。
 
 在 GUI 登录会话中运行 `python3 packages/experimental/cua-macos/native/tests/launcher_identity_e2e.py --helper /absolute/helper`，验证由 Launch Services 启动的应用先启动另一个 GUI 启动器，再启动 helper。helper 识别外层责任应用，并在启动器退出后保留其名称和图标。检查只使用测试自建的两个应用和 helper，结束后清理对应的 Launch Services 注册，不申请辅助功能或屏幕录制权限。
 

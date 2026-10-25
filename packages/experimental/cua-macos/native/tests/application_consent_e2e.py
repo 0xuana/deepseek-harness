@@ -35,9 +35,11 @@ def main():
             executable.parent.mkdir(parents=True)
             shutil.copy2(binary, executable)
             state = root / (name + ".json")
-            info = {"CFBundleIdentifier": bundle_id, "CFBundleName": name, "CFBundleDisplayName": name,
+            info = {"CFBundleName": name, "CFBundleDisplayName": name,
                     "CFBundleExecutable": "fixture", "CFBundlePackageType": "APPL",
                     "DSHFixtureStatePath": str(state), "DSHFixtureBackground": True}
+            if bundle_id is not None:
+                info["CFBundleIdentifier"] = bundle_id
             (app / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
             cleanup.callback(subprocess.run, [register, "-u", str(app)], check=True,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
@@ -72,7 +74,7 @@ def main():
                 "The replaced application is running after refusal"
 
         identities = []
-        for name, bundle_id in [("Version One", identifier), ("Version Two", identifier), ("Other", identifier + ".other")]:
+        for name, bundle_id in [("Version One", identifier), ("Version Two", identifier), ("Other", identifier + ".other"), ("No identifier", None)]:
             app, executable, state, info = fixture(name, bundle_id)
             pending = helper.call("getApp", {"selector": str(app)})
             assert pending["pid"] is None and not state.exists(), pending
@@ -86,9 +88,12 @@ def main():
             assert Path(running["authorization"]["executablePath"]).samefile(executable), running
             assert Path(pending["authorization"]["executablePath"]).samefile(executable), pending
             identities.append(running["authorization"]["id"])
+            if bundle_id is None:
+                expected_path = hashlib.sha256(("macos:executable-path:" + str(executable.resolve())).encode()).hexdigest()
+                assert running["authorization"]["id"] == expected_path, running
         assert identities[0] == identities[1] == expected, identities
         assert identities[2] != expected, identities
-        print("PASS: changed bundles cannot launch; cold/running identities agree; copies share consent; other IDs stay separate")
+        print("PASS: changed bundles cannot launch; cold/running identities agree; copies share consent; other IDs stay separate; missing IDs use persistent paths")
 
 
 if __name__ == "__main__":
