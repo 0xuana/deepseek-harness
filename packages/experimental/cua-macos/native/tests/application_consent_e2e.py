@@ -96,7 +96,8 @@ def main():
                 "The replaced application is running after refusal"
 
         identities = []
-        for name, bundle_id in [("Version One", identifier), ("Version Two", identifier), ("Other", identifier + ".other"), ("No identifier", None)]:
+        mixed_case_identifier = "Test.DSH.MixedCase." + uuid.uuid4().hex
+        for name, bundle_id in [("Version One", identifier), ("Version Two", identifier), ("Other", identifier + ".other"), ("No identifier", None), ("Mixed case", mixed_case_identifier)]:
             app, executable, state, info = fixture(name, bundle_id)
             pending = helper.call("getApp", {"selector": str(app)})
             assert pending["pid"] is None and not state.exists(), pending
@@ -118,6 +119,7 @@ def main():
             check_window(running, state)
         assert identities[0] == identities[1] == expected, identities
         assert identities[2] != expected, identities
+        assert identities[4] == hashlib.sha256(("macos:bundle-id:" + mixed_case_identifier).encode()).hexdigest(), identities
 
         app, executable, state, _ = fixture("Direct bundle", identifier)
         pending = helper.call("getApp", {"selector": str(app)})

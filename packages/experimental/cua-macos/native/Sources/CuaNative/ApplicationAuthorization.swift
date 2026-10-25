@@ -43,7 +43,7 @@ enum ApplicationAuthorization {
         let identity: String
         if let bundleID, !bundleID.isEmpty { identity = "macos:bundle-id:" + bundleID }
         else if let path { identity = "macos:executable-path:" + path }
-        else { throw NativePlatform.executablePathFailure(0) }
+        else { throw NativeFailure(code: "NATIVE_ERROR", message: "Application consent requires a bundle identifier or an executable path") }
         var value: [String: JSONValue] = ["id": .string(digest(identity)), "name": .string(name), "persistable": .bool(true)]
         if let path { value["executablePath"] = .string(path) }
         return .object(value)

@@ -53,7 +53,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 | `hover`, `click`, `setValue`, `selectText`, `typeText`, `paste`, `pressKey`, `scroll`, `drag` | `{dispatched: true, verified: false}` 记录原生分派。需要读取新状态以核实预期的应用变化。 |
 | `screenshot` | `{mimeType: "image/png", data, pixelWidth, pixelHeight, bounds, coordinateSpace: "window-points", windowId}`。Retina 显示器上 PNG 像素尺寸可能不同于窗口 point 尺寸。 |
 
-每个面向应用的操作都要求使用同一 helper 的 `getApp` 返回的 `appHandle`。helper 固定 PID 和内核进程启动时间，进程退出或 PID 被复用后使句柄及其全部快照失效。再次调用 `getApp` 可取得替代进程，不会重新激活旧句柄。随机的 helper 命名空间防止已终止 helper 的句柄与替代实例重合。重复获取同一存活进程会共享句柄。
+每个面向应用的操作都要求使用同一 helper 的 `getApp` 返回的 `appHandle`。helper 固定 PID 和内核进程启动时间，进程退出或 PID 被复用后使句柄及其全部快照失效。再次调用 `getApp` 可取得替代进程，不会重新激活旧句柄。随机的 helper 命名空间防止已终止 helper 的句柄与替代实例重合。重复获取同一存活进程会共享句柄。启动后检查失败会使待启动句柄失效，并保留原错误；已经启动的进程不会被终止，launchApp 也不能复用失败的句柄。
 
 稳定错误码包括 `INVALID_REQUEST`（信封无效）、`INVALID_ARGUMENT`（参数无效）、`UNSUPPORTED`（操作未知）、`APP_UNAVAILABLE`、`APP_PATH_UNAVAILABLE`、`PROCESS_INSPECTION_FAILED`、`AMBIGUOUS_APP`、`STALE_APP`、`STALE_SNAPSHOT`、`WINDOW_UNAVAILABLE`、`WINDOW_CHANGED`、`PERMISSION_DENIED`、`FOREGROUND_REQUIRED`（悬停目标不是未被遮挡的前台窗口）、`PANEL_NOT_READY`（输入前系统面板接收方尚不可用）及 `NATIVE_ERROR`（其余操作系统失败）。错误不保证已分派的部分输入被回滚，Host 不得自动重试输入。
 

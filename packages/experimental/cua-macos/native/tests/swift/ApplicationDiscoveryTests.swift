@@ -1,5 +1,6 @@
 // Installed application discovery uses isolated bundles and does not launch user applications.
 import AppKit
+import Darwin
 import Foundation
 import Testing
 @testable import CuaNative
@@ -15,6 +16,48 @@ private func fixtureApplication(_ directory: URL, name: String, identifier: Stri
     try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: contents.appendingPathComponent("Info.plist"))
     try Data("fixture executable".utf8).write(to: executable)
     return try #require(InstalledApplication.read(app))
+}
+
+@Test(arguments: ["process-query", "authorization", "metadata"])
+func failedLaunchInspectionInvalidatesThePendingHandle(failure: String) async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("dsh-cua-launch-" + UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let app = try fixtureApplication(root, name: "Fixture", identifier: "test.dsh.launch." + UUID().uuidString)
+    let worker = AXWorker(cancellation: CancellationLatch(), axTimeout: 1, textEventInterval: 0, maxClickHoldMs: 5000,
+                          sessionState: { false })
+    let catalog = ApplicationCatalogSnapshot(applications: [], frontPID: nil)
+    func parameters(_ method: String, _ values: [String: JSONValue]) throws -> RequestParameters {
+        try RequestParameters(NativeRequest(data: JSONEncoder().encode(JSONValue.object([
+            "id": .string("fixture"), "method": .string(method), "params": .object(values),
+        ]))))
+    }
+    do {
+        let selection = try await worker.execute("getApp", params: parameters("getApp", ["selector": .string(app.path)]),
+                                                 catalog: catalog, installed: app)
+        guard case .result(let selected) = selection else { throw NativeFailure(code: "TEST", message: "Expected pending selection") }
+        let handle = try #require(selected["appHandle"].string)
+        let launchParameters = try parameters("launchApp", ["appHandle": .string(handle)])
+        let outcome = try await worker.execute("launchApp", params: launchParameters, catalog: catalog)
+        guard case .launch(let plan) = outcome else { throw NativeFailure(code: "TEST", message: "Expected launch plan") }
+        let plist = URL(fileURLWithPath: app.path).appendingPathComponent("Contents/Info.plist")
+        let original = try Data(contentsOf: plist)
+        if failure == "metadata" { try FileManager.default.removeItem(at: plist) }
+        do {
+            _ = try await worker.finishLaunch(plan, pid: failure == "process-query" ? Int32.max : getpid())
+            Issue.record("Invalid post-launch inspection succeeded")
+        } catch let error as NativeFailure {
+            #expect(error.code == (failure == "process-query" ? "APP_UNAVAILABLE" : "STALE_APP"))
+        }
+        if failure == "metadata" { try original.write(to: plist) }
+        do {
+            _ = try await worker.execute("launchApp", params: launchParameters, catalog: catalog)
+            Issue.record("A failed launch retained a handle that could launch another instance")
+        } catch let error as NativeFailure { #expect(error.code == "STALE_APP") }
+    } catch {
+        await worker.shutdown()
+        throw error
+    }
+    await worker.shutdown()
 }
 
 @Test @MainActor func findsStoppedApplicationsAndIdentifiesRunningMatchesWithoutLaunching() throws {
