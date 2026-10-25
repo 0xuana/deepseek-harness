@@ -632,7 +632,10 @@ export interface SessionWaitValue {
   readonly output: SessionWaitOutput
 }
 
-/** One `session.history` page and its inclusive cut: the supplied `throughSeq`, otherwise the log end it was read at. */
+/**
+ * One `session.events` page (or its deprecated `page` alias) with its inclusive cut:
+ * the supplied `throughSeq`, otherwise the log end it was read at.
+ */
 export interface SessionEventsPage extends SessionPage {
   readonly cursor: number
 }

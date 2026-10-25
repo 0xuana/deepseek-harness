@@ -65,7 +65,7 @@ describe('plan history resource', () => {
     expect(await read(b.provider, address, controller.signal)).toEqual([])
     expect(b.events).not.toHaveBeenCalled()
   })
-  it('reports page failures with their Remote code', async () => {
+  it('reports an opening events failure with its Remote code', async () => {
     const b = setup([])
     const error = new RemoteError('plan/read-failed', 'connection lost', {})
     b.events.mockResolvedValueOnce({ ok: false, error })
