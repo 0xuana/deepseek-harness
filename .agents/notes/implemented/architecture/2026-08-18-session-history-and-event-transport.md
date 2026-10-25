@@ -139,7 +139,7 @@ If a page request is canceled with its physical carrier generation, the journal 
 
 `packages/api/session-controller` provides Host `ctx.sessionController` and the generated `ctx.remote.session` namespace.
 
-It owns Session list, search, create, selectModel, rename, fork, prompt, attachment, updateQueue, cancel, page, follow, and control. The Host-generation model catalog is exposed separately through `session/modelCatalog` because it is not Session-specific.
+It owns Session list, search, create, selectModel, rename, fork, prompt, attachment, updateQueue, cancel, `events`, the deprecated `page`, `follow`, `control`, plus `observeEvent`, `projections`, `observeProjections`, `state`, `observeState`, and `wait`. The Host-generation model catalog is exposed separately through `session/modelCatalog` because it is not Session-specific.
 
 The package separates agent, commands, control, history, and list controllers internally, but Session identity resolution, activation policy, subagent ownership, and Remote error projection have one public owner.
 

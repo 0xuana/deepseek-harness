@@ -139,7 +139,7 @@ repair 期间旧 window 保持可读；page 与期间积累的 live entries 拼�
 
 `packages/api/session-controller` 提供 Host `ctx.sessionController` 与生成的 `ctx.remote.session` namespace。
 
-它拥有 Session list、search、create、selectModel、rename、fork、prompt、attachment、updateQueue、cancel、page、follow 与 control。Host generation 的 model catalog 通过独立的 `session/modelCatalog` 公开，因为它不属于特定 Session。
+它拥有 Session list、search、create、selectModel、rename、fork、prompt、attachment、updateQueue、cancel、`events`、已弃用的 `page`、`follow`、`control`，以及 `observeEvent`、`projections`、`observeProjections`、`state`、`observeState` 与 `wait`。Host generation 的 model catalog 通过独立的 `session/modelCatalog` 公开，因为它不属于特定 Session。
 
 包内的 agent、commands、control、history 与 list controller 分开实现，但 Session 身份解析、激活策略、subagent ownership 和 Remote 错误投影只有一个公开 owner。
 
