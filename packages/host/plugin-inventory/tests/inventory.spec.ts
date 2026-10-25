@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { lstatSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -171,6 +171,48 @@ describe('PluginInventoryGateway', () => {
     expect((await inventory.list()).entries).toContainEqual({
       entryId: entry.id, moduleName: 'cordis:failing', enabled: true, fiberPhase: 'active',
     })
+  })
+
+  it.each([false, true])('reads failed diagnostics concurrently and preserves row order (recovery: %s)', async (recover) => {
+    const { ctx, inventory } = await harness()
+    ctx.loader.builtins.failing = {
+      apply(_ctx: Context, config: { fail: boolean; message: string }) {
+        if (config.fail) throw new Error(config.message)
+      },
+    }
+    const firstEntry = ctx.loader.resolve(await ctx.loader.create({ name: 'cordis:failing', config: { fail: true, message: 'first failure' } }))
+    const activeEntry = ctx.loader.resolve(await ctx.loader.create({ name: 'cordis:active' }))
+    const secondEntry = ctx.loader.resolve(await ctx.loader.create({ name: 'cordis:failing', config: { fail: true, message: 'second failure' } }))
+    const first = firstEntry.fiber!, second = secondEntry.fiber!
+    await expect(first.await()).rejects.toThrow('first failure')
+    await activeEntry.fiber!.await()
+    await expect(second.await()).rejects.toThrow('second failure')
+    const firstAwait = first.await.bind(first), secondAwait = second.await.bind(second)
+    const firstGate = Promise.withResolvers<undefined>(), secondGate = Promise.withResolvers<undefined>()
+    // Hold completion to exercise overlapping reads without scheduler delays.
+    const firstRead = vi.spyOn(first, 'await').mockImplementation(() => firstGate.promise.then(firstAwait))
+    const secondRead = vi.spyOn(second, 'await').mockImplementation(() => secondGate.promise.then(secondAwait))
+    const reading = inventory.list()
+    try {
+      expect(firstRead).toHaveBeenCalledOnce()
+      expect(secondRead).toHaveBeenCalledOnce()
+      if (recover) {
+        await secondEntry.update({ config: { fail: false, message: 'second failure' } })
+        await secondAwait()
+      }
+      secondGate.resolve(undefined)
+      firstGate.resolve(undefined)
+      expect((await reading).entries).toEqual([
+        { entryId: firstEntry.id, moduleName: 'cordis:failing', enabled: true, fiberPhase: 'failed', diagnostic: 'first failure' },
+        { entryId: activeEntry.id, moduleName: 'cordis:active', enabled: true, fiberPhase: 'active' },
+        { entryId: secondEntry.id, moduleName: 'cordis:failing', enabled: true, fiberPhase: 'failed',
+          ...recover ? {} : { diagnostic: 'second failure' } },
+      ])
+    } finally {
+      firstGate.resolve(undefined)
+      secondGate.resolve(undefined)
+      try { await reading } finally { firstRead.mockRestore(); secondRead.mockRestore() }
+    }
   })
 
   it('projects current non-group Loader entries without a second cache', async () => {

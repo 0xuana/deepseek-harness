@@ -1,6 +1,6 @@
 /** Read-only projection of the current Cordis Loader plugin entries. */
 
-import type { Context, FiberState } from '@deepseek-ai/cordis'
+import type { Context, Fiber, FiberState } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 // Type-only: the optional agent-preset roster resolved through `ctx.get`.
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
@@ -77,10 +77,11 @@ export default PluginInventoryGateway
 
 /** Read current Loader entries and optional preset compositions.
  * @param ctx Context with the Loader service.
- * @returns Current inventory with optional display metadata and no separate runtime cache.
+ * @returns Current inventory with entry states sampled before concurrent diagnostic reads.
  */
 export async function readPluginInventory(ctx: Context): Promise<PluginInventorySnapshot> {
   const entries: PluginInventoryEntry[] = []
+  const failed: { row: PluginInventoryEntry; fiber: Fiber }[] = []
   const packages = ctx.get('pluginPackages')
   for (const entry of ctx.loader.entries()) {
     if (entry.options.group) continue
@@ -88,18 +89,22 @@ export async function readPluginInventory(ctx: Context): Promise<PluginInventory
     const meta = base === undefined ? undefined : packages?.metaOf(entry.options.name, base)
     const fiber = entry.fiber
     const fiberPhase = fiber === undefined ? null : FIBER_PHASE[fiber.state]
-    let diagnostic: string | undefined
-    if (fiber !== undefined && fiberPhase === 'failed') {
-      try { await fiber.await() } catch (error) { diagnostic = error instanceof Error ? error.message : String(error) }
-    }
-    entries.push({
+    const row: PluginInventoryEntry = {
       entryId: pluginEntryId(entry.id),
       moduleName: entry.options.name,
       enabled: !entry.disabled,
       fiberPhase,
-      ...diagnostic === undefined ? {} : { diagnostic },
       ...meta === undefined ? {} : { meta },
-    })
+    }
+    entries.push(row)
+    if (fiber !== undefined && fiberPhase === 'failed') failed.push({ row, fiber })
+  }
+  const diagnostics = await Promise.all(failed.map(({ row, fiber }) => fiber.await().then(
+    () => ({ row, diagnostic: undefined }),
+    (error: unknown) => ({ row, diagnostic: error instanceof Error ? error.message : String(error) }),
+  )))
+  for (const { row, diagnostic } of diagnostics) {
+    if (diagnostic !== undefined) Object.assign(row, { diagnostic })
   }
   const presets = ctx.get('agentPresets')
   const management = ctx.get('pluginManager') === undefined ? {} : { managementAvailable: true }
