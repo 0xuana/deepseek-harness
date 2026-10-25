@@ -1,5 +1,9 @@
 /** Deployment configuration and model-facing selection for spawn presets. */
 import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
@@ -8,7 +12,8 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
+import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as tool from '../src/index.ts'
 import { SubagentPresetSelection } from '../src/preset-selection.ts'
@@ -16,9 +21,21 @@ import { mountScriptedProvider, type Config as ProviderConfig } from './scripted
 import { callSubagent, text } from './harness.ts'
 
 const contexts: Context[] = []
+const roots: string[] = []
 afterEach(async () => {
-  for (const ctx of contexts.splice(0).reverse()) await ctx.fiber.dispose()
+  try {
+    for (const ctx of contexts.splice(0).reverse()) await ctx.fiber.dispose()
+  } finally {
+    for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+  }
 })
+
+async function mountSpawn(ctx: Context, providerName: string): Promise<void> {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-tool-preset-'))
+  roots.push(root)
+  await ctx.plugin(JsonlSessionPersistence, { root })
+  await ctx.plugin(SubagentSpawn, { providerName })
+}
 
 async function setup(config: Omit<tool.Config, 'provider'>, providerConfig: Partial<ProviderConfig> = {}) {
   const ctx = new Context()
@@ -57,7 +74,7 @@ describe('spawn preset selection', () => {
     })
     const schema = ctx.tools.schemas().find(schema => schema.name === 'subagent')
     expect(JSON.stringify(schema)).toContain('agent_preset')
-    expect(JSON.stringify(schema)).toContain('reviewer persona')
+    expect(schema).toHaveProperty('parameters.properties.agent_preset.enum', ['writer', 'reviewer'])
     expect(schema?.parameters.properties).toHaveProperty('agent_preset')
     expect(Object.hasOwn(schema!.parameters.properties!, 'model')).toBe(modelSelection)
     expect((await callSubagent(ctx, { ...args, agent_preset: 'reviewer' })).isError).not.toBe(true)
@@ -101,7 +118,6 @@ describe('spawn preset selection', () => {
     { allowedAgentPresets: ['writer', 'writer'] },
     { allowedAgentPresets: [''] },
     { agentPreset: 'writer', allowedAgentPresets: ['reviewer'] },
-    { agentPreset: 'absent' },
     { agentPreset: '' },
   ])('rejects invalid deployment choices before registration: %j', async (config) => {
     await expect(setup(config)).rejects.toThrow()
@@ -124,25 +140,39 @@ describe('spawn preset selection', () => {
     const ctx = new Context()
     contexts.push(ctx)
     await expect(tool.apply(ctx, { provider: 'spawn', agentPreset: 'writer' })).rejects.toThrow(/requires the agent-presets service/)
-    const selection = new SubagentPresetSelection({ agentPreset: 'writer' })
-    await expect(selection.validate(ctx)).rejects.toThrow(/requires the agent-presets service/)
   })
 
-  it('reads declared metadata for a broken preset and rejects mounting its composition', async () => {
-    const { ctx, presets } = await setup({})
+  it.each([
+    { config: { agentPreset: 'absent' }, selection: {} },
+    { config: { allowedAgentPresets: ['absent'] }, selection: { agent_preset: 'absent' } },
+  ])('reports a missing preset only when delegation uses it: %j', async ({ config, selection }) => {
+    const { ctx, provider } = await setup(config)
+    await provider.dispose()
+    await mountSpawn(ctx, 'custom-spawn')
+    const parent = await ctx.agents.create({ sessionId: SessionId('missing-child-preset') })
+    const sessions = ctx.sessions.list()
+    const result = await callSubagent(ctx, { ...args, ...selection }, { agent: parent.agent })
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('Unknown agent preset: absent')
+    expect(ctx.agents.list()).toEqual([parent.agent])
+    expect(ctx.sessions.list()).toEqual(sessions)
+  })
+
+  it('reports an unloadable child preset through the tool result', async () => {
+    const { ctx, presets, provider } = await setup({ agentPreset: 'reviewer' })
+    await provider.dispose()
+    await mountSpawn(ctx, 'custom-spawn')
     await presets.get('reviewer')!()
     await ctx.agentPresets.register({
-      id: 'reviewer', description: 'Review with unavailable tools.',
-      plugins: [{ name: 'cordis:missing-plugin' }],
+      id: 'reviewer', plugins: [{ name: 'cordis:missing-plugin' }],
     })
-    const selection = new SubagentPresetSelection({ allowedAgentPresets: ['reviewer'] })
-    await selection.validate(ctx)
-    expect(selection.description).toContain('reviewer: Review with unavailable tools.')
-    await expect(ctx.agents.create({
-      sessionId: SessionId('broken-preset'),
-      setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, 'reviewer') },
-    })).rejects.toMatchObject({ code: 'agent-preset/invalid' })
-    expect(ctx.agents.list()).toEqual([])
+    const parent = await ctx.agents.create({ sessionId: SessionId('broken-child-preset') })
+    const sessions = ctx.sessions.list()
+    const result = await callSubagent(ctx, args, { agent: parent.agent })
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('missing-plugin')
+    expect(ctx.agents.list()).toEqual([parent.agent])
+    expect(ctx.sessions.list()).toEqual(sessions)
   })
 
   it('creates an Agent from a preset whose delegation tool selects itself', async () => {
@@ -160,7 +190,6 @@ describe('spawn preset selection', () => {
     })
     const schema = ctx.tools.schemas(handle.agent).find(schema => schema.name === 'self_delegate')
     expect(schema).toHaveProperty('parameters.properties.agent_preset.enum', ['self'])
-    expect(JSON.stringify(schema)).toContain('self: Self-selected composition.')
   })
 
   it.each([
@@ -185,29 +214,7 @@ describe('spawn preset selection', () => {
       })
       const schema = ctx.tools.schemas(handle.agent).find(schema => schema.name === 'peer_delegate')
       expect(schema).toHaveProperty('parameters.properties.agent_preset.enum', [other])
-      expect(JSON.stringify(schema)).toContain(`${other}: ${other} composition.`)
     }
-  })
-
-  it('rejects Agent publication when a preset delegation tool names an absent preset', async () => {
-    const { ctx } = await setup({})
-    await ctx.agentPresets.register({
-      id: 'missing-reference',
-      plugins: [{
-        name: 'cordis:subagentTool',
-        config: { provider: 'custom-spawn', toolName: 'missing_delegate', agentPreset: 'absent' },
-      }],
-    })
-    const published = vi.fn()
-    ctx.on('agent/created', published)
-    await expect(ctx.agents.create({
-      sessionId: SessionId('unpublished-preset'),
-      setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, 'missing-reference') },
-    })).rejects.toThrow('Unknown agent preset: absent')
-    expect(published).not.toHaveBeenCalled()
-    expect(ctx.agents.list()).toEqual([])
-    expect(ctx.sessions.list()).toEqual([])
-    expect(ctx.tools.schemas().map(schema => schema.name)).not.toContain('missing_delegate')
   })
 
   it('shares each preset tool across Agents and repeated round trips', async () => {
@@ -253,89 +260,39 @@ describe('spawn preset selection', () => {
     expect(ctx.tools.get('shared_delegate', ptc.agent)).toBe(expected.ptc)
   })
 
-  it('rechecks references before publishing a child inheriting a prepared preset', async () => {
-    const { ctx, presets } = await setup({})
-    await ctx.agentPresets.register({ id: 'parent', plugins: [{
-      name: 'cordis:subagentTool', config: {
-        provider: 'custom-spawn', toolName: 'child_delegate', agentPreset: 'reviewer',
-      },
-    }] })
-    const parent = await ctx.agents.create({
-      sessionId: SessionId('reference-parent'),
-      setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, 'parent') },
-    })
-    await presets.get('reviewer')!()
-    await expect(ctx.agents.create({
-      sessionId: SessionId('reference-child'),
-      setup: (agentCtx) => { ctx.agentPresets.composeFrom(agentCtx, parent.agent.ctx) },
-    })).rejects.toThrow('Unknown agent preset: reviewer')
-    expect(ctx.agents.get(SessionId('reference-child'))).toBeUndefined()
-    expect(ctx.tools.get('child_delegate', parent.agent)).toBeDefined()
-  })
-
-  it('keeps the current preset on a missing reference and retries after declaration', async () => {
+  it('switches to a preset with a missing child reference and retries delegation after declaration', async () => {
     const { ctx } = await setup({})
+    await mountSpawn(ctx, 'spawn')
     await ctx.agentPresets.register({
       id: 'pending-reference',
       plugins: [{ name: 'cordis:subagentTool', config: {
-        provider: 'custom-spawn', toolName: 'pending_delegate', agentPreset: 'later',
+        provider: 'spawn', agentPreset: 'later',
       } }],
     })
     const lease = await ctx.agentPresets.acquireScope('pending-reference')
+    const definition = ctx.tools.get('subagent', lease.key)
+    expect(definition).toBeDefined()
     await lease[Symbol.asyncDispose]()
     const handle = await ctx.agents.create({
       sessionId: SessionId('retry-preset'),
+      agentOptions: { provider: 'mock', model: 'mock' },
       setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, 'writer') },
     })
-    await expect(ctx.agentPresets.select(handle.agent, 'pending-reference'))
-      .rejects.toThrow('Unknown agent preset: later')
-    expect(ctx.agentPresets.composedPreset(handle.agent.ctx)).toBe('writer')
-    expect(ctx.agentPresets.presetForSession(handle.agent.session)).toBeNull()
-    expect(ctx.tools.get('pending_delegate', handle.agent)).toBeUndefined()
-    await ctx.agentPresets.register({ id: 'later', plugins: [] })
     await ctx.agentPresets.select(handle.agent, 'pending-reference')
-    expect(ctx.tools.get('pending_delegate', handle.agent)).toBeDefined()
+    expect(ctx.tools.get('subagent', handle.agent)).toBe(definition)
     expect(ctx.agentPresets.presetForSession(handle.agent.session)).toBe('pending-reference')
-  })
+    const failed = await callSubagent(ctx, args, { agent: handle.agent })
+    expect(failed.isError).toBe(true)
+    expect(text(failed)).toContain('Unknown agent preset: later')
 
-  it('cleans up a failed shared installation before retrying registration', async () => {
-    const { ctx } = await setup({})
-    const blockers: Array<() => void> = []
-    ctx.loader.builtins.blockDelegate = (owner: Context) => {
-      blockers.push(owner.tools.register(defineTool({
-        name: 'collision_delegate', description: 'Conflicting configured tool.', parameters: {},
-        output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
-        execute: () => Promise.resolve('blocked'),
-      })))
-    }
-    await ctx.agentPresets.register({
-      id: 'collision', plugins: [
-        { name: 'cordis:blockDelegate', inject: ['tools'] },
-        { name: 'cordis:subagentTool', config: {
-          provider: 'custom-spawn', toolName: 'collision_delegate', agentPreset: 'reviewer',
-        } },
-      ],
-    })
-    const handle = await ctx.agents.create({
-      sessionId: SessionId('retry-installation'),
-      setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, 'writer') },
-    })
-    await expect(ctx.agentPresets.select(handle.agent, 'collision')).rejects.toThrow('already registered')
-    expect(ctx.agentPresets.composedPreset(handle.agent.ctx)).toBe('writer')
-    expect(blockers).toHaveLength(1)
-    blockers[0]!()
-    await ctx.agentPresets.select(handle.agent, 'collision')
-    const schema = ctx.tools.schemas(handle.agent).find(tool => tool.name === 'collision_delegate')
-    expect(schema?.parameters.properties).toHaveProperty('prompt')
+    await ctx.agentPresets.register({ id: 'later', plugins: [] })
+    ctx.llm.registerAdapter(['mock'], new MockAdapter([textResponse('reviewed')]))
+    // Completion notices must not consume the response scripted for the child.
+    ctx.on('agent/pre-step', async ({ agent }, next) => agent === handle.agent ? { kind: 'reject' } : next())
+    const retried = await callSubagent(ctx, args, { agent: handle.agent })
+    expect(retried.isError).not.toBe(true)
+    expect(text(retried)).toContain('started subagent')
+    await ctx.subagents.waitForChildren(handle.agent)
+    expect(ctx.tools.get('subagent', handle.agent)).toBe(definition)
   })
-
-  it('can advertise a preset without a description', async () => {
-    const { ctx, presets } = await setup({})
-    await presets.get('reviewer')!()
-    await ctx.agentPresets.register({ id: 'reviewer', plugins: [] })
-    const selection = new SubagentPresetSelection({ allowedAgentPresets: ['reviewer'] })
-    await selection.validate(ctx)
-    expect(selection.description).not.toContain('Available presets:')
-  })
-
 })

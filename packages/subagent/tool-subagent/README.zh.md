@@ -68,7 +68,7 @@ kind: "package-reference"
 
 设置 `agentPreset`，为每个子级指定默认的独立 preset。设置 `allowedAgentPresets`，允许模型通过 `agent_preset` 选择 id；没有此白名单时，模型不能覆盖配置中的选择。只有进程内 spawn 支持这些选项；fork 与外部后端会拒绝它们。
 
-配置的默认值与白名单必须引用已声明 preset。preset 内的工具在绑定该 preset 前以及发布继承它的 Agent 前校验这些引用；直接挂载在 Host 的工具在加载时校验。引用缺失会拒绝操作，切换失败时保留原绑定。支持自引用和引用后续声明。此检查只读取声明，不激活候选 preset；创建子级时，选中 preset 的激活失败会拒绝组装。两个选择字段都省略时，工具不要求 preset 服务。模型省略选择时使用配置的 `agentPreset`；若也没有默认值，则加入父方当前 preset 代际。任何显式 id 都挂载当前可用代际，即使与父方 id 相同。
+同时配置默认值和白名单时，默认值必须属于白名单；重复或空 id 在加载时被拒绝。调用启动子级时解析 preset id；未知或无法加载的 preset 返回出错的工具结果，不会启动子级。创建父 Agent 或切换其 preset 时不解析子级引用。两个选择字段都省略时，工具不要求 preset 服务。模型省略选择时使用配置的 `agentPreset`；若也没有默认值，则加入父方当前 preset 代际。任何显式 id 都挂载当前可用代际，即使与父方 id 相同。
 
 在 [preset 插件列表](../../preset/agent-preset-registry/README.zh.md)中配置 persona 与工具。包含 `persona` 或 `toolFilter` 的工具配置在加载时会报迁移错误。本地子级采用共享的 [preset 恢复规则](../subagent/README.zh.md#restoring-child-composition)。
 
@@ -90,7 +90,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-一个实例对应一个提供方和一个工具名。插件在提供方存在时向所属组合注册定义，并在提供方离开时释放它。每个 preset 代际拥有一份共享安装，配置了 preset 选择的工具也相同。Agent 继承其定义；切换 preset 只改变作用域的继承关系，不重新安装工具。preset 描述在安装时读取，重新加载所属工具实例后更新。发现工具属于配置了 `modelDiscovery` 的实例，与委派执行器读取同一份持久 Session 策略。提供方不支持的数字 `maxDepth` 或配置的 LLM 选择会使挂载失败。同一作用域中可以有多个名称不同的委派工具公开模型选择。
+一个实例对应一个提供方和一个工具名。插件在提供方存在时向所属组合注册定义，并在提供方离开时释放它。每个 preset 代际拥有一份共享注册，配置了 preset 选择的工具也相同。Agent 继承其定义；切换 preset 只改变作用域的继承关系，不重新安装工具。发现工具属于配置了 `modelDiscovery` 的实例，与委派执行器读取同一份持久 Session 策略。提供方不支持的数字 `maxDepth` 或配置的 LLM 选择会使挂载失败。同一作用域中可以有多个名称不同的委派工具公开模型选择。
 
 ### Activation 所有权
 
@@ -139,11 +139,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-生成的默认 [`subagent` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent) 在提供方存在时以配置的工具名公开。设置了 `modelSelection` 的实例在每个 Session 中都会增加 `provider`、`model`、`reasoning_effort` 及路由指导。`allowedAgentPresets` 增加 `agent_preset` 枚举和来自 preset 显示描述的引导。上下文继承和继续执行能力决定任务与后续工作描述。工具限制同时移除 schema 及其 `tool:<toolName>` 指导段。
+生成的默认 [`subagent` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent) 在提供方存在时以配置的工具名公开。设置了 `modelSelection` 的实例在每个 Session 中都会增加 `provider`、`model`、`reasoning_effort` 及路由指导。`allowedAgentPresets` 增加 `agent_preset` 枚举及默认或继承选择的引导。上下文继承和继续执行能力决定任务与后续工作描述。工具限制同时移除 schema 及其 `tool:<toolName>` 指导段。
 
 #### Token 影响
 
-每次父级请求承担固定 schema 成本；`modelSelection` 会增加三个可选路由字段，preset 选择则增加一个枚举参数和 preset 描述。每个工具实例增加一份 schema；可见委派工具共享一个简短系统提示词段。
+每次父级请求承担固定 schema 成本；`modelSelection` 会增加三个可选路由字段，preset 选择则增加一个枚举参数及默认值引导。每个工具实例增加一份 schema；可见委派工具共享一个简短系统提示词段。
 
 #### KV Cache 影响
 

@@ -68,7 +68,7 @@ Every backend’s completion notice carries its final answer. Local Spawn and Fo
 
 Set `agentPreset` to give every child an independent preset by default. Set `allowedAgentPresets` to let the model choose an id through `agent_preset`; without this allowlist, the model cannot override the configured choice. Only in-process spawn supports these options; fork and external backends reject them.
 
-The configured default and allowlist must name declared presets. A tool inside a preset validates these references before that preset is bound and before an inheriting Agent is published; a Host-mounted tool validates them at load. Missing references reject the operation, preserving the previous binding on a failed switch. Self-references and references to later declarations are supported. This check reads declarations without activating candidate presets; activation failures reject the selected preset when the child is composed. Without either selection field, the tool does not require the preset service. An omitted model choice uses the configured `agentPreset`, or joins the parent's current preset revision when no default is configured. Any explicit id mounts the currently available revision, even when it matches the parent's id.
+The configured default must belong to the allowlist when both are set, and duplicate or empty ids fail at load. Preset ids are resolved when a call starts the child; an unknown or unloadable preset returns an errored tool result without starting a child. Creating a parent Agent or switching its preset does not resolve child references. Without either selection field, the tool does not require the preset service. An omitted model choice uses the configured `agentPreset`, or joins the parent's current preset revision when no default is configured. Any explicit id mounts the currently available revision, even when it matches the parent's id.
 
 Compose persona and tools in the [preset plugin list](../../preset/agent-preset-registry/README.md). Tool configuration containing `persona` or `toolFilter` fails at load with a migration error. Local children use the shared [preset restoration rules](../subagent/README.md#restoring-child-composition).
 
@@ -90,7 +90,7 @@ This section explains how the tool mirrors provider lifecycle and settles runs; 
 
 ### Design concept
 
-One instance is one provider plus one tool name. The plugin registers its definition in the owning composition while the provider is present and disposes it when the provider leaves. Each preset revision owns one shared installation, including tools with preset selection. Agents inherit its definitions; switching presets changes scope ancestry without reinstalling tools. Preset descriptions are captured at installation and refreshed by reloading the owning tool instance. Discovery belongs to the instance configured with `modelDiscovery` and reads the same durable Session policy as the delegation executor. A numeric `maxDepth` or configured LLM selection unsupported by the provider fails the mount. Multiple distinctly named delegation tools may expose model selection in one scope.
+One instance is one provider plus one tool name. The plugin registers its definition in the owning composition while the provider is present and disposes it when the provider leaves. Each preset revision owns one shared registration, including tools with preset selection. Agents inherit its definitions; switching presets changes scope ancestry without reinstalling tools. Discovery belongs to the instance configured with `modelDiscovery` and reads the same durable Session policy as the delegation executor. A numeric `maxDepth` or configured LLM selection unsupported by the provider fails the mount. Multiple distinctly named delegation tools may expose model selection in one scope.
 
 ### Activation ownership
 
@@ -139,11 +139,11 @@ Read these pages when the package-level contract is not enough; they move from t
 
 #### What the model sees
 
-The generated default [`subagent` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent) appears under the configured tool name while its provider exists. An instance with `modelSelection` adds `provider`, `model`, and `reasoning_effort` plus route guidance in every Session. `allowedAgentPresets` adds the `agent_preset` enum and guidance from the presets’ display descriptions. Context inheritance and continuation support determine task and follow-up descriptions. A tool restriction removes both the schema and its `tool:<toolName>` guidance section.
+The generated default [`subagent` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent) appears under the configured tool name while its provider exists. An instance with `modelSelection` adds `provider`, `model`, and `reasoning_effort` plus route guidance in every Session. `allowedAgentPresets` adds the `agent_preset` enum and guidance for the default or inherited selection. Context inheritance and continuation support determine task and follow-up descriptions. A tool restriction removes both the schema and its `tool:<toolName>` guidance section.
 
 #### Token effect
 
-Fixed schema cost per parent request; `modelSelection` adds three optional route fields, while preset selection adds one enum parameter and preset descriptions. Each tool instance adds one schema; visible delegation tools share one short system-prompt section.
+Fixed schema cost per parent request; `modelSelection` adds three optional route fields, while preset selection adds one enum parameter and default guidance. Each tool instance adds one schema; visible delegation tools share one short system-prompt section.
 
 #### KV Cache effect
 

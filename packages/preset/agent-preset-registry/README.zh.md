@@ -53,7 +53,7 @@ Web 内置定义来自 `dsh-web-app` bundle。定义使用普通插件行；注�
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-每个声明在启动时创建注册表拥有的 scope 和内存 Loader 树。更新或移除声明会让旧代际退役；Agent、子 Agent 和临时历史读取各自持有引用，最后一个引用释放后才销毁插件树。插件注册继承 preset scope，Agent scope 的父链接决定可见性。绑定代际前，注册表等待其作用域内的准备监听器完成；失败时保留原绑定。这让插件能够在声明加载后校验跨 preset 引用，并准备共享注册。冷读取作用域不执行准备。Agent loop 仍由宿主共享。
+每个声明在启动时创建注册表拥有的 scope 和内存 Loader 树。更新或移除声明会让旧代际退役；Agent、子 Agent 和临时历史读取各自持有引用，最后一个引用释放后才销毁插件树。插件注册继承 preset scope，Agent scope 的父链接决定可见性；Agent loop 仍由宿主共享。
 
 preset 的服务提供方及其消费方必须共享同一个 `cordis:group` 隔离 realm。条目局部隔离不会沿 Agent 注册 scope 传播：组外的普通 Context 查找（包括 `agent.ctx`）仍选择 Host realm。`agentPresets.serviceFor()` 显式检查保留的组合，不改变普通服务查找。
 

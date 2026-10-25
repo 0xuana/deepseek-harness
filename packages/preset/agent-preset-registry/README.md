@@ -53,7 +53,7 @@ The registry writes no declarations. The `read` Remote renders one declaration�
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-Each declaration eagerly creates a registry-owned scope and an in-memory Loader tree. Updating or removing a declaration retires its previous revision. Agents, children and temporary historical reads retain references; releasing the final reference disposes the retired tree. Plugin registrations inherit the preset scope, and the Agent scope’s parent link controls visibility. Before binding a revision, the registry awaits its scoped preparation listeners; failure preserves the previous binding. This lets plugins validate cross-preset references and prepare shared registrations after declarations have loaded. Cold scope reads do not run preparation. The Host continues to share the Agent loop.
+Each declaration eagerly creates a registry-owned scope and an in-memory Loader tree. Updating or removing a declaration retires its previous revision. Agents, children and temporary historical reads retain references; releasing the final reference disposes the retired tree. Plugin registrations inherit the preset scope, and the Agent scope’s parent link controls visibility. The Host continues to share the Agent loop.
 
 A preset service provider and its consumers must share one `cordis:group` isolation realm. Entry-local isolation does not propagate through the Agent registration scope: ordinary Context lookup outside the group, including `agent.ctx`, still selects the Host realm. `agentPresets.serviceFor()` explicitly inspects the retained composition; it does not change ordinary service lookup.
 

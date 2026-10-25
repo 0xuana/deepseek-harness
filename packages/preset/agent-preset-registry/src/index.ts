@@ -3,7 +3,7 @@ import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import { bindScopeParent, createScope, scopeOf, scopeParentOf, scopeTarget, type Scope, type ScopeKey, type ScopeParentBinding } from '@deepseek-ai/dsh-scope'
+import { bindScopeParent, createScope, scopeOf, scopeParentOf, type Scope, type ScopeKey, type ScopeParentBinding } from '@deepseek-ai/dsh-scope'
 import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 import { dump } from 'js-yaml'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -289,8 +289,7 @@ export class AgentPresetRegistry extends TypertRemoteService {
     }, 'agent-preset.binding')
   }
 
-  /** Prepare and bind an unpublished Agent to the current preset revision.
-   * Preparation failure preserves any existing binding.
+  /** Bind an unpublished Agent to the current preset revision.
    * @param ctx Agent context from its setup callback.
    * @param id Requested preset, or the default.
    * @returns Bound preset identity.
@@ -298,10 +297,8 @@ export class AgentPresetRegistry extends TypertRemoteService {
   async mount(ctx: Context, id?: string): Promise<AgentPreset> {
     const generation = await this.retain(id)
     try {
-      const preset = { id: generation.mount.presetId }
-      await this.owner.serial(scopeTarget(preset, generation.key), 'agent-preset/prepare', preset)
       await this.bind(ctx, generation)
-      return preset
+      return { id: generation.mount.presetId }
     } finally {
       generation.users--
       await this.collect(generation)

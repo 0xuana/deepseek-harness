@@ -1,7 +1,5 @@
 /** Client-safe payloads and event declarations owned by the agent-preset domain. */
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { Scoped } from '@deepseek-ai/dsh-scope'
-import type { AgentPreset } from './preset.ts'
 
 
 /**
@@ -58,13 +56,6 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
-    /**
-     * Prepare shared registrations before binding a preset revision.
-     * Listeners are routed to that revision and awaited; rejection preserves the existing binding.
-     * @mode serial
-     * @param preset - the preset whose retained revision is being prepared.
-     */
-    'agent-preset/prepare'(this: Scoped<AgentPreset>, preset: AgentPreset): undefined | Promise<undefined>
     /**
      * One session committed a different agent preset to its durable log.
      * Consumers invalidate only state derived from that session's composition.
