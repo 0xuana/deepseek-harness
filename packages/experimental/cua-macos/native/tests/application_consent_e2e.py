@@ -89,8 +89,10 @@ def main():
             assert Path(pending["authorization"]["executablePath"]).samefile(executable), pending
             identities.append(running["authorization"]["id"])
             if bundle_id is None:
-                expected_path = hashlib.sha256(("macos:executable-path:" + str(executable.resolve())).encode()).hexdigest()
-                assert running["authorization"]["id"] == expected_path, running
+                # Foundation normalizes /private/var to /var; pathlib.resolve preserves /private/var.
+                authorization = running["authorization"]
+                expected_path = hashlib.sha256(("macos:executable-path:" + authorization["executablePath"]).encode()).hexdigest()
+                assert authorization["id"] == expected_path, authorization
         assert identities[0] == identities[1] == expected, identities
         assert identities[2] != expected, identities
         print("PASS: changed bundles cannot launch; cold/running identities agree; copies share consent; other IDs stay separate; missing IDs use persistent paths")
