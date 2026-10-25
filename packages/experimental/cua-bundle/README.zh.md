@@ -37,7 +37,7 @@ pnpm dsh web
 
 关闭会卸载提供方，并从其 Agent 作用域中撤回 CUA 工具。执行器配置、新会话默认值和已保存的授权保留。会话级应用授权随提供方卸载而失效。
 
-Computer Use 要求 DSH Host 运行在 macOS 上。其他系统安装时跳过可选的 macOS 提供方，组合包也不加载该提供方。共享 CUA 逻辑和权限页入口仍保留，Computer Use 操作需要提供方才能使用。其他操作系统上的浏览器可以连接受支持的 Mac Host。
+Computer Use 仅支持 macOS DSH Host。原生提供方是仅在 macOS 安装的可选依赖，共享 CUA 和 Client 包仍随安装提供。其他 Host 默认不在插件列表和模型推荐中展示此组合包，并在保存设置前拒绝启用。profile 显式安装的依赖和已保存的选择仍保留管理入口。已选中的组合包会在启动时跳过并报告原因，仍可取消选择；已保存的用户设置保留。其他操作系统上的浏览器可以连接受支持的 Mac Host。
 
 准备失败时，已保存的选择保留，CUA 操作不可用。查看 Host 的启动诊断，修复原因后重启 DSH。
 
@@ -51,7 +51,7 @@ Computer Use 要求 DSH Host 运行在 macOS 上。其他系统安装时跳过�
 <details>
 <summary>维护者说明</summary>
 
-组合包 patch 通过 `agentPreset: ptc` 挂载原生提供方和权限界面。工具通过现有 Agent 作用域注册，preset 文档保持不变。详情页按钮复用现有设置表单，仅在点击后保存 `agent-preset-registry.selectedDefault: ptc`。[CUA](../cua/README.zh.md)负责注册和销毁。
+组合包 patch 通过 `agentPreset: ptc` 挂载原生提供方和权限界面。直接将导出的 `cordis.patch.yml` 用作覆盖层时不会经过组合包准入；行级条件会在其他 Host 上跳过可选的 macOS 提供方。仅加载共享条目不能提供计算机控制。工具通过现有 Agent 作用域注册，preset 文档保持不变。详情页按钮复用现有设置表单，仅在点击后保存 `agent-preset-registry.selectedDefault: ptc`。[CUA](../cua/README.zh.md)负责注册和销毁。
 
 </details>
 
