@@ -98,7 +98,7 @@ Browser controls for provider-owned native permission and application decisions.
 
 /**
  * Load presentation icons separately from application decisions.
- * @returns Optional native PNG icons keyed by executable path for saved and blocked applications.
+ * @returns Optional native PNG icons keyed by executable path; applications without paths are skipped.
  */
 @Remote async applicationIcons(): Promise<Record<string, string>>
 
