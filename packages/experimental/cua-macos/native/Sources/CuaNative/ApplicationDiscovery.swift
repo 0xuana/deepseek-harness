@@ -69,6 +69,7 @@ struct InstalledApplication: Sendable, Equatable {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
         configuration.addsToRecentItems = false
+        configuration.createsNewApplicationInstance = true
         let running = try await NSWorkspace.shared.openApplication(
             at: URL(fileURLWithPath: app.path), configuration: configuration)
         while !running.isFinishedLaunching {
