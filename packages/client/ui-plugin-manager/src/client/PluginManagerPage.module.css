@@ -1525,7 +1525,7 @@ label.registryOption {
   gap: 16px;
   min-height: 44px;
   padding: 8px 2px;
-  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
 }
 
 .facts dt {
@@ -1570,7 +1570,7 @@ label.registryOption {
 
 .row {
   padding: 12px 2px;
-  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
 }
 
 .row:last-child {
