@@ -6,11 +6,12 @@ import { cpSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, r
 import { cp } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import extractZip from 'extract-zip'
 import { x as extractTar } from 'tar'
 import { copyPrimaryRuntime, parsePrimaryRuntime, workspaceDependencyPaths, type PrimaryRuntimeManifest } from '@deepseek-ai/dsh-tool-workspace-dependencies'
+import { acceptsNpmPlatform } from '../npm-platform.ts'
 import lock from './lock.json' with { type: 'json' }
 import { prunePrimaryRuntimePythonTests } from './prune-python-tests.ts'
 
@@ -149,21 +150,25 @@ export async function unpackPrimaryRuntimeWheel(archive: string, destination: st
 }
 
 /**
- * Remove packages bundled under pnpm's dist/node_modules whose npm `os`/`cpu` fields exclude the target.
+ * Remove packages bundled directly under pnpm's dist/node_modules whose npm `os`/`cpu` fields exclude the target.
  * The pnpm tarball carries every platform's optional native packages, such as `@reflink/reflink-darwin-x64`.
+ * Nested node_modules and the `libc` field are not inspected; pnpm 11 bundles neither nested native packages nor Linux variants.
  * @param pnpm - Unpacked pnpm package directory.
  * @param platform - Target Node.js platform.
  * @param arch - Target Node.js architecture.
+ * @throws When a bundled package manifest is missing or has invalid `os`/`cpu` fields.
  */
 export function prunePnpmForeignNativePackages(pnpm: string, platform: NodeJS.Platform, arch: NodeJS.Architecture): void {
   const modules = join(pnpm, 'dist', 'node_modules')
-  const admits = (values: string[] | undefined, value: string): boolean => values === undefined
-    || (values.some(entry => !entry.startsWith('!')) ? values.includes(value) : !values.includes(`!${value}`))
-  for (const name of readdirSync(modules).filter(entry => entry !== '.bin')) {
-    for (const directory of name.startsWith('@') ? readdirSync(join(modules, name)).map(child => join(modules, name, child)) : [join(modules, name)]) {
-      const { os, cpu } = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')) as { os?: string[]; cpu?: string[] }
-      if (!admits(os, platform) || !admits(cpu, arch)) rmSync(directory, { recursive: true })
+  const directories = (parent: string): string[] => readdirSync(parent, { withFileTypes: true })
+    .filter(entry => entry.isDirectory() && entry.name !== '.bin').map(entry => join(parent, entry.name))
+  for (const directory of directories(modules).flatMap(entry => basename(entry).startsWith('@') ? directories(entry) : [entry])) {
+    const { os, cpu } = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')) as { os?: unknown; cpu?: unknown }
+    let admitted: boolean
+    try { admitted = acceptsNpmPlatform(os, platform) && acceptsNpmPlatform(cpu, arch) } catch (error) {
+      throw new Error(`primary runtime: ${directory}/package.json: ${(error as Error).message}`, { cause: error })
     }
+    if (!admitted) rmSync(directory, { recursive: true })
   }
 }
 
