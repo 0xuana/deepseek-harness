@@ -75,7 +75,7 @@ enum NativePlatform {
         try? executablePathResult(pid).get()
     }
     static func executablePathResult(_ pid: Int32) -> Result<String, NativeFailure> {
-        var buffer = [CChar](repeating: 0, count: Int(PROC_PIDPATHINFO_MAXSIZE))
+        var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
         errno = 0
         guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return .failure(executablePathFailure(errno)) }
         return .success(String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self))

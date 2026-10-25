@@ -10,5 +10,5 @@ export interface CuaApplicationGrant {
   /** Application label presented when the decision was made. */
   name: string
   /** Canonical executable path for display and icons; absent when the operating system cannot provide it. */
-  executablePath?: string
+  executablePath?: string | undefined
 }
