@@ -8,6 +8,7 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { defineTool } from '@deepseek-ai/dsh-tools'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as tool from '../src/index.ts'
 import { SubagentPresetSelection } from '../src/preset-selection.ts'
@@ -207,6 +208,125 @@ describe('spawn preset selection', () => {
     expect(ctx.agents.list()).toEqual([])
     expect(ctx.sessions.list()).toEqual([])
     expect(ctx.tools.schemas().map(schema => schema.name)).not.toContain('missing_delegate')
+  })
+
+  it('shares each preset tool across Agents and repeated round trips', async () => {
+    const { ctx } = await setup({})
+    const declarations = new Map<string, () => Promise<void>>()
+    for (const id of ['standard', 'ptc']) {
+      declarations.set(id, await ctx.agentPresets.register({
+        id,
+        plugins: [{ name: 'cordis:subagentTool', config: {
+          provider: 'custom-spawn', toolName: 'shared_delegate', allowedAgentPresets: ['reviewer'],
+        } }],
+      }))
+    }
+    const create = (id: string, preset: string) => ctx.agents.create({
+      sessionId: SessionId(id),
+      setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, preset) },
+    })
+    const [standard, moving] = await Promise.all([
+      create('shared-standard', 'standard'), create('shared-moving', 'standard'),
+    ])
+    const ptc = await create('shared-ptc', 'ptc')
+    const expected = {
+      standard: ctx.tools.get('shared_delegate', standard.agent),
+      ptc: ctx.tools.get('shared_delegate', ptc.agent),
+    }
+    expect(expected.standard).toBeDefined()
+    expect(expected.ptc).toBeDefined()
+    expect(expected.standard).not.toBe(expected.ptc)
+    expect(ctx.tools.get('shared_delegate', moving.agent)).toBe(expected.standard)
+    for (const preset of ['ptc', 'standard', 'ptc', 'standard'] as const) {
+      await ctx.agentPresets.select(moving.agent, preset)
+      expect(ctx.tools.get('shared_delegate', moving.agent)).toBe(expected[preset])
+    }
+    await standard.dispose()
+    expect(ctx.tools.get('shared_delegate', moving.agent)).toBe(expected.standard)
+    const lease = await ctx.agentPresets.acquireScope('standard')
+    const key = lease.key
+    await lease[Symbol.asyncDispose]()
+    await declarations.get('standard')!()
+    expect(ctx.tools.get('shared_delegate', moving.agent)).toBe(expected.standard)
+    await moving.dispose()
+    expect(ctx.tools.get('shared_delegate', key)).toBeUndefined()
+    expect(ctx.tools.get('shared_delegate', ptc.agent)).toBe(expected.ptc)
+  })
+
+  it('rechecks references before publishing a child inheriting a prepared preset', async () => {
+    const { ctx, presets } = await setup({})
+    await ctx.agentPresets.register({ id: 'parent', plugins: [{
+      name: 'cordis:subagentTool', config: {
+        provider: 'custom-spawn', toolName: 'child_delegate', agentPreset: 'reviewer',
+      },
+    }] })
+    const parent = await ctx.agents.create({
+      sessionId: SessionId('reference-parent'),
+      setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, 'parent') },
+    })
+    await presets.get('reviewer')!()
+    await expect(ctx.agents.create({
+      sessionId: SessionId('reference-child'),
+      setup: (agentCtx) => { ctx.agentPresets.composeFrom(agentCtx, parent.agent.ctx) },
+    })).rejects.toThrow('Unknown agent preset: reviewer')
+    expect(ctx.agents.get(SessionId('reference-child'))).toBeUndefined()
+    expect(ctx.tools.get('child_delegate', parent.agent)).toBeDefined()
+  })
+
+  it('keeps the current preset on a missing reference and retries after declaration', async () => {
+    const { ctx } = await setup({})
+    await ctx.agentPresets.register({
+      id: 'pending-reference',
+      plugins: [{ name: 'cordis:subagentTool', config: {
+        provider: 'custom-spawn', toolName: 'pending_delegate', agentPreset: 'later',
+      } }],
+    })
+    const lease = await ctx.agentPresets.acquireScope('pending-reference')
+    await lease[Symbol.asyncDispose]()
+    const handle = await ctx.agents.create({
+      sessionId: SessionId('retry-preset'),
+      setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, 'writer') },
+    })
+    await expect(ctx.agentPresets.select(handle.agent, 'pending-reference'))
+      .rejects.toThrow('Unknown agent preset: later')
+    expect(ctx.agentPresets.composedPreset(handle.agent.ctx)).toBe('writer')
+    expect(ctx.agentPresets.presetForSession(handle.agent.session)).toBeNull()
+    expect(ctx.tools.get('pending_delegate', handle.agent)).toBeUndefined()
+    await ctx.agentPresets.register({ id: 'later', plugins: [] })
+    await ctx.agentPresets.select(handle.agent, 'pending-reference')
+    expect(ctx.tools.get('pending_delegate', handle.agent)).toBeDefined()
+    expect(ctx.agentPresets.presetForSession(handle.agent.session)).toBe('pending-reference')
+  })
+
+  it('cleans up a failed shared installation before retrying registration', async () => {
+    const { ctx } = await setup({})
+    const blockers: Array<() => void> = []
+    ctx.loader.builtins.blockDelegate = (owner: Context) => {
+      blockers.push(owner.tools.register(defineTool({
+        name: 'collision_delegate', description: 'Conflicting configured tool.', parameters: {},
+        output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+        execute: () => Promise.resolve('blocked'),
+      })))
+    }
+    await ctx.agentPresets.register({
+      id: 'collision', plugins: [
+        { name: 'cordis:blockDelegate', inject: ['tools'] },
+        { name: 'cordis:subagentTool', config: {
+          provider: 'custom-spawn', toolName: 'collision_delegate', agentPreset: 'reviewer',
+        } },
+      ],
+    })
+    const handle = await ctx.agents.create({
+      sessionId: SessionId('retry-installation'),
+      setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, 'writer') },
+    })
+    await expect(ctx.agentPresets.select(handle.agent, 'collision')).rejects.toThrow('already registered')
+    expect(ctx.agentPresets.composedPreset(handle.agent.ctx)).toBe('writer')
+    expect(blockers).toHaveLength(1)
+    blockers[0]!()
+    await ctx.agentPresets.select(handle.agent, 'collision')
+    const schema = ctx.tools.schemas(handle.agent).find(tool => tool.name === 'collision_delegate')
+    expect(schema?.parameters.properties).toHaveProperty('prompt')
   })
 
   it('can advertise a preset without a description', async () => {

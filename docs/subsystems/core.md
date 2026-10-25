@@ -618,7 +618,8 @@ async resolve(id?: string): Promise<AgentPreset>
  */
 @Remote('read') readDocument(agentPreset: string): Promise<AgentPresetDocument>
 
-/** Bind an unpublished Agent to the current preset revision.
+/** Prepare and bind an unpublished Agent to the current preset revision.
+ * Preparation failure preserves any existing binding.
  * @param ctx Agent context from its setup callback.
  * @param id Requested preset, or the default.
  * @returns Bound preset identity.
@@ -1166,6 +1167,26 @@ Source: [`packages/core/agent-loop/src/index.ts`](../../packages/core/agent-loop
 <a id="agent-preset-events"></a>
 
 ### `agent-preset/*` events
+
+<a id="agent-presetprepare--serial"></a>
+
+#### `agent-preset/prepare` — serial
+
+Prepare shared registrations before binding a preset revision. Listeners are routed to that revision and awaited; rejection preserves the existing binding.
+
+```ts cordis-catalog
+/**
+ * Prepare shared registrations before binding a preset revision.
+ * Listeners are routed to that revision and awaited; rejection preserves the existing binding.
+ * @mode serial
+ * @param preset - the preset whose retained revision is being prepared.
+ */
+'agent-preset/prepare'(this: Scoped<AgentPreset>, preset: AgentPreset): undefined | Promise<undefined>
+```
+
+Types: [Scoped](scope.md)
+
+Source: [`packages/preset/agent-preset-registry/src/types.ts`](../../packages/preset/agent-preset-registry/src/types.ts)
 
 <a id="agent-presetselected--emit"></a>
 

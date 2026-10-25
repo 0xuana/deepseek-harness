@@ -355,6 +355,49 @@ describe('the shipped Web composition', () => {
     }
   })
 
+  it.each(['standard', 'ptc'] as const)('retains delegation tools after repeated preset round trips ending in %s', async (target) => {
+    const adapter = new MinimalCompactionAdapter()
+    const unregister = ctx.llm.registerAdapter(['preset-round-trip'], adapter)
+    onTestFinished(unregister)
+    const direct = await ctx.agents.create({
+      sessionId: SessionId(`preset-direct-${target}-${randomUUID()}`),
+      agentOptions: { provider: 'preset-round-trip', model: 'preset-round-trip' },
+      setup: agentCtx => ctx.agentPresets.mount(agentCtx, target).then(() => undefined),
+    })
+    onTestFinished(() => direct.dispose())
+    const handle = await ctx.agents.create({
+      sessionId: SessionId(`preset-round-trip-${target}-${randomUUID()}`),
+      agentOptions: { provider: 'preset-round-trip', model: 'preset-round-trip' },
+      setup: agentCtx => ctx.agentPresets.mount(agentCtx, target).then(() => undefined),
+    })
+    onTestFinished(() => handle.dispose())
+    const { agent } = handle
+    const other = target === 'standard' ? 'ptc' : 'standard'
+    for (const preset of [other, target, other, target]) {
+      await ctx.agentPresets.select(agent, preset)
+      expect(toolNames(ctx, agent)).toEqual(expect.arrayContaining(['subagent', 'subagent_fork']))
+    }
+    expect(ctx.tools.schemas(agent)).toEqual(ctx.tools.schemas(direct.agent))
+    const assembly = await ctx.systemPrompt.assemble({ scope: agent })
+    if (target === 'ptc') {
+      const sdk = assembly.sections.find(section => section.name === 'tools:sdk')?.text ?? ''
+      expect(sdk).toContain('subagent:')
+      expect(sdk).toContain('subagent_fork:')
+    }
+    direct.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Reply with Ready.' }], source: { kind: 'user' } }))
+    await direct.agent.whenIdle()
+    const directRequest = adapter.requests.find(request => request.purpose === undefined)
+    expect(directRequest).toBeDefined()
+    adapter.requests.length = 0
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Reply with Ready.' }], source: { kind: 'user' } }))
+    await agent.whenIdle()
+    const request = adapter.requests.find(request => request.purpose === undefined)
+    expect(request).toBeDefined()
+    expect(request?.tools).toEqual(directRequest?.tools)
+    const header = agent.session.snapshotEvents().find(event => event.type === 'request/header')
+    expect(header?.data.header.tools).toEqual(request?.tools)
+  })
+
   it('composes the exact RL prompt and persistent shell from `minimal`', async () => {
     const handle = await ctx.agents.create({
       sessionId: SessionId('preset-minimal'),

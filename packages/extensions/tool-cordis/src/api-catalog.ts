@@ -211,7 +211,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async mount(ctx: Context, id?: string): Promise<AgentPreset>',
-        description: 'Bind an unpublished Agent to the current preset revision.',
+        description: 'Prepare and bind an unpublished Agent to the current preset revision. Preparation failure preserves any existing binding.',
         parameters: [{ name: 'ctx', description: 'Agent context from its setup callback.' }, { name: 'id', description: 'Requested preset, or the default.' }],
         returns: 'Bound preset identity.',
       },
@@ -4231,6 +4231,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'A declarative agent entry failed before it could publish a live agent.',
     description: 'A declarative agent entry failed before it could publish a live agent. Consumers that buffer work for the configured identity use this transient signal to reject that work instead of waiting forever. Normal factory teardown suppresses failures from the cancelled startup attempt.',
     parameters: [{ name: 'payload', description: '.error - persistence, setup, or publication failure.' }],
+  },
+  {
+    name: 'agent-preset/prepare',
+    mode: 'serial',
+    signature: '\'agent-preset/prepare\'(this: Scoped<AgentPreset>, preset: AgentPreset): undefined | Promise<undefined>',
+    summary: 'Prepare shared registrations before binding a preset revision.',
+    description: 'Prepare shared registrations before binding a preset revision. Listeners are routed to that revision and awaited; rejection preserves the existing binding.',
+    parameters: [{ name: 'preset', description: 'the preset whose retained revision is being prepared.' }],
   },
   {
     name: 'agent-preset/selected',

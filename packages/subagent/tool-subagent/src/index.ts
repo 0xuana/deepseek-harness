@@ -8,10 +8,10 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { scopeChainOf, scopeOf } from '@deepseek-ai/dsh-scope'
+import { scopeOf } from '@deepseek-ai/dsh-scope'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
-import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
+import type { AgentOptions } from '@deepseek-ai/dsh-agent'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
@@ -142,7 +142,7 @@ function providerWording(inheritsConversation: boolean): { description: string; 
 
 /**
  * Install one delegation-tool composition.
- * Standing preset choices are validated for each Agent before its tool is installed.
+ * The composition owns one shared installation; preset references are checked before binding or Agent publication.
  * @param ctx - Context that owns the registrations.
  * @param config - delegation-tool configuration.
  * @returns when the plugin is ready.
@@ -196,6 +196,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   if (config.modelDiscovery === true) registerListSubagentModels(ctx, subagentModelSelectionProjectionHandle)
 
   const install = (runtimeCtx: Context): void => {
+    const presetDescription = presets.description
     // Load order and HMR replacement can change provider availability while
     // this fiber remains active.
     let mounted: { subagentProvider: SubagentProvider; definition: ToolDefinition; disposeTool: () => void } | undefined
@@ -236,7 +237,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             agent_preset: {
               type: 'string' as const,
               enum: [...presets.choices],
-              description: presets.description,
+              description: presetDescription,
             },
           },
           ...modelSelectionEnabled ? {
@@ -397,46 +398,20 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     return
   }
 
-  const agents = ctx.get('agents')
-  /* v8 ignore next -- shipped preset compositions always include the Agent registry. */
-  if (agents === undefined) throw new Error('tool-subagent: standing preset selection requires the Agent registry')
-  const scopedInstalls = new WeakMap<Agent, ReturnType<Context['inject']>>()
-  const belongsToComposition = (candidate: Agent): boolean =>
-    scopeChainOf(scopeOf(candidate.ctx)).includes(compositionScope)
-  const installScoped = (candidate: Agent): ReturnType<Context['inject']> | undefined => {
-    const existing = scopedInstalls.get(candidate)
-    if (existing !== undefined) return existing
-    const fiber = candidate.ctx.inject(['tools', 'subagents', 'systemPrompt', 'sessionProjections'], async (runtimeCtx) => {
-      await presets.validate(ctx)
-      install(runtimeCtx)
-    })
-    scopedInstalls.set(candidate, fiber)
-    return fiber
-  }
-  const removeScoped = (candidate: Agent): void => {
-    const fiber = scopedInstalls.get(candidate)
-    if (fiber === undefined) return
-    scopedInstalls.delete(candidate)
-    /* v8 ignore next 3 -- Cordis Fiber disposal contains registration cleanup failures; this is the final diagnostic sink. */
-    void fiber.dispose().catch((error: unknown) => {
-      ctx.logger.warn(`tool-subagent: failed to remove recomposed Agent "${candidate.id}" definitions: ${String(error)}`)
-    })
-  }
-  const reconcileComposedAgents = (): void => {
-    for (const candidate of agents.list()) {
-      if (belongsToComposition(candidate)) installScoped(candidate)
-      else removeScoped(candidate)
+  let installation: Promise<void> | undefined
+  const prepare = async (): Promise<undefined> => {
+    await presets.validate(ctx)
+    if (installation === undefined) {
+      const fiber = ctx.plugin(install)
+      installation = fiber.await().then(() => undefined).catch(async (error: unknown) => {
+        await fiber.dispose()
+        installation = undefined
+        throw error
+      })
     }
+    await installation
   }
-  // The preset-scoped listener admits descendant Agents and installs the
-  // preset choices in each Agent's own scope after validating their references.
-  ctx.on('agent/created', async ({ agent: created }) => {
-    await installScoped(created)
-  })
-  ctx.on('agent/disposed', ({ agent: disposed }) => { removeScoped(disposed) })
-  // Reparenting an Agent between standing presets changes its inherited tool
-  // set and emits `tools/change`; reconcile the Agent-owned override with the
-  // new ancestry. Other registry changes are idempotent no-ops here.
-  ctx.on('tools/change', reconcileComposedAgents)
-  reconcileComposedAgents()
+  ctx.on('agent-preset/prepare', prepare)
+  // Direct Agent setup and inherited children also validate before publication.
+  ctx.on('agent/created', prepare)
 }

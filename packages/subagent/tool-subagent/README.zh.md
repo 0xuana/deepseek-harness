@@ -68,7 +68,7 @@ kind: "package-reference"
 
 设置 `agentPreset`，为每个子级指定默认的独立 preset。设置 `allowedAgentPresets`，允许模型通过 `agent_preset` 选择 id；没有此白名单时，模型不能覆盖配置中的选择。只有进程内 spawn 支持这些选项；fork 与外部后端会拒绝它们。
 
-配置的默认值与白名单必须引用已声明 preset。preset 内的工具在 Agent 初始化期间检查这些 id 并读取描述；直接挂载在 Host 的工具在加载时检查。此检查不激活候选 preset。创建子级时，选中 preset 的激活失败会拒绝组装。两个选择字段都省略时，工具不要求 preset 服务。模型省略选择时使用配置的 `agentPreset`；若也没有默认值，则加入父方当前 preset 代际。任何显式 id 都挂载当前可用代际，即使与父方 id 相同。
+配置的默认值与白名单必须引用已声明 preset。preset 内的工具在绑定该 preset 前以及发布继承它的 Agent 前校验这些引用；直接挂载在 Host 的工具在加载时校验。引用缺失会拒绝操作，切换失败时保留原绑定。支持自引用和引用后续声明。此检查只读取声明，不激活候选 preset；创建子级时，选中 preset 的激活失败会拒绝组装。两个选择字段都省略时，工具不要求 preset 服务。模型省略选择时使用配置的 `agentPreset`；若也没有默认值，则加入父方当前 preset 代际。任何显式 id 都挂载当前可用代际，即使与父方 id 相同。
 
 在 [preset 插件列表](../../preset/agent-preset-registry/README.zh.md)中配置 persona 与工具。包含 `persona` 或 `toolFilter` 的工具配置在加载时会报迁移错误。本地子级采用共享的 [preset 恢复规则](../subagent/README.zh.md#restoring-child-composition)。
 
@@ -90,7 +90,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-一个实例对应一个提供方和一个工具名。插件在提供方存在时向所属组合注册定义，并在提供方离开时释放它。Agent 默认继承这份共享定义。配置了 preset 选择的常驻组合会校验引用，并在每个匹配 Agent 发布前将工具安装到其作用域。发现工具属于配置了 `modelDiscovery` 的实例，与委派执行器读取同一份持久 Session 策略。提供方不支持的数字 `maxDepth` 或配置的 LLM 选择会使挂载失败。同一作用域中可以有多个名称不同的委派工具公开模型选择。
+一个实例对应一个提供方和一个工具名。插件在提供方存在时向所属组合注册定义，并在提供方离开时释放它。每个 preset 代际拥有一份共享安装，配置了 preset 选择的工具也相同。Agent 继承其定义；切换 preset 只改变作用域的继承关系，不重新安装工具。preset 描述在安装时读取，重新加载所属工具实例后更新。发现工具属于配置了 `modelDiscovery` 的实例，与委派执行器读取同一份持久 Session 策略。提供方不支持的数字 `maxDepth` 或配置的 LLM 选择会使挂载失败。同一作用域中可以有多个名称不同的委派工具公开模型选择。
 
 ### Activation 所有权
 
