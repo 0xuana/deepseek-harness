@@ -226,23 +226,6 @@ function renderTab(
 }
 
 describe('PluginManagerPage', () => {
-  it('starts each page at the top and keeps scroll position during a refresh', () => {
-    const { set } = renderTab({ packages: [pkg()] })
-    const open = screen.getByRole('button', { name: 'View dsh-better-sidebar' })
-    const panel = open.closest<HTMLElement>('[data-plugin-body]')!
-    panel.scrollTop = 350
-    fireEvent.click(open)
-    expect(panel.scrollTop).toBe(0)
-    panel.scrollTop = 120
-    set({ refreshStatus: 'refreshing' })
-    expect(panel.scrollTop).toBe(120)
-    set({ refreshStatus: 'idle', packages: [pkg({ version: '0.17.0' })] })
-    expect(panel.scrollTop).toBe(120)
-    fireEvent.click(screen.getByRole('button', { name: en.backToList }))
-    expect(panel.scrollTop).toBe(0)
-    expect(screen.getByRole('heading', { name: en.title, level: 1 })).toBeTruthy()
-  })
-
   it('shows no tabs without contributions, and switches between Installed and a contributed tab', () => {
     const { actions, navigation, setTabs } = renderTab({ packages: [pkg()] }, {}, {
       'plugins.tab:discover': (_view, owner) => {

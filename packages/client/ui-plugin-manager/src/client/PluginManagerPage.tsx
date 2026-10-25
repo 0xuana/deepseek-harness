@@ -8,7 +8,7 @@
  * the page declares.
  */
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { PluginInstallFailureKind, Registry } from '@deepseek-ai/dsh-api-remotes/client'
 import {
@@ -1527,11 +1527,6 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const selectedTab = props.useStore(state => state.tab)
   // A contributed tab that left the ledger falls back to Installed, and stays there when it returns.
   const tab = tabs.some(item => item.id === selectedTab) ? selectedTab : INSTALLED_TAB
-  const pageRef = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    /* v8 ignore else -- The unconditional body attaches its ref before this layout effect. */
-    if (pageRef.current !== null) pageRef.current.scrollTop = 0
-  }, [view, tab])
   useEffect(() => { if (tab !== selectedTab) setTab(tab) }, [tab, selectedTab, setTab])
   const tabsId = useId()
   const [activation, setActivation] = useState<string | null>(null)
@@ -1642,7 +1637,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
           <h1 className={css.pageTitle}>{t('moreTitle')}</h1>
         </header>
       ) : null}
-      <div ref={pageRef} className={css.pageBody} data-plugin-body>
+      <div className={css.pageBody} data-plugin-body>
         {showsMainList
           ? (
             <div
