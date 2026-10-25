@@ -837,6 +837,27 @@ describe('PluginManagerPage', () => {
     expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith('@deepseek-ai/dsh-experimental-agent-team-profile', true)
   })
 
+  it('keeps the persisted selection while marking a failed component as a problem', () => {
+    renderTab({ packages: [pkg({ name: 'cua', enabled: true, rows: [row({ phase: 'failed', diagnostic: 'native preparation unavailable' })] })] })
+    expect(document.querySelector('[data-plugin-package="cua"]')?.getAttribute('data-plugin-status')).toBe('problem')
+    expect(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'cua') }).getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'cua') }))
+    expect(screen.getByText(`${en.reasonLabel}: native preparation unavailable`)).toBeTruthy()
+  })
+
+  it('shows Computer Use permission guidance on the experimental plugins page', () => {
+    const description = 'Review application access before use.'
+    const { actions } = renderTab({ packages: [pkg({
+      name: '@deepseek-ai/dsh-cua-bundle', enabled: false, optional: true, installed: false,
+      meta: { title: 'Computer Use', description },
+    })] })
+    fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
+    expect(screen.getByText(en.statusBeta)).toBeTruthy()
+    expect(screen.getByText(description)).toBeTruthy()
+    fireEvent.click(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'Computer Use') }))
+    expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith('@deepseek-ai/dsh-cua-bundle', true)
+  })
+
   it.each([
     ['@deepseek-ai/dsh-experimental-agent-team-profile', true],
     ['@deepseek-ai/dsh-experimental-auto-review', true],
@@ -1587,7 +1608,7 @@ describe('PluginManagerPage', () => {
     fireEvent.click(toggle('row-2'))
     expect(actions.setRowEnabled).toHaveBeenCalledTimes(1)
     expect(toggle('include:row-5')).toHaveProperty('disabled', true)
-    expect(within(detail).getByText(en.rowPhaseFailed)).toBeTruthy()
+    expect(within(detail.querySelector<HTMLElement>('[data-plugin-row="include:row-3"]')!).getByText(en.rowPhaseFailed)).toBeTruthy()
     expect(within(detail).getByText(en.rowPhaseLoading)).toBeTruthy()
     expect(within(detail).getByText(en.rowPhaseUnloading)).toBeTruthy()
     expect(document.querySelector('[data-plugin-row="include:row-3"]')?.getAttribute('data-state')).toBe('failed')
@@ -2569,7 +2590,6 @@ it('supplies the accepted entry values and atomic mutation action to a custom pl
   expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['count'], value: 3 }], 7)
 })
 
-
 describe('on-demand Official bundles', () => {
   const name = '@deepseek-ai/dsh-subagent-codex'
   const title = 'Codex subagent'
@@ -2676,6 +2696,28 @@ describe('on-demand Official bundles', () => {
     expect(detail.querySelector('[data-plugin-rows]')).toBeNull()
   })
 })
+
+it('uses the same activation guidance from a package detail switch', () => {
+  const name = 'dsh-better-sidebar'
+  const { set, actions } = renderTab({ packages: [pkg({ enabled: false })] }, { bundles: new Set([name]) }, {
+    [`plugins.bundle.activation:${name}`]: (_view, owner) => <button onClick={(owner as PluginActivationOwnerProps).onDismiss}>Finish setup</button>,
+    [`plugins.bundle.config:${name}`]: () => <div>Bundle setup</div>,
+  })
+  fireEvent.click(screen.getByRole('button', { name: `View ${name}` }))
+  expect(screen.getByText('Bundle setup')).toBeTruthy()
+  fireEvent.click(screen.getByRole('switch'))
+  expect(actions.setEnabled).toHaveBeenCalledWith(name, true)
+  set({ packages: [pkg()], busy: [name] })
+  expect(screen.queryByText('Finish setup')).toBeNull()
+  set({ busy: [] })
+  fireEvent.click(screen.getByText('Finish setup'))
+  expect(screen.queryByText('Finish setup')).toBeNull()
+  expect(screen.getByText('Bundle setup')).toBeTruthy()
+  fireEvent.click(screen.getByRole('switch'))
+  set({ packages: [pkg({ enabled: false })] })
+  expect(screen.queryByText('Finish setup')).toBeNull()
+})
+
 
 it('keeps bundle configuration mounted while its operation is pending', () => {
   const name = 'dsh-better-sidebar'
