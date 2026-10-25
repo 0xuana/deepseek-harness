@@ -2,7 +2,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { cpSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { cp } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -125,7 +125,7 @@ export function primaryRuntimePayloadDigest(
   // Identity preserves key order within the selected target, wheel records and distribution map, plus wheel-entry order.
   // Bump format when extraction or assembly changes payload bytes without changing locked inputs.
   return createHash('sha256').update(JSON.stringify({
-    format: 7, target, pythonVersion, pythonRelease, nodeVersion: pnpmVersion === undefined ? undefined : nodeVersion,
+    format: 8, target, pythonVersion, pythonRelease, nodeVersion: pnpmVersion === undefined ? undefined : nodeVersion,
     artifact: runtimeLock.targets[target], wheels, pythonPackages, pnpm: pnpmVersion,
   })).digest('hex')
 }
@@ -146,6 +146,25 @@ export async function unpackPrimaryRuntimeWheel(archive: string, destination: st
       }
     },
   })
+}
+
+/**
+ * Remove packages bundled under pnpm's dist/node_modules whose npm `os`/`cpu` fields exclude the target.
+ * The pnpm tarball carries every platform's optional native packages, such as `@reflink/reflink-darwin-x64`.
+ * @param pnpm - Unpacked pnpm package directory.
+ * @param platform - Target Node.js platform.
+ * @param arch - Target Node.js architecture.
+ */
+export function prunePnpmForeignNativePackages(pnpm: string, platform: NodeJS.Platform, arch: NodeJS.Architecture): void {
+  const modules = join(pnpm, 'dist', 'node_modules')
+  const admits = (values: string[] | undefined, value: string): boolean => values === undefined
+    || (values.some(entry => !entry.startsWith('!')) ? values.includes(value) : !values.includes(`!${value}`))
+  for (const name of readdirSync(modules).filter(entry => entry !== '.bin')) {
+    for (const directory of name.startsWith('@') ? readdirSync(join(modules, name)).map(child => join(modules, name, child)) : [join(modules, name)]) {
+      const { os, cpu } = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')) as { os?: string[]; cpu?: string[] }
+      if (!admits(os, platform) || !admits(cpu, arch)) rmSync(directory, { recursive: true })
+    }
+  }
 }
 
 /**
@@ -195,6 +214,8 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
     const output = join(staging, 'payload')
     const dependencies = join(output, 'dependencies')
     mkdirSync(dependencies, { recursive: true })
+    const platform = target === 'win-x64' ? 'win32' : target.startsWith('linux-') ? 'linux' : 'darwin'
+    const arch = target.endsWith('-arm64') ? 'arm64' : 'x64'
     let pnpmVersion: string | undefined
     if (!options.pythonOnly) {
       const node = join(dependencies, 'node')
@@ -209,12 +230,13 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
         pnpmVersion = (JSON.parse(readFileSync(pnpmManifest, 'utf8')) as { version: string }).version
         await cp(dirname(pnpmManifest), join(dependencies, 'pnpm'), { recursive: true, dereference: true })
       }
+      prunePnpmForeignNativePackages(join(dependencies, 'pnpm'), platform, arch)
     }
     await extractTar({ file: await pythonArchive(target, paths.downloads), cwd: dependencies })
     const manifest: PrimaryRuntimeManifest = {
       desktopVersion: options.version,
-      platform: target === 'win-x64' ? 'win32' : target.startsWith('linux-') ? 'linux' : 'darwin',
-      arch: target.endsWith('-arm64') ? 'arm64' : 'x64',
+      platform,
+      arch,
       payloadDigest: primaryRuntimePayloadDigest(target, lock, pnpmVersion),
       python: lock.pythonVersion,
       ...(pnpmVersion === undefined ? {} : { node: lock.nodeVersion, pnpm: pnpmVersion }),

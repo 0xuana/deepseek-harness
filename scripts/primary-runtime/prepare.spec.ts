@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { zipSync } from 'fflate'
 import { expect, it } from 'vitest'
-import { downloadPrimaryRuntimeAsset, prepareOfficeSkillAssets, primaryRuntimePayloadDigest, smokePrimaryRuntime, unpackPrimaryRuntimeWheel } from './prepare.ts'
+import { downloadPrimaryRuntimeAsset, prepareOfficeSkillAssets, primaryRuntimePayloadDigest, prunePnpmForeignNativePackages, smokePrimaryRuntime, unpackPrimaryRuntimeWheel } from './prepare.ts'
 import lock from './lock.json' with { type: 'json' }
 
 it('covers every SDK wheel target with the shared interpreter lock', () => {
@@ -166,4 +166,27 @@ it('keeps carrier pnpm versions aligned with the shared payload build', () => {
   }
   expect(desktop.devDependencies.pnpm).toBe(root.devDependencies.pnpm)
   expect(root.packageManager).toBe(`pnpm@${root.devDependencies.pnpm}`)
+})
+
+it('keeps only pnpm-bundled native packages that the target platform and architecture admit', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'primary-pnpm-natives-'))
+  try {
+    const modules = join(root, 'dist', 'node_modules')
+    const packages: Record<string, { os?: string[]; cpu?: string[] }> = {
+      'semver': {}, '@reflink/reflink': {},
+      '@reflink/reflink-darwin-arm64': { os: ['darwin'], cpu: ['arm64'] },
+      '@reflink/reflink-darwin-x64': { os: ['darwin'], cpu: ['x64'] },
+      '@reflink/reflink-win32-x64-msvc': { os: ['win32'], cpu: ['x64'] },
+      'not-windows': { os: ['!win32'] },
+      'not-darwin': { os: ['!darwin'] },
+    }
+    for (const [name, fields] of Object.entries(packages)) {
+      await mkdir(join(modules, name), { recursive: true })
+      await writeFile(join(modules, name, 'package.json'), JSON.stringify({ name, ...fields }))
+    }
+    await mkdir(join(modules, '.bin'))
+    prunePnpmForeignNativePackages(root, 'darwin', 'arm64')
+    expect((await readdir(modules)).sort()).toEqual(['.bin', '@reflink', 'not-windows', 'semver'])
+    expect((await readdir(join(modules, '@reflink'))).sort()).toEqual(['reflink', 'reflink-darwin-arm64'])
+  } finally { await rm(root, { recursive: true, force: true }) }
 })
