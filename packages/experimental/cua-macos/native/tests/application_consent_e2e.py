@@ -42,8 +42,12 @@ def main():
             cleanup.callback(subprocess.run, [register, "-u", str(app)], check=True,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
             def stop_started_fixture():
+                pids = {item["pid"] for item in helper.call("findApps", {"query": str(app), "maxAppMatches": 20})
+                        if item["isRunning"]}
                 if state.exists():
-                    stop_application(json.loads(state.read_text())["pid"])
+                    pids.add(json.loads(state.read_text())["pid"])
+                for pid in pids:
+                    stop_application(pid)
             cleanup.callback(stop_started_fixture)
             return app, executable, state, info
 
@@ -64,7 +68,8 @@ def main():
                 plist.write_bytes(plistlib.dumps(info))
             helper.call("launchApp", {"appHandle": pending["appHandle"]}, error_code="STALE_APP")
             assert not state.exists(), "The replaced application was started before refusal"
-            assert not any(app["isRunning"] for app in helper.call("findApps", {"query": str(app), "maxAppMatches": 20}))
+            assert not any(item["isRunning"] for item in helper.call("findApps", {"query": str(app), "maxAppMatches": 20})), \
+                "The replaced application is running after refusal"
 
         identities = []
         for name, bundle_id in [("Version One", identifier), ("Version Two", identifier), ("Other", identifier + ".other")]:
