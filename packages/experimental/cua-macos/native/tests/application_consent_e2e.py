@@ -1,6 +1,7 @@
 """Verify bundle and executable-path consent, optionally with fixture-only GUI operations."""
 import argparse
 import base64
+import ctypes
 from contextlib import ExitStack
 import hashlib
 import json
@@ -33,7 +34,9 @@ def main():
         if args.desktop:
             assert helper.call("getCapabilities", {})["permissions"] == {"accessibility": True, "screenRecording": True}
 
+        checked_windows = 0
         def check_window(app, state_path):
+            nonlocal checked_windows
             if not args.desktop:
                 return
             state = wait_for_state(state_path, lambda value: value["pid"] == app["pid"] and value["windowId"] > 0)
@@ -44,6 +47,7 @@ def main():
             wait_for_state(state_path, lambda value: value["axPresses"] == state["axPresses"] + 1)
             captured = helper.call("screenshot", owner)
             assert base64.b64decode(captured["data"], validate=True).startswith(b"\x89PNG\r\n\x1a\n")
+            checked_windows += 1
 
         register = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
         def fixture(name, bundle_id):
@@ -139,8 +143,34 @@ def main():
             finally:
                 stop(process)
         assert standalone_ids[0] == standalone_ids[1], standalone_ids
+
+        libsystem = ctypes.CDLL(None, use_errno=True)
+        libsystem.proc_pidpath.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32]
+        libsystem.proc_pidpath.restype = ctypes.c_int
+        for name, bundle_id in [("Deleted bundle executable", identifier), ("Deleted path executable", None)]:
+            app, executable, state, _ = fixture(name, bundle_id)
+            pending = helper.call("getApp", {"selector": str(app)})
+            launched = helper.call("launchApp", {"appHandle": pending["appHandle"]})
+            pid = launched["pid"]
+            wait_for_state(state, lambda value: value["pid"] == pid and value["windowId"] > 0)
+            executable.unlink()
+            buffer = ctypes.create_string_buffer(4096)
+            ctypes.set_errno(0)
+            copied = libsystem.proc_pidpath(pid, buffer, len(buffer))
+            path_error = ctypes.get_errno()
+            if bundle_id is None and copied == 0:
+                failure = helper.call("getApp", {"selector": str(pid)}, error_code="APP_PATH_UNAVAILABLE")
+                assert "exited" not in failure["message"], failure
+            else:
+                running = helper.call("getApp", {"selector": str(pid)})
+                authorization = running["authorization"]
+                assert authorization["id"] == pending["authorization"]["id"] and authorization["persistable"] is True, authorization
+                if copied == 0:
+                    assert "executablePath" not in authorization, authorization
+                check_window(running, state)
+            print(f"Deleted executable: bundle_id={bundle_id is not None}, proc_pidpath_bytes={copied}, errno={path_error}")
         print("PASS: changed bundles cannot launch; cold/running and direct-bundle identities agree; copies share consent; other IDs stay separate; missing IDs and standalone GUIs use persistent paths across restarts"
-              + ("; all seven GUI instances expose controls, receive an AX click and produce a PNG" if args.desktop else ""))
+              + (f"; {checked_windows} GUI instances expose controls, receive an AX click and produce a PNG" if args.desktop else ""))
 
 
 if __name__ == "__main__":

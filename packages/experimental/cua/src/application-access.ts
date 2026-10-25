@@ -13,7 +13,7 @@ import { CuaPermissionStore, type ApplicationPermission, type PermissionTransact
 /** Native identity admission occurs before any application observation or input. */
 export const ApplicationAuthorizationResult = z.object({
   id: z.string().regex(/^[a-f0-9]{64}$/).transform(value => value as CuaApplicationId),
-  name: z.string(), executablePath: z.string().min(1), persistable: z.boolean(),
+  name: z.string(), executablePath: z.string().min(1).optional(), persistable: z.boolean(),
 })
 /** Application consent uses one profile store, including conversation-scoped decisions. */
 export interface AccessOptions { store: CuaPermissionStore }

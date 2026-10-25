@@ -66,6 +66,20 @@ it('refuses raw handle dispatch until getApp obtains consent', async () => {
   expect(dispatch).not.toHaveBeenCalled()
 })
 
+it('saves, reuses, and revokes a native identity without executable path metadata', async () => {
+  const f = await setup('Always allow')
+  const withoutPath = ApplicationAuthorizationResult.parse({ id: identity.id, name: identity.name, persistable: true })
+  await f.access.select(f.agent, f.client, handle, withoutPath, signal)
+  expect(f.answer.mock.calls[0]![0].questions[0]!.options).toContainEqual({ label: 'Always allow' })
+  expect(f.grants()).toEqual([{ id: identity.id, name: identity.name }])
+  const second = 'another-handle' as CuaAppHandle
+  await f.access.select(f.agent, f.client, second, withoutPath, signal)
+  expect(f.answer).toHaveBeenCalledOnce()
+  await expect(f.access.run(f.client, second, signal, async () => 'observed')).resolves.toBe('observed')
+  await f.access.revoke(identity.id)
+  await expect(f.access.run(f.client, second, signal, async () => 'unexpected')).rejects.toThrow()
+})
+
 it.each([
   { persistable: true, writable: true, withIcon: true, offeredAlways: true },
   { persistable: false, writable: true, withIcon: false, offeredAlways: false },

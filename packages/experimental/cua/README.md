@@ -67,6 +67,8 @@ The [permission store](src/permission-store.ts) uses `storageDomain` with the co
 
 Legacy `allowedApps` are imported on first store access and never reapplied after migration. The old configuration can be removed after checking the permission page. Grants, denials and the option to ask again are durable; the page still omits conversation-only grants. Standalone compositions without a profile retain only process-local decisions; a profile without domain storage refuses authorization operations.
 
+Grant executable paths are optional display metadata. Missing paths omit the tooltip and icon query while retaining the application name and revoke action. Existing stored records remain valid; new records without paths require a reader that supports the optional field. Storage failures still reject authorization and dispatch without substituting temporary permission.
+
 The permission Remote also exposes `ptcConfiguration()` and `enablePersistentPtc()` for the detail-page runtime setting. Reads inspect the existing runtime and editable profile entry. Explicit writes use `configEditor.edit()` to preserve other fields and apply normal Loader reload; an already-persistent runtime is left intact. This setting is separate from system and application authorization.
 
 The provider calls [installCua](src/index.ts) with its prepared helper, connection factory, and guidance. [NativeClient](src/native-client.ts) owns request correlation, byte limits, cancellation acknowledgement, and failure settlement. The platform connector owns startup and connection cleanup. The shared executor retains one connection per Agent and joins in-flight image writes during disposal.

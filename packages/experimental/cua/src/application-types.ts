@@ -1,7 +1,7 @@
 /** Application identities admitted from native selection or saved provider configuration. */
 import type { Branded } from '@deepseek-ai/dsh-brand'
 
-/** Helper-computed digest of platform application information, a process instance or a pending executable. */
+/** Native application consent digest, separate from process and window handles. */
 export type CuaApplicationId = Branded<'CuaApplicationId'>
 /** Identity shown to the human before application access is granted. */
 export interface CuaApplicationGrant {
@@ -9,6 +9,6 @@ export interface CuaApplicationGrant {
   id: CuaApplicationId
   /** Application label presented when the decision was made. */
   name: string
-  /** Canonical executable path presented with the application label. */
-  executablePath: string
+  /** Canonical executable path for display and icons; absent when the operating system cannot provide it. */
+  executablePath?: string
 }

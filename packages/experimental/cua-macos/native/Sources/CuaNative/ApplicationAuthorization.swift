@@ -5,23 +5,29 @@ import Foundation
 
 enum ApplicationAuthorization {
     // Versions and copies with the same bundle identifier share consent, regardless of signing.
-    static func describe(_ identity: ProcessIdentity, name: String, expectedExecutablePath: String?) throws -> JSONValue {
+    static func describe(_ identity: ProcessIdentity, name: String, expectedExecutablePath: String?,
+                         readBundle: (Int32) -> (identifier: String?, url: URL?) = runningBundle,
+                         readPath: (Int32) -> Result<String, NativeFailure> = NativePlatform.executablePathResult) throws -> JSONValue {
         try NativePlatform.verify(identity)
-        guard let executablePath = NativePlatform.executablePath(identity.pid) else {
-            throw NativeFailure(code: "APP_UNAVAILABLE", message: "Cannot identify the application executable")
-        }
-        let path = URL(fileURLWithPath: executablePath).resolvingSymlinksInPath().path
-        if let expectedExecutablePath, path != URL(fileURLWithPath: expectedExecutablePath).resolvingSymlinksInPath().path {
+        let bundle = readBundle(identity.pid)
+        var bundleID = bundle.identifier.flatMap { $0.isEmpty ? nil : $0 }
+        let pathResult = readPath(identity.pid)
+        let path = (try? pathResult.get()).map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
+        if let path, let expectedExecutablePath, path != URL(fileURLWithPath: expectedExecutablePath).resolvingSymlinksInPath().path {
             throw NativeFailure(code: "STALE_APP", message: "Application executable changed during selection; select the application again")
         }
-        let application = NSRunningApplication(processIdentifier: identity.pid)
-        var bundleID = application?.bundleIdentifier
-        if bundleID?.isEmpty != false, let url = application?.bundleURL,
+        if bundleID == nil, let path, let url = bundle.url,
            let installed = InstalledApplication.read(url), installed.executablePath == path {
             bundleID = installed.bundleID
         }
         try NativePlatform.verify(identity)
-        return record(bundleID: bundleID, name: name, executablePath: path)
+        if bundleID?.isEmpty != false, case .failure(let error) = pathResult { throw error }
+        return try record(bundleID: bundleID, name: name, executablePath: path)
+    }
+
+    static func runningBundle(_ pid: Int32) -> (identifier: String?, url: URL?) {
+        let application = NSRunningApplication(processIdentifier: pid)
+        return (application?.bundleIdentifier, application?.bundleURL)
     }
 
     static func describeInstalled(_ app: InstalledApplication) throws -> JSONValue {
@@ -29,16 +35,18 @@ enum ApplicationAuthorization {
               current.bundleID == app.bundleID, current.executablePath == app.executablePath else {
             throw NativeFailure(code: "STALE_APP", message: "Application changed after selection; select it again")
         }
-        return record(bundleID: current.bundleID, name: app.name, executablePath: current.executablePath)
+        return try record(bundleID: current.bundleID, name: app.name, executablePath: current.executablePath)
     }
 
-    private static func record(bundleID: String?, name: String, executablePath: String) -> JSONValue {
-        let path = URL(fileURLWithPath: executablePath).resolvingSymlinksInPath().path
+    private static func record(bundleID: String?, name: String, executablePath: String?) throws -> JSONValue {
+        let path = executablePath.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
         let identity: String
         if let bundleID, !bundleID.isEmpty { identity = "macos:bundle-id:" + bundleID }
-        else { identity = "macos:executable-path:" + path }
-        return .object(["id": .string(digest(identity)), "name": .string(name),
-                        "executablePath": .string(path), "persistable": .bool(true)])
+        else if let path { identity = "macos:executable-path:" + path }
+        else { throw NativePlatform.executablePathFailure(0) }
+        var value: [String: JSONValue] = ["id": .string(digest(identity)), "name": .string(name), "persistable": .bool(true)]
+        if let path { value["executablePath"] = .string(path) }
+        return .object(value)
     }
 
     private static func digest(_ value: String) -> String {

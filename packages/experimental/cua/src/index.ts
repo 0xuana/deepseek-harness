@@ -82,7 +82,7 @@ export const CuaConfig = Schema.object({
   agentPreset: Schema.union([Schema.string().min(1), Schema.const(false)]).default('ptc'),
   allowedApps: Schema.array(Schema.object({
     id: Schema.string().pattern(/^[a-f0-9]{64}$/).required(),
-    name: Schema.string().required(), executablePath: Schema.string().min(1).required(),
+    name: Schema.string().required(), executablePath: Schema.string().min(1),
   })).default([]),
   helperPath: Schema.string(),
   buildTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(300_000),
