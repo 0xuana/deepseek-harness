@@ -93,7 +93,7 @@ enum NativePlatform {
     }
     static func processIdentityFailure(_ error: Int32) -> NativeFailure {
         if error == ESRCH {
-            return NativeFailure(code: "APP_UNAVAILABLE", message: "Application process no longer exists; select the application again")
+            return NativeFailure(code: "APP_UNAVAILABLE", message: "macOS could not find the application process; select the application again")
         }
         if error == 0 {
             return NativeFailure(code: "PROCESS_INSPECTION_FAILED", message: "macOS returned incomplete application process information; check system access before selecting it again")
