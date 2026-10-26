@@ -229,7 +229,7 @@
 }
 ```
 
-## B restored: normal mode and expanded Files directory
+## B restored: normal mode and collapsed Files directory
 
 ```json
 {
@@ -249,9 +249,7 @@
   "panelOuterWidth": 756,
   "coversViewport": false,
   "resizeHandleWidth": 8,
-  "expandedDirectories": [
-    "workspace"
-  ],
+  "expandedDirectories": [],
   "panes": [
     {
       "active": true,
