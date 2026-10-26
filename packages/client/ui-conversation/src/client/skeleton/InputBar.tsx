@@ -17,7 +17,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import type { ChangeEvent, KeyboardEvent, MouseEvent } from 'react'
 import clsx from 'clsx'
 import {
-  IconPlusOutlineMedium, IconWarningOutlineRegular, isMobileDevice, Toast, Tooltip,
+  focusWithoutRing, IconPlusOutlineMedium, IconWarningOutlineRegular, isMobileDevice, Toast, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 // Type-only: the `plan` projection key merge (the TodoDock posture — the
 // composer reads a host-computed value; the domain owns the key).
@@ -196,10 +196,9 @@ export const InputBar = memo(function InputBar({
     focusDraftEditor(editor, revealSelection)
   }, [locked, sessionId, editor])
 
-  // A busy phase leaves the box read-only, and the browser then moves the
-  // keyboard to the document body. When the phase ends with the keyboard still
-  // there, return it, so the next message can be typed as soon as a send
-  // settles; a control the user moved to meanwhile keeps the keyboard.
+  // A read-only phase can move focus to the body. Restore the composer's
+  // keyboard position without reopening the mobile keyboard or taking focus
+  // from a control the user selected meanwhile.
   const busyPhaseSeen = useRef(false)
   useEffect(() => {
     if (machineBusy) {
@@ -209,7 +208,12 @@ export const InputBar = memo(function InputBar({
     if (!busyPhaseSeen.current) return
     busyPhaseSeen.current = false
     if (locked || editor === null) return
-    if (document.activeElement === null || document.activeElement === document.body) focusDraftEditor(editor, revealSelection)
+    if (document.activeElement !== null && document.activeElement !== document.body) return
+    if (isMobileDevice()) {
+      if (cardRef.current !== null) focusWithoutRing(cardRef.current, { preventScroll: true })
+    } else {
+      focusDraftEditor(editor, revealSelection)
+    }
   }, [machineBusy])
 
   // A persisted draft arrives AFTER the unlock effect: DefaultConversationViews

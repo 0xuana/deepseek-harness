@@ -385,11 +385,15 @@ describe('composer focus handoff', () => {
     expect(lexicalFocus).toHaveBeenCalled()
   })
 
-  it.each<[string, SubmitOutcome]>([
-    ['the Host accepts it', { kind: 'success' }],
-    ['it fails', { kind: 'error', text: 'send failed' }],
-  ])('returns the keyboard to the editor once a sent message settles because %s', async (_label, outcome) => {
-    const { shell, textarea, sink } = bench()
+  it.each<[string, SubmitOutcome, boolean]>([
+    ['desktop acceptance', { kind: 'success' }, false],
+    ['desktop failure', { kind: 'error', text: 'send failed' }, false],
+    ['mobile acceptance', { kind: 'success' }, true],
+    ['mobile failure', { kind: 'error', text: 'send failed' }, true],
+  ])('returns focus within the composer after %s', async (_label, outcome, mobile) => {
+    const device = vi.spyOn(uiPrimitives, 'isMobileDevice').mockReturnValue(mobile)
+    onTestFinished(() => { device.mockRestore() })
+    const { view, shell, textarea, sink } = bench()
     writeDraft(shell, 'draft text')
     act(() => { shell.focus() })
     let settle!: (outcome: SubmitOutcome) => void
@@ -403,7 +407,7 @@ describe('composer focus handoff', () => {
     await act(async () => { settle(outcome) })
 
     expect(textarea.getAttribute('contenteditable')).toBe('true')
-    expect(document.activeElement).toBe(textarea)
+    expect(document.activeElement).toBe(mobile ? view.container.querySelector('[data-composer-card]') : textarea)
   })
 
   it('leaves the keyboard with a control the user moved to while a message was sending', async () => {
