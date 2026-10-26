@@ -46,9 +46,6 @@
       "path": "../../typert/protocol"
     },
     {
-      "path": "../../settings/settings"
-    },
-    {
       "path": "../../interaction/user-questions"
     },
     {
@@ -65,6 +62,15 @@
     },
     {
       "path": "../../preset/agent-preset-registry"
+    },
+    {
+      "path": "../../storage/storage-domain"
+    },
+    {
+      "path": "../../boot/app-boot"
+    },
+    {
+      "path": "../../boot/config-editor"
     }
   ],
   "exclude": [

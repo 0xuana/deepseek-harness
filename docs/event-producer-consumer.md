@@ -21,11 +21,11 @@ This matrix shows which packages dispatch each harness-owned event and which pac
 | `agent/request-error` | `waterfall` | [`packages/core/agent/src/runtime-types.ts:389`](../packages/core/agent/src/runtime-types.ts) | [`agent-loop`](../packages/core/agent-loop) (`waterfall`) | [`compaction-basic`](../packages/compaction/compaction-basic), [`compaction-image-offload`](../packages/compaction/compaction-image-offload), [`llm-retry`](../packages/llm/llm-retry) |
 | `agent/status` | `emit` | [`packages/core/agent/src/runtime-types.ts:309`](../packages/core/agent/src/runtime-types.ts) | [`agent-loop`](../packages/core/agent-loop) (`emit`) | [`acp`](../packages/acp/acp), `agent-team`, [`compaction-basic`](../packages/compaction/compaction-basic), [`goal-round-driver`](../packages/goal/goal-round-driver), `server`, `session-controller` |
 | `agent/turn-stopping` | `serial` | [`packages/core/agent/src/runtime-types.ts:417`](../packages/core/agent/src/runtime-types.ts) | [`agent-loop`](../packages/core/agent-loop) (`serial`) | [`hooks-claude-code`](../packages/experimental/hooks-claude-code), [`hooks-codex`](../packages/experimental/hooks-codex), [`workspace-changes`](../packages/deliverables/workspace-changes) |
-| `api-session/activity` | `emit` | [`packages/api/session-controller/src/types.ts:600`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
-| `api-session/added` | `emit` | [`packages/api/session-controller/src/types.ts:580`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
-| `api-session/error` | `emit` | [`packages/api/session-controller/src/types.ts:607`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
-| `api-session/removed` | `emit` | [`packages/api/session-controller/src/types.ts:586`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
-| `api-session/status` | `emit` | [`packages/api/session-controller/src/types.ts:593`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
+| `api-session/activity` | `emit` | [`packages/api/session-controller/src/types.ts:689`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
+| `api-session/added` | `emit` | [`packages/api/session-controller/src/types.ts:669`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
+| `api-session/error` | `emit` | [`packages/api/session-controller/src/types.ts:696`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
+| `api-session/removed` | `emit` | [`packages/api/session-controller/src/types.ts:675`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
+| `api-session/status` | `emit` | [`packages/api/session-controller/src/types.ts:682`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
 | `app-boot/config-reload` | `emit` | [`packages/boot/app-boot/src/index.ts:53`](../packages/boot/app-boot/src/index.ts) | [`app-boot`](../packages/boot/app-boot) (`emit`) | [`settings`](../packages/settings/settings) |
 | `approval/request` | `waterfall` | [`packages/interaction/user-approval/src/types.ts:87`](../packages/interaction/user-approval/src/types.ts) | [`user-approval`](../packages/interaction/user-approval) (`waterfall`) | [`acp`](../packages/acp/acp), `remotes`, `server` |
 | `authorization/settled` | `emit` | [`packages/credentials/authorization/src/index.ts:57`](../packages/credentials/authorization/src/index.ts) | [`authorization`](../packages/credentials/authorization) (`events.dispatch`) | - |
@@ -105,7 +105,7 @@ This matrix shows which packages dispatch each harness-owned event and which pac
 | `internal/service` | - | `gateway` |
 | `internal/status` | - | [`agent`](../packages/core/agent), `inspector`, `translator`, [`web`](../packages/web/web) |
 | `internal/update` | - | [`app-boot`](../packages/boot/app-boot) |
-| `loader/volatile-update` | - | [`cua`](../packages/experimental/cua), [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-deepseek-api-key`](../packages/llm/llm-deepseek-api-key), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`plugin-market`](../packages/boot/plugin-market), `product-analytics`, `speech-to-text` |
+| `loader/volatile-update` | - | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-deepseek-api-key`](../packages/llm/llm-deepseek-api-key), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`plugin-market`](../packages/boot/plugin-market), `product-analytics`, `speech-to-text` |
 | `slots/changed` | `ui-renderer` (`emit`) | - |
 <!-- END GENERATED event-producer-consumer:undeclared -->
 
