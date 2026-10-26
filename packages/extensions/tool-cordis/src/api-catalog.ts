@@ -2834,19 +2834,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
-    key: 'sessionToolResults',
-    summary: 'Read-only Remote inspection of tool values produced in this Session lifetime.',
-    description: 'Read-only Remote inspection of tool values produced in this Session lifetime.',
-    methods: [
-      {
-        signature: '@Remote({ mode: \'stream\' }) async *watch(request: SessionToolResultRequest, signal: AbortSignal): AsyncIterable<SessionToolResultValue>',
-        description: 'Observe one committed result without loading a Session or reading its history. Values disappear on count eviction or when the exact Session instance leaves the registry. A cold read stays unavailable; opening a new stream observes the current instance. Inspection does not extend a result\'s retention.',
-        parameters: [{ name: 'request', description: 'Authorized Session identity and durable result event sequence.' }, { name: 'signal', description: 'Remote consumer lifetime.' }],
-        returns: 'Current availability and changes until cancellation or service disposal.',
-      },
-    ],
-  },
-  {
     key: 'settings',
     summary: 'Project Config schemas into forms and own optional instance-level UI policy.',
     description: 'Project Config schemas into forms and own optional instance-level UI policy.',
@@ -7928,14 +7915,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionTitleUserMessage',
     declaration: 'export interface SessionTitleUserMessage {\n    readonly seq: SessionSeq;\n    readonly text: string;\n}',
-  },
-  {
-    name: 'SessionToolResultRequest',
-    declaration: 'export interface SessionToolResultRequest {\n    readonly sessionId: SessionId;\n    readonly seq: number;\n}',
-  },
-  {
-    name: 'SessionToolResultValue',
-    declaration: 'export type SessionToolResultValue = {\n    readonly available: false;\n} | {\n    readonly available: true;\n    readonly value: JsonValue;\n};',
   },
   {
     name: 'SessionUpdateQueueRequest',

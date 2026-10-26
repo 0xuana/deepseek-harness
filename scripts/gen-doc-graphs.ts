@@ -330,13 +330,6 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Delegates file-reference discovery through the Session Controller\'s established Agent lookup policy.',
   },
   {
-    key: 'sessionToolResults',
-    pkg: 'client-ui-trajectory',
-    title: 'Trajectory live tool-result Remote',
-    mode: 'core',
-    note: 'Retains final tool values only for their live Session instance and invalidates inspectors when that instance unloads.',
-  },
-  {
     key: 'sessionSkillCatalog',
     pkg: 'api-session-controller',
     title: 'Session-addressed skill Remote adapter',
