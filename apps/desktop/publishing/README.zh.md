@@ -33,7 +33,7 @@ description: "将完整 Desktop 安装包与更新清单发布到选定下载服
 
 `DSH_DESKTOP_AUTO_UPDATE_ENV` 同时选择打包写入的 URL 与后续 COS 上传环境，可取 `test` 或 `production`；缺省为 `test`。测试打包通过 `DOWNLOAD_TEST_ORIGIN` 提供 HTTPS origin；生产使用 `https://download.deepseek.com`。上传通过 `DOWNLOAD_TEST_COS_BUCKET` 或 `DOWNLOAD_PROD_COS_BUCKET` 提供所选 bucket。生产清单位于 `dsh-desk/feeds/<target>/`，安装包位于 `dsh-desk/bin/<target>/`。测试发布必须配置 `DOWNLOAD_TEST_RELEASE_ID`：32 位小写十六进制字符，分别插入路径 `dsh-desk/<release-id>/feeds/<target>/` 和 `dsh-desk/<release-id>/bin/<target>/`。YAML 引用、稳定通道别名和 blockmap 都位于该发布目录内。目标为 `mac-arm64`、`mac-x64` 和 `win-x64`。
 
-更新目标与上传凭据都与所选环境对应：
+更新目标与上传凭据都与所选环境对应；生产固定下载还需配置 [EdgeOne 设置](#fixed-downloads)：
 
 | 环境 | 公开 origin | COS bucket | COS 凭据 |
 |---|---|---|---|
@@ -71,9 +71,9 @@ Windows NSIS 上传要求安装包旁存在生成的非空 `.exe.blockmap`。blo
 
 固定安装包下载在仓库根目录使用 `pnpm run upload:latest:mac:arm64`、`pnpm run upload:latest:mac:x64` 或 `pnpm run upload:latest:win:x64`。它们把已完成目标的 DMG 或 EXE 上传到 `desktop/dsh-latest-macos-arm64.dmg`、`desktop/dsh-latest-macos-x64.dmg` 或 `desktop/dsh-latest-windows-x64.exe`。生产 URL 以 `https://download.deepseek.com/` 开头；测试 URL 使用 `DOWNLOAD_TEST_ORIGIN`。两个部署环境均复用目标 dotenv 中的部署、bucket 和凭据、全部常规发布校验以及下述上传审计。每个命令覆盖一个固定对象，不发布更新清单、blockmap 或发布标签。测试固定下载在测试 bucket 中跨发布 ID 共享；包内更新 URL 仍要求原有发布 ID。发布由操作人员显式执行，也允许预发布版本。生产命令随后提交 EdgeOne URL 缓存清除任务，并等待该任务成功。测试上传仍由部署基础设施管理缓存策略。本地回环测试覆盖上传行为；真实 COS 和 CDN 验收由发布操作人员负责。
 
-生产固定下载要求在目标 dotenv 中配置 `DOWNLOAD_PROD_EO_ZONE_ID`。上传器复用 `DOWNLOAD_PROD_COS_SECRET_ID` 和 `DOWNLOAD_PROD_COS_SECRET_KEY`；该身份需要对应站点的 `teo:CreatePurgeTask` 和 `teo:DescribePurgeTasks` 权限，无需新增 CI Secret。可选的 `DOWNLOAD_PROD_EO_TIMEOUT_MS` 和 `DOWNLOAD_PROD_EO_POLL_INTERVAL_MS` 默认分别为 300000 和 5000 毫秒，均须为正数计时器时长，轮询间隔不能大于超时时长。上传前解析必需配置。
+生产固定下载要求在目标 dotenv 中配置 `DOWNLOAD_PROD_EO_ZONE_ID`。上传器复用 `DOWNLOAD_PROD_COS_SECRET_ID` 和 `DOWNLOAD_PROD_COS_SECRET_KEY`；该身份需要对应站点的 `teo:CreatePurgeTask` 和 `teo:DescribePurgeTasks` 权限。本次脚本修改未验证现有密钥权限；启用生产固定上传前，发布操作人员必须确认所选身份具备这两个 EO 操作的权限。无需新增 CI Secret。可选的 `DOWNLOAD_PROD_EO_TIMEOUT_MS` 和 `DOWNLOAD_PROD_EO_POLL_INTERVAL_MS` 默认分别为 300000 和 5000 毫秒，均须为正数计时器时长，轮询间隔不能大于超时时长。上传前解析必需配置。
 
-缓存清除失败或超时时，已上传的安装包仍保持发布，命令以失败状态退出并提示缓存刷新未完成。缓存清除在上传记录根目录下独立保留 `production-<target>-purge-*` 目录，包含 URL、任务 ID、状态事件和最终结果。上传记录中成功的 `result.json` 只确认 COS 写入。使用 `pnpm run purge:latest <target> --job-id <id>` 继续等待已接受的任务；提交结果未知时，先在 EO 确认状态，再用 `pnpm run purge:latest <target>` 提交新任务。这些命令需要生产配置和凭据，无需本地安装包，不上传或回滚文件；连接结束、超时或权限拒绝不代表 EO 已取消任务。按目标串行执行上传和恢复。CI 发布器不发布这些固定下载，也不执行此刷新。
+缓存清除失败或超时时，已上传的安装包仍保持发布，命令以失败状态退出并提示缓存刷新未完成。缓存清除在上传记录根目录下独立保留 `production-<target>-purge-*` 目录，包含带版本号的计划和结果、脚本指纹、URL、任务 ID 和状态事件。上传记录中成功的 `result.json` 只确认 COS 写入。使用 `pnpm run purge:latest <target> --job-id <id>` 继续等待已接受的任务；提交结果未知时，先在 EO 确认状态，再用 `pnpm run purge:latest <target>` 提交新任务。这些命令需要生产配置和凭据，无需本地安装包，不上传或回滚文件；连接中断、超时或权限拒绝不代表 EO 已取消任务。临时查询错误在截止时间内重试；权限和参数错误立即停止。截止时间前始终未找到任务时，单独报告该情况，与任务尚未完成区分。DPAPI 恢复必须复用原凭据启动器以及相同的凭据文件、部署环境、bucket 和目标，添加 `-PurgeOnly` 和已接受的 `-JobId`。按目标串行执行上传和恢复。CI 发布器不发布这些固定下载，也不执行此刷新。
 
 <a id="credentials"></a>
 

@@ -13,7 +13,7 @@ const FAILURE_CODES = new Set(['AccessDenied', 'InternalError', 'NoSuchBucket', 
   'RequestTimeout', 'TimeoutError', 'AbortError', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'ENOSPC', 'EACCES', 'EPERM', 'ENOENT'])
 
 /** Object keys fingerprinted into every upload record to bind evidence to this uploader. */
-const UPLOADER_SOURCES = ['desktop-upload-run.ts', 'upload-target.ts', 'desktop-upload-plan.ts', 'desktop-cos.ts']
+const UPLOADER_SOURCES = ['desktop-upload-run.ts', 'upload-target.ts', 'desktop-upload-plan.ts', 'desktop-cos.ts', 'desktop-edgeone.ts']
 
 async function fingerprint(artifact: DesktopUploadArtifact) {
   const sha512 = createHash('sha512')

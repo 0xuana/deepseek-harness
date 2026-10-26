@@ -110,7 +110,7 @@ export function desktopUpdateMetadataFilename(version, platform, channel = 'nigh
  * @param {string} name - Environment variable to read.
  * @returns {string} Trimmed setting.
  */
-function requiredEnvironmentValue(env, name) {
+export function requiredEnvironmentValue(env, name) {
   const value = env[name]?.trim()
   if (value === undefined || value === '') {
     throw new Error(`desktop auto-update: ${name} must be set to a non-empty value`)

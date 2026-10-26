@@ -58,10 +58,12 @@ $credentials = $null
 $startInfo = $null
 $stage = 'decrypt-file'
 
+if (($PurgeOnly -and (-not $Latest -or $Environment -ne 'production')) -or ($JobId -and -not $PurgeOnly)) {
+    Write-Output 'desktop credentials: invalid arguments; PurgeOnly requires Latest and production; JobId requires PurgeOnly.'
+    exit 1
+}
+
 try {
-    if (($PurgeOnly -and (-not $Latest -or $Environment -ne 'production')) -or ($JobId -and -not $PurgeOnly)) {
-        throw 'PurgeOnly requires Latest and production; JobId requires PurgeOnly.'
-    }
     if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
         throw 'Windows DPAPI is required.'
     }

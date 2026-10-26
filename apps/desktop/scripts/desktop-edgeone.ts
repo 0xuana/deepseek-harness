@@ -1,10 +1,12 @@
 /** Refresh production fixed-installer URLs through EdgeOne with resumable task tracking. */
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import { teo } from 'tencentcloud-sdk-nodejs-teo'
+import type { teo } from 'tencentcloud-sdk-nodejs-teo'
 import type { DesktopPackageTargetName } from './package-target.ts'
-import { desktopLatestInstallerFilename, resolveDesktopAutoUpdateConfig } from './desktop-auto-update-environment.mjs'
+import { desktopLatestInstallerFilename, requiredEnvironmentValue, resolveDesktopAutoUpdateEnvironment, resolveDesktopUploadConfig } from './desktop-auto-update-environment.mjs'
+import { desktopTargetPlatform } from './desktop-build-paths.mjs'
 import { recordPackagingEvent } from './packaging-run.mjs'
 
 /** Validated production destination and credentials; never serialize this value. */
@@ -18,10 +20,14 @@ export interface DesktopPurgeConfig {
   readonly pollIntervalMs: number
 }
 
-function required(env: NodeJS.ProcessEnv, name: string): string {
-  const value = env[name]?.trim()
-  if (!value) throw new DesktopPurgeError(`desktop purge: ${name} must be set in the target dotenv`)
-  return value
+/** SDK operations used by one purge; callers may supply an isolated client. */
+export type DesktopPurgeClient = Pick<InstanceType<typeof teo.v20220901.Client>, 'profile' | 'CreatePurgeTask' | 'DescribePurgeTasks'>
+
+/** Optional existing task, credential-launcher context, and caller-owned SDK client. */
+export interface DesktopPurgeOptions {
+  readonly jobId?: string
+  readonly credentialLauncher?: boolean
+  readonly client?: DesktopPurgeClient
 }
 
 function milliseconds(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
@@ -37,19 +43,23 @@ function milliseconds(env: NodeJS.ProcessEnv, name: string, fallback: number): n
  * Resolve the production URL, EO zone and existing COS credentials before any upload.
  * @param env Target dotenv settings, with any credential-launcher replacement already applied.
  * @param target Fixed installer selected by the operator.
+ * @param publicUrl Uploaded object URL; omitted derives the fixed URL for cache-only recovery.
  * @returns Required EO settings; test deployments and invalid settings throw before network writes.
  */
-export function resolveDesktopPurgeConfig(env: NodeJS.ProcessEnv, target: DesktopPackageTargetName): DesktopPurgeConfig {
-  if (env.DSH_DESKTOP_AUTO_UPDATE_ENV?.trim() !== 'production') throw new DesktopPurgeError('desktop purge: production is required')
-  const update = resolveDesktopAutoUpdateConfig(env, target === 'win-x64' ? 'win32' : 'darwin', target === 'mac-arm64' ? 'arm64' : 'x64')
-  const zoneId = required(env, 'DOWNLOAD_PROD_EO_ZONE_ID')
+export function resolveDesktopPurgeConfig(env: NodeJS.ProcessEnv, target: DesktopPackageTargetName,
+  publicUrl?: string,
+): DesktopPurgeConfig {
+  if (resolveDesktopAutoUpdateEnvironment(env) !== 'production') throw new DesktopPurgeError('desktop purge: production is required')
+  const { platform, arch } = desktopTargetPlatform(target)
+  const update = resolveDesktopUploadConfig(env, platform, arch)
+  const zoneId = requiredEnvironmentValue(env, 'DOWNLOAD_PROD_EO_ZONE_ID')
   if (!/^zone-[a-z0-9]+$/u.test(zoneId)) throw new DesktopPurgeError('desktop purge: DOWNLOAD_PROD_EO_ZONE_ID must name one EO zone')
   const timeoutMs = milliseconds(env, 'DOWNLOAD_PROD_EO_TIMEOUT_MS', 300_000)
   const pollIntervalMs = milliseconds(env, 'DOWNLOAD_PROD_EO_POLL_INTERVAL_MS', 5_000)
   if (pollIntervalMs > timeoutMs) throw new DesktopPurgeError('desktop purge: poll interval must not exceed timeout')
   return {
-    target, zoneId, publicUrl: `${update.origin}/desktop/${desktopLatestInstallerFilename(target)}`,
-    secretId: required(env, 'DOWNLOAD_PROD_COS_SECRET_ID'), secretKey: required(env, 'DOWNLOAD_PROD_COS_SECRET_KEY'),
+    target, zoneId, publicUrl: publicUrl ?? `${update.origin}/desktop/${desktopLatestInstallerFilename(target)}`,
+    secretId: requiredEnvironmentValue(env, update.secretIdEnvName), secretKey: requiredEnvironmentValue(env, update.secretKeyEnvName),
     timeoutMs, pollIntervalMs,
   }
 }
@@ -68,15 +78,33 @@ function safeField(value: unknown, config: DesktopPurgeConfig): string | undefin
   return value
 }
 
+function errorCode(error: unknown, config: DesktopPurgeConfig): string | undefined {
+  return safeField(typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined, config)
+}
+
+function transientQueryError(error: unknown, config: DesktopPurgeConfig): boolean {
+  const code = errorCode(error, config)
+  // The pinned SDK wraps transport failures without preserving their original code.
+  if (code === undefined && error instanceof Error && 'getRequestId' in error && 'getTraceId' in error) {
+    return !('httpCode' in error) || (typeof error.httpCode === 'number' && (error.httpCode === 429 || error.httpCode >= 500))
+  }
+  return code !== undefined && (['RequestLimitExceeded', 'InternalError'].includes(code.split('.')[0]!)
+    || ['ClientNetworkError', 'ClientNetworkSocketTimeoutError', 'ClientNetworkConnectTimeoutError',
+      'RequestTimeout', 'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EAI_AGAIN'].includes(code))
+}
+
 /**
  * Submit one URL purge, or wait for an existing task without submitting again.
  * @param config Validated production destination and credentials.
  * @param recordsRoot Parent directory for separate purge records; upload records remain intact.
- * @param existingJobId EO task to resume; omitted submits once, without automatic write retries.
+ * @param options Existing task, launcher context, and optional SDK client; submission is never retried.
  * @returns Resolves only after EO reports success for the exact target URL and task ID.
  * @throws DesktopPurgeError on failure, timeout or unknown submission outcome; uploaded bytes remain unchanged.
  */
-export async function purgeDesktopInstaller(config: DesktopPurgeConfig, recordsRoot: string, existingJobId?: string): Promise<void> {
+export async function purgeDesktopInstaller(config: DesktopPurgeConfig, recordsRoot: string,
+  options: DesktopPurgeOptions = {},
+): Promise<void> {
+  const existingJobId = options.jobId
   if (existingJobId !== undefined && !/^[a-zA-Z0-9-]{1,128}$/u.test(existingJobId)) {
     throw new DesktopPurgeError('desktop purge: invalid --job-id')
   }
@@ -84,6 +112,8 @@ export async function purgeDesktopInstaller(config: DesktopPurgeConfig, recordsR
   let jobId = existingJobId
   let stage = 'prepare'
   let success = false
+  let observedTask = false
+  let lastQueryFailed = false
   let failure: string | undefined
   let rejected = false
   let report: DesktopPurgeError | undefined
@@ -92,11 +122,12 @@ export async function purgeDesktopInstaller(config: DesktopPurgeConfig, recordsR
     directory = await mkdtemp(join(recordsRoot, `production-${config.target}-purge-`))
     process.stdout.write(`desktop purge: record ${directory}\n`)
     await writeFile(join(directory, 'events.jsonl'), '', { flag: 'wx', mode: 0o600, flush: true })
-    await writeFile(join(directory, 'plan.json'), `${JSON.stringify({ zoneId: config.zoneId, publicUrl: config.publicUrl,
+    const sourceSha256 = { 'desktop-edgeone.ts': createHash('sha256').update(await readFile(import.meta.filename)).digest('hex') }
+    await writeFile(join(directory, 'plan.json'), `${JSON.stringify({ schemaVersion: 1, sourceSha256, zoneId: config.zoneId, publicUrl: config.publicUrl,
       target: config.target, jobId, timeoutMs: config.timeoutMs, pollIntervalMs: config.pollIntervalMs })}\n`,
     { flag: 'wx', mode: 0o600, flush: true })
     const httpProfile = { endpoint: 'teo.tencentcloudapi.com', reqTimeout: Math.min(30, config.timeoutMs / 1000) }
-    const client = new teo.v20220901.Client({
+    const client = options.client ?? new (await import('tencentcloud-sdk-nodejs-teo')).teo.v20220901.Client({
       credential: { secretId: config.secretId, secretKey: config.secretKey }, region: '',
       profile: { httpProfile },
     })
@@ -116,12 +147,28 @@ export async function purgeDesktopInstaller(config: DesktopPurgeConfig, recordsR
     }
     stage = 'DescribePurgeTasks'
     while (performance.now() < deadline) {
-      client.profile.httpProfile = { ...httpProfile, reqTimeout: Math.min(30, Math.max(0.001, (deadline - performance.now()) / 1000)) }
-      const response = await client.DescribePurgeTasks({ ZoneId: config.zoneId, Limit: 1000,
-        Filters: [{ Name: 'job-id', Values: [jobId] }, { Name: 'target', Values: [config.publicUrl] }] })
+      client.profile.httpProfile!.reqTimeout = Math.min(30, Math.max(0.001, (deadline - performance.now()) / 1000))
+      let response: Awaited<ReturnType<DesktopPurgeClient['DescribePurgeTasks']>>
+      try {
+        response = await client.DescribePurgeTasks({ ZoneId: config.zoneId, Limit: 1000,
+          Filters: [{ Name: 'job-id', Values: [jobId] }] })
+      } catch (error) {
+        const code = errorCode(error, config)
+        if (!transientQueryError(error, config)) throw error
+        lastQueryFailed = true
+        recordPackagingEvent(directory, { type: 'purge-query-retry', jobId, code: code ?? 'SDKTransportError' })
+        const remaining = deadline - performance.now()
+        if (remaining > 0) await delay(Math.min(config.pollIntervalMs, remaining))
+        continue
+      }
+      lastQueryFailed = false
       if ((response.TotalCount ?? 0) > 1000) throw new DesktopPurgeError('EO task query exceeded its page limit')
       const tasks = response.Tasks?.filter(task => task.JobId === jobId && task.Target === config.publicUrl && task.Type === 'purge_url') ?? []
+      if ((response.Tasks?.length ?? 0) > 0 && tasks.length === 0) {
+        throw new DesktopPurgeError('EO job does not contain the expected URL purge; check the zone, job ID and target')
+      }
       const task = tasks[0]
+      observedTask ||= task !== undefined
       if (tasks.length > 1) throw new DesktopPurgeError('EO returned multiple entries for the URL and task ID')
       const status = task?.Status
       recordPackagingEvent(directory, { type: 'purge-status', jobId, status: safeField(status, config), requestId: safeField(response.RequestId, config) })
@@ -135,13 +182,18 @@ export async function purgeDesktopInstaller(config: DesktopPurgeConfig, recordsR
       const remaining = deadline - performance.now()
       if (remaining > 0) await delay(Math.min(config.pollIntervalMs, remaining))
     }
-    if (!success) throw new DesktopPurgeError('timed out waiting for EO; task completion is unknown')
+    if (!success) throw new DesktopPurgeError(observedTask || lastQueryFailed
+      ? 'timed out waiting for EO; task completion is unknown'
+      : 'EO task was not found before the deadline; check the zone, job ID and EO task history')
   } catch (error) {
-    const code = safeField(typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined, config)
+    const code = errorCode(error, config)
     failure = error instanceof DesktopPurgeError ? error.message : `${stage} failed (${code ?? 'unclassified error'})`
+    const command = options.credentialLauncher
+      ? `rerun upload-with-credentials.ps1 with the original -CredentialFile, -Environment production, -Target ${config.target} and -Bucket; include -Upload -Latest -PurgeOnly${!rejected && jobId ? ` -JobId ${jobId}` : ''}`
+      : `pnpm run purge:latest ${config.target}${!rejected && jobId ? ` --job-id ${jobId}` : ''}`
     const recovery = rejected
-      ? `Resolve the EO failure, then retry with pnpm run purge:latest ${config.target}.`
-      : jobId ? `Resume with pnpm run purge:latest ${config.target} --job-id ${jobId}.`
+      ? `Resolve the EO failure, then ${command}.`
+      : jobId ? `Resume with ${command}.`
         : 'Inspect EO task history before submitting another purge.'
     const permission = code?.startsWith('AuthFailure') || code?.startsWith('UnauthorizedOperation')
       ? ' Check teo:CreatePurgeTask and teo:DescribePurgeTasks permissions.' : ''
@@ -149,8 +201,8 @@ export async function purgeDesktopInstaller(config: DesktopPurgeConfig, recordsR
   } finally {
     if (directory !== undefined) {
       try {
-        await writeFile(join(directory, 'result.json'), `${JSON.stringify({ success, stage, jobId, failure, publicUrl: config.publicUrl })}\n`,
-        { flag: 'wx', mode: 0o600, flush: true })
+        await writeFile(join(directory, 'result.json'), `${JSON.stringify({ schemaVersion: 1, success, stage, jobId, failure, publicUrl: config.publicUrl })}\n`,
+          { flag: 'wx', mode: 0o600, flush: true })
       } catch (error) {
         // An unavailable journal cannot establish completion for a subsequent process.
         report = new DesktopPurgeError(`desktop purge: cannot save result; inspect EO task ${jobId ?? 'history'} and ${directory} before recovery`)

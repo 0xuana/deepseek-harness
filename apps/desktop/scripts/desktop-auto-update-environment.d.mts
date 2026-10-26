@@ -105,3 +105,11 @@ export function resolveDesktopUploadConfig(
  * @returns Validated channel.
  */
 export function resolveDesktopUpdateChannel(env: NodeJS.ProcessEnv): 'nightly' | 'latest'
+
+/**
+ * Read a required nonempty deployment setting.
+ * @param env Packaging or upload settings.
+ * @param name Setting name included in missing-value diagnostics.
+ * @returns Trimmed setting value.
+ */
+export function requiredEnvironmentValue(env: NodeJS.ProcessEnv, name: string): string
