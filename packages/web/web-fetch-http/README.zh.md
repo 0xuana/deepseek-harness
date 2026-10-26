@@ -61,7 +61,9 @@ const page = await ctx.web.fetch({ url: 'https://example.com' })
 
 ### 传输行为
 
-提供方保持请求匿名且有界：只接受不含内嵌凭据且不超过 2,048 个字符的 `http:` 与 `https:` URL。请求经过进程级 dispatcher，因此已安装的代理策略生效，目标地址由系统解析器选择；任何目标地址都被允许。同源重定向会被跟随；跨源重定向会失败并要求重新调用。提供方还强制执行字节、字符、跳数和时间上限，拒绝不支持的内容类型，并发送显式产品 `User-Agent`。它还会解码以逗号拼接多个标签的畸形 charset 声明（`charset=utf-8,gbk`）：正文字节是合法 UTF-8 时使用 UTF-8 候选，否则使用第一个能严格解码正文的候选；若没有任何候选能解码正文，则以 `WEB_UNSUPPORTED_CONTENT_TYPE` 失败。
+提供方保持请求匿名且有界：只接受不含内嵌凭据且不超过 2,048 个字符的 `http:` 与 `https:` URL。请求经过进程级 dispatcher，因此已安装的代理策略生效，目标地址由系统解析器选择；任何目标地址都被允许。同源重定向会被跟随；跨源重定向会失败并要求重新调用。提供方还强制执行字节、字符、跳数和时间上限，拒绝不支持的内容类型，并发送显式产品 `User-Agent`。
+
+对于以逗号或空白拼接、且含有 UTF-8 标签的畸形 charset 声明（例如 `charset=utf-8,gbk`），提供方严格按 UTF-8 解码。非法 UTF-8 以 `WEB_UNSUPPORTED_CONTENT_TYPE` 失败，提供方不会尝试其他编码。字节上限在字符内部截断时，恢复路径省略不完整的末尾序列并返回 `truncated: true`；完整响应必须通过 EOF 检查。合法的单标签声明保持原有的常规解码行为。
 
 ### 失败与恢复
 
@@ -94,7 +96,7 @@ const page = await ctx.web.fetch({ url: 'https://example.com' })
 
 ### 读取路径
 
-抓取先校验 URL，再发送请求。每次同源重定向都重复 URL 校验；跨源重定向在接收响应字节前失败。最终响应按 `Content-Type` 分类、依声明的 charset 解码（畸形的多标签声明会结合正文判定），并在字节上限内读取；解码后的文本再截断到字符上限。
+抓取先校验 URL，再发送请求。每次同源重定向都重复 URL 校验；跨源重定向在接收响应字节前失败。最终响应按 `Content-Type` 分类、依声明的 charset 解码（含有 UTF-8 的畸形声明使用严格 UTF-8 恢复），并在字节上限内读取；解码后的文本再截断到字符上限。
 
 </details>
 
@@ -132,7 +134,8 @@ const page = await ctx.web.fetch({ url: 'https://example.com' })
 
 - **可以访问私有目标**——loopback、内网与云元数据地址与其他主机一样会被抓取。需要阻止模型访问这些地址的部署必须添加 `tools/pre-execute` 策略、网络隔离，或不挂载抓取工具。
 - **只解码文本内容**——包括 html/xhtml 与 `text/*` 加 JSON/XML 家族；缺少 `Content-Type` 或任何二进制类型都会抛出 `WEB_UNSUPPORTED_CONTENT_TYPE`，可提取文本的 PDF 解码属于明确的延期工作。
-- **charset 只来自 `Content-Type` 标头**（默认 UTF-8）——HTML `<meta charset>` 声明会被忽略；声明了但不含任何已知编码的标签会抛出异常，而非回退。
+- **charset 只来自 `Content-Type` 标头**（默认 UTF-8）——HTML `<meta charset>` 声明会被忽略；不支持且不含 UTF-8 恢复标签的声明会抛出异常。
+- **UTF-8 恢复是一种优先规则，不是编码检测**——同一组字节可能同时是合法的 UTF-8 和其他编码，长响应也不例外。恢复路径在这种情况下选择 UTF-8；不含 UTF-8 标签的畸形声明仍不受支持。
 
 <a id="dev-note"></a>
 ### 开发备注

@@ -1,4 +1,4 @@
-# Agent Note: A malformed charset declaration is resolved against the body
+# Agent Note: Malformed charset recovery prefers UTF-8
 
 Status: implemented
 
@@ -6,40 +6,28 @@ English | [中文](2026-10-26-malformed-charset-declaration.zh.md)
 
 ## Problem
 
-A `Content-Type` header can join two encoding labels in one `charset` parameter (`text/html; charset=utf-8,gbk`). The whole parameter reaches `TextDecoder` as a single label, which rejects it, so `web_fetch` failed with `WEB_UNSUPPORTED_CONTENT_TYPE` before reading a body that is valid UTF-8 and renders in a browser. The header is malformed, but its body stays readable, and refusing the page costs more than tolerating the declaration.
+A response can declare `charset=utf-8,gbk` over readable UTF-8 HTML. Passing that entire parameter to `TextDecoder` rejects the page before reading it. Compatibility needs an explicit encoding preference because successful decoding alone cannot identify the server's intended encoding.
 
 ## Decision
 
-`charsetCandidates` splits the declared parameter on comma and whitespace, replaces each label with its canonical `TextDecoder` name (`gb2312` and `gbk` collapse into one candidate), keeps declaration order, drops labels no encoding has, returns the UTF-8 default when the response declares none, and throws the existing `WEB_UNSUPPORTED_CONTENT_TYPE` when a declaration names no encoding at all.
+`decoderForCharset` preserves valid single-label declarations and the absent-header UTF-8 default. If a declaration is unsupported as a whole, it checks its comma- and whitespace-separated labels for UTF-8, including standard aliases. A match selects a fatal UTF-8 decoder; otherwise the declaration fails before the response body is read and the provider cancels the stream.
 
-`decodeBody` decodes with a single candidate as declared and does not probe. Several candidates mean the header names encodings a server cannot mean simultaneously, so the body decides: a UTF-8 candidate wins when the bytes are strictly valid UTF-8; otherwise the first candidate whose strict decode succeeds wins; when no candidate decodes the body, the fetch fails naming the candidates rather than returning replacement characters.
+The provider decodes once. Recovery rejects invalid UTF-8 with `WEB_UNSUPPORTED_CONTENT_TYPE` and preserves the decoding error as its cause. Only an actual byte-cap truncation enables streaming decode, which omits an incomplete suffix and keeps `truncated: true`. Complete responses, including those exactly at the cap, validate the final sequence at EOF.
 
-The UTF-8 precedence comes from how far each decode result can be trusted. A strict UTF-8 decode of GBK text fails, while `TextDecoder('gbk')` accepted four of six UTF-8 test strings, so a legacy label's success does not identify the encoding and only UTF-8 validity does. Single-byte legacy labels such as `windows-1252` accept every byte sequence, so without the precedence an `iso-8859-1,utf-8` declaration over UTF-8 text would decode as `windows-1252`.
-
-The strict probe decodes with `fatal: true` and `stream: true`, so an incomplete final sequence cut by `maxResponseBytes` stays buffered instead of failing the probe; the chosen label's ordinary decode then replaces it. Candidates resolve before the body is read, keeping the path that cancels the stream when a declaration names no encoding.
-
-## Verification
-
-- [`fetch-http.spec.ts`](../../../../packages/web/web-fetch-http/tests/fetch-http.spec.ts) covers the candidate rules (`utf-8,gbk`, the `gb2312`/`gbk` alias pair, an unrecognized label beside a valid one, a declaration naming nothing, the UTF-8 default), the single-candidate path, UTF-8 over `windows-1252`, declaration-order fallback, the no-candidate failure, and a body cut inside a character.
-- The same file fetches through a local HTTP server with `charset=utf-8,gbk` over UTF-8 HTML, with `charset=gbk,utf-8` over GBK bytes, and with a body neither label decodes (rejected).
-- `pnpm exec vitest run packages/web/web-fetch-http/tests --coverage --coverage.include='packages/web/web-fetch-http/src/**/*.ts'` reports 100% statements, branches, functions, and lines for the package.
+UTF-8 recovery is an explicit heuristic, not proof of the original encoding. The bytes `C2 A9` represent `©` in UTF-8 and `漏` in GBK; repeating them preserves that ambiguity at any length. The provider accepts that ambiguity for UTF-8 recovery but does not extend it to arbitrary legacy-encoding guesses.
 
 ## Alternatives considered
 
-**Use the text before the first comma.** The reported header decodes correctly that way, but it presumes the first label is the intended one: `gbk,utf-8` over UTF-8 text and `iso-8859-1,utf-8` over UTF-8 text would decode as the first label and produce mojibake. Rejected.
+**Choose the first declared encoding that decodes.** A GBK body can also decode as `windows-1252` with different text. Declaration order does not resolve the conflict, and single-byte encodings can turn a decoding failure into silent corruption. Rejected.
 
-**Treat a declaration no encoding has as absent and fall back to UTF-8.** A browser reaches its `<meta charset>` prescan through that fallback, but here it would decode genuinely GBK content as UTF-8 without a signal. Rejected; a declaration naming no encoding stays a loud failure.
+**Use strict probes followed by ordinary decoding.** This decodes successful bodies twice. An unflushed streaming probe also accepts an incomplete EOF sequence that the ordinary decoder replaces. One fatal decode with explicit truncation state is sufficient.
 
-**Probe the candidates in declaration order.** Legacy decoders accept UTF-8 byte sequences too readily (four of six samples), so the last declared label would decide UTF-8 content whenever a legacy label precedes it. Rejected.
-
-**Implement the `<meta charset>` prescan instead.** That is the specification's path for a transport declaration a browser cannot use, but it adds HTML scanning to the transport layer, does not help non-HTML text responses, and the reported page decodes once the declaration itself is tolerated. Deferred, and the package README keeps `<meta charset>` as an ignored declaration.
-
-**Keep failing with a clearer error.** Readable content is the common case behind such a header; refusing it costs more than the ambiguity of a permissive decode that still requires the bytes to decode cleanly.
+**Read BOM and HTML meta declarations.** This would add HTML encoding identification and a dependency or parser, with a separate policy for missing metadata and non-HTML content. It remains deferred; the bounded UTF-8 preference resolves the reported response without claiming browser-equivalent detection.
 
 ## Consequences
 
-- The model now receives pages whose header joins labels when the body decodes; when no candidate decodes the body, the failure names the candidates and no replacement-character text reaches the model.
-- A short body can be valid in more than one candidate encoding. The UTF-8 precedence decides then, so a short GBK body declared `gbk,utf-8` can decode as UTF-8; that ambiguity becomes negligible as the body grows.
-- A single-label declaration behaves as before, including the failure for an unrecognized label and the replacement characters from a declared-but-wrong encoding.
-- A declaration naming many encodings costs one strict decode per distinct encoding, bounded by `maxResponseBytes`.
-- `<meta charset>` remains ignored.
+- Malformed declarations containing UTF-8 can return readable text; a failed UTF-8 recovery never falls back to another encoding or inserts replacement characters.
+- Malformed declarations without a UTF-8 label remain unsupported, including repeated legacy aliases. Valid single-label legacy decoding is unchanged.
+- [`fetch-http.spec.ts`](../../../../packages/web/web-fetch-http/tests/fetch-http.spec.ts) covers recovery, conflicting labels, invalid bytes, EOF, truncation, and response-stream cancellation.
+- The recorded [`web-fetch`](../../../../snapshots/session/web-fetch/snapshot.yml) scenario serves literal UTF-8 characters with `charset=gbk,utf-8` through the real HTTP provider and verifies the same model-visible text.
+- HTML `<meta charset>` remains ignored. The package README documents the remaining ambiguity.

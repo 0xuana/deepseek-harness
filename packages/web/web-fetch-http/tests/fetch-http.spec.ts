@@ -7,9 +7,8 @@ import { HttpFetchProvider, LOCAL_FETCH_PROVIDER_ID } from '@deepseek-ai/dsh-web
 import type { HttpFetchLimits } from '@deepseek-ai/dsh-web-fetch-http'
 import * as fetchPlugin from '@deepseek-ai/dsh-web-fetch-http'
 import {
-  charsetCandidates,
   classifyContentType,
-  decodeBody,
+  decoderForCharset,
   isSameOrigin,
   parseCharset,
   parseFetchUrl,
@@ -84,49 +83,24 @@ describe('policy helpers', () => {
     expect(parseCharset(null)).toBeUndefined()
   })
 
-  it('resolves charset candidates and defaults to UTF-8', () => {
-    expect(charsetCandidates(undefined)).toEqual(['utf-8'])
-    expect(charsetCandidates('utf-8')).toEqual(['utf-8'])
-    expect(charsetCandidates('gb2312, gbk')).toEqual(['gbk'])
-    expect(charsetCandidates('not-a-charset, utf-8')).toEqual(['utf-8'])
-    expect(charsetCandidates('utf-8,gbk')).toEqual(['utf-8', 'gbk'])
-    expect(() => charsetCandidates('not-a-charset'))
-      .toThrow(expect.objectContaining({ code: 'WEB_UNSUPPORTED_CONTENT_TYPE', message: 'unsupported charset "not-a-charset"' }))
-    expect(() => charsetCandidates(','))
-      .toThrow(expect.objectContaining({ code: 'WEB_UNSUPPORTED_CONTENT_TYPE' }))
+  it('builds a decoder for a charset and defaults to UTF-8', () => {
+    expect(decoderForCharset(undefined).encoding).toBe('utf-8')
+    expect(decoderForCharset('iso-8859-1').encoding).toBe('windows-1252')
+    expect(decoderForCharset('gb2312').encoding).toBe('gbk')
+    expect(decoderForCharset('utf-8').fatal).toBe(false)
+    expect(() => decoderForCharset('not-a-charset')).toThrow(expect.objectContaining({
+      code: 'WEB_UNSUPPORTED_CONTENT_TYPE', message: 'unsupported charset "not-a-charset"',
+    }))
   })
 
-  it('decodes with a single declared charset without probing the body', () => {
-    // 0xE9 is "é" in windows-1252; a strict probe would reject these bytes.
-    expect(decodeBody(Uint8Array.of(0x63, 0x61, 0x66, 0xE9), ['windows-1252'])).toBe('café')
+  it.each(['utf-8,gbk', 'gbk,utf8', 'not-a-charset, utf-8', 'utf-8 utf8'])('requires strict UTF-8 for %s', (charset) => {
+    const decoder = decoderForCharset(charset)
+    expect(decoder.encoding).toBe('utf-8')
+    expect(decoder.fatal).toBe(true)
   })
 
-  it('lets a UTF-8 candidate win when the body is valid UTF-8', () => {
-    const utf8 = new TextEncoder().encode('中文')
-    expect(decodeBody(utf8, ['gbk', 'utf-8'])).toBe('中文')
-    // windows-1252 decodes every byte sequence, so only the UTF-8 preference reaches the text.
-    expect(decodeBody(utf8, ['windows-1252', 'utf-8'])).toBe('中文')
-  })
-
-  it('falls back to the first candidate that decodes the body', () => {
-    // 中文 in GBK: invalid UTF-8, so declaration order decides.
-    const gbk = Uint8Array.of(0xD6, 0xD0, 0xCE, 0xC4)
-    expect(decodeBody(gbk, ['gbk', 'utf-8'])).toBe('中文')
-    expect(decodeBody(gbk, ['gbk', 'windows-1252'])).toBe('中文')
-  })
-
-  it('rejects a body no candidate decodes instead of returning replacement characters', () => {
-    // 0x81 starts neither a GBK nor a UTF-8 sequence, and 0x20 cannot continue either.
-    expect(() => decodeBody(Uint8Array.of(0x81, 0x20), ['gbk', 'utf-8']))
-      .toThrow(expect.objectContaining({
-        code: 'WEB_UNSUPPORTED_CONTENT_TYPE',
-        message: 'cannot decode the response body with any declared charset (gbk, utf-8)',
-      }))
-  })
-
-  it('accepts a body cut at the byte cap inside a character', () => {
-    // '中文' cut to 5 bytes leaves the second character incomplete.
-    expect(decodeBody(new TextEncoder().encode('中文').subarray(0, 5), ['utf-8', 'gbk'])).toBe('中\uFFFD')
+  it.each(['gb2312,gbk', 'windows-1252,gbk', ','])('rejects a malformed declaration without UTF-8: %s', (charset) => {
+    expect(() => decoderForCharset(charset)).toThrow(expect.objectContaining({ code: 'WEB_UNSUPPORTED_CONTENT_TYPE' }))
   })
 })
 
@@ -219,33 +193,98 @@ describe('HttpFetchProvider caps', () => {
     await expect(provider().fetch({ url: base }))
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_UNSUPPORTED_CONTENT_TYPE' }))
   })
+})
 
-  it('decodes a comma-joined charset declaration when the body is UTF-8', async () => {
+describe('HttpFetchProvider charset recovery', () => {
+  it.each(['utf-8,gbk', 'gbk,utf8', 'not-a-charset, utf-8'])('decodes UTF-8 HTML declared as %s', async (charset) => {
     handler = (_req, res) => {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8,gbk' })
-      res.end(Buffer.from('<meta charset="UTF-8"><p>你好</p>', 'utf8'))
+      res.writeHead(200, { 'content-type': `text/html; charset=${charset}` })
+      res.end('<meta charset="UTF-8"><p>你好</p>')
     }
     const result = await provider().fetch({ url: base })
     expect(result.body).toEqual({ kind: 'html', content: '<meta charset="UTF-8"><p>你好</p>' })
+    expect(result.truncated).toBe(false)
   })
 
-  it('follows declaration order for a conflicting comma-joined charset whose body is not UTF-8', async () => {
-    // 中文 in GBK; the body is invalid UTF-8, so the first declared label decodes it.
+  it.each([
+    ['gbk,utf-8', [0xE4, 0xB8]], // Valid GBK, but an incomplete UTF-8 sequence at EOF.
+    ['gbk,utf-8', [0xE4]],
+    ['gbk,utf-8', [0x81, 0x20]],
+    ['gbk,utf-8', [0xD6, 0xD0, 0xCE, 0xC4]],
+    ['not-a-charset,utf-8', [0xD6, 0xD0, 0xCE, 0xC4]],
+    ['utf8,utf-8', [0x81, 0x20]],
+  ] as const)('rejects non-UTF-8 bytes for %s: %j', async (charset, bytes) => {
     handler = (_req, res) => {
-      res.writeHead(200, { 'content-type': 'text/plain; charset=gbk,utf-8' })
+      res.writeHead(200, { 'content-type': `text/plain; charset=${charset}` })
+      res.end(Buffer.from(bytes))
+    }
+    await expect(provider().fetch({ url: base })).rejects.toThrow(expect.objectContaining({
+      code: 'WEB_UNSUPPORTED_CONTENT_TYPE',
+      message: 'response body is not valid UTF-8 for the malformed charset declaration',
+    }))
+  })
+
+  it.each(['gb2312,gbk', 'windows-1252,gbk'])('rejects a legacy-only compound declaration: %s', async (charset) => {
+    handler = (_req, res) => {
+      res.writeHead(200, { 'content-type': `text/plain; charset=${charset}` })
       res.end(Buffer.from([0xD6, 0xD0, 0xCE, 0xC4]))
     }
-    const result = await provider().fetch({ url: base })
-    expect(result.body.content).toBe('中文')
+    await expect(provider().fetch({ url: base })).rejects.toThrow(expect.objectContaining({
+      code: 'WEB_UNSUPPORTED_CONTENT_TYPE', message: `unsupported charset "${charset}"`,
+    }))
   })
 
-  it('rejects a comma-joined charset whose labels decode none of the body', async () => {
+  it('keeps single-label GBK decoding', async () => {
+    handler = (_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/plain; charset=gbk' })
+      res.end(Buffer.from([0xD6, 0xD0, 0xCE, 0xC4]))
+    }
+    expect((await provider().fetch({ url: base })).body.content).toBe('中文')
+  })
+
+  it('keeps replacement decoding for a single declared charset', async () => {
+    handler = (_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' })
+      res.end(Buffer.from([0xE4, 0xB8]))
+    }
+    expect((await provider().fetch({ url: base })).body.content).toBe('\uFFFD')
+  })
+
+  it('omits an incomplete UTF-8 suffix only when the byte cap cuts the response', async () => {
     handler = (_req, res) => {
       res.writeHead(200, { 'content-type': 'text/plain; charset=gbk,utf-8' })
-      res.end(Buffer.from([0x81, 0x20]))
+      res.end('中文')
     }
-    await expect(provider().fetch({ url: base }))
+    const result = await provider({ maxResponseBytes: 5 }).fetch({ url: base })
+    expect(result.body.content).toBe('中')
+    expect(result.truncated).toBe(true)
+  })
+
+  it('validates EOF when the response exactly fills the byte cap', async () => {
+    handler = (_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/plain; charset=gbk,utf-8' })
+      res.end(Buffer.from([0xE4, 0xB8]))
+    }
+    await expect(provider({ maxResponseBytes: 2 }).fetch({ url: base }))
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_UNSUPPORTED_CONTENT_TYPE' }))
+  })
+
+  it('rejects invalid UTF-8 before the truncated suffix', async () => {
+    handler = (_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/plain; charset=gbk,utf-8' })
+      res.end(Buffer.from([0x81, 0x20, 0x61]))
+    }
+    await expect(provider({ maxResponseBytes: 2 }).fetch({ url: base }))
+      .rejects.toThrow(expect.objectContaining({ code: 'WEB_UNSUPPORTED_CONTENT_TYPE' }))
+  })
+
+  it('uses UTF-8 even when a long body also forms valid GBK', async () => {
+    // C2 A9 represents © in UTF-8 and 漏 in GBK; length cannot disambiguate it.
+    handler = (_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/plain; charset=gbk,utf-8' })
+      res.end('©'.repeat(1000))
+    }
+    expect((await provider().fetch({ url: base })).body.content).toBe('©'.repeat(1000))
   })
 })
 
@@ -410,7 +449,6 @@ describe('HttpFetchProvider invalid URLs and abort', () => {
     await expect(provider().fetch({ url: 'http://127.0.0.1:1/' }))
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_ERROR' }))
   })
-
 })
 
 describe('HttpFetchProvider body cancellation on error paths', () => {
@@ -432,8 +470,8 @@ describe('HttpFetchProvider body cancellation on error paths', () => {
     await closed
   })
 
-  it('cancels the body when an unsupported charset is rejected', async () => {
-    const closed = respondWithOpenBody(200, { 'content-type': 'text/plain; charset=not-a-charset' })
+  it.each(['not-a-charset', 'gb2312,gbk', 'windows-1252,gbk'])('cancels the body when charset %s is rejected', async (charset) => {
+    const closed = respondWithOpenBody(200, { 'content-type': `text/plain; charset=${charset}` })
     await expect(provider().fetch({ url: base }))
       .rejects.toThrow(expect.objectContaining({ code: 'WEB_UNSUPPORTED_CONTENT_TYPE' }))
     await closed

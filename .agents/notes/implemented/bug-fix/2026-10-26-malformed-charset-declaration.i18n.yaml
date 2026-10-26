@@ -2,21 +2,18 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-10-26-malformed-charset-declaration.md
-/agent-note-a-malformed-charset-declaration-is-resolved-against-the-body:
-  en: ce3a059a679d3c55
-  zh: 5f2b426f9cb84d6e
-/agent-note-a-malformed-charset-declaration-is-resolved-against-the-body/problem:
-  en: 111d4f151c7c209e
-  zh: b5dcc01b300c74c3
-/agent-note-a-malformed-charset-declaration-is-resolved-against-the-body/decision:
-  en: 1700647432adb909
-  zh: 5453577aad4deeae
-/agent-note-a-malformed-charset-declaration-is-resolved-against-the-body/verification:
-  en: 88d3b3325d2603e7
-  zh: 4b2a22f427cbc4c0
-/agent-note-a-malformed-charset-declaration-is-resolved-against-the-body/alternatives-considered:
-  en: 6aac113f16de50d8
-  zh: 9cd553b7f71950cc
-/agent-note-a-malformed-charset-declaration-is-resolved-against-the-body/consequences:
-  en: 4d4d530ec9bc82e5
-  zh: cfbe5498901ec215
+/agent-note-malformed-charset-recovery-prefers-utf-8:
+  en: d8a759b84c36b308
+  zh: 3b6ff2eb5519afb1
+/agent-note-malformed-charset-recovery-prefers-utf-8/problem:
+  en: dce96445b3801a7f
+  zh: e026d26fa680556a
+/agent-note-malformed-charset-recovery-prefers-utf-8/decision:
+  en: ba74ad57757231ca
+  zh: 46999cd0100814ae
+/agent-note-malformed-charset-recovery-prefers-utf-8/alternatives-considered:
+  en: 9fafffb6a7a78a29
+  zh: ee1dcc27d0315e68
+/agent-note-malformed-charset-recovery-prefers-utf-8/consequences:
+  en: c8aad3cc3f02e81e
+  zh: 29d9313afd1c7b5b
