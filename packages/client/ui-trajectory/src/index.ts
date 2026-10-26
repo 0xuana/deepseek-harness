@@ -12,13 +12,6 @@ import type { SessionToolResultRequest, SessionToolResultValue } from './types.t
 
 export type { SessionToolResultRequest, SessionToolResultValue } from './types.ts'
 
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    /** Non-restorable tool values retained only while their Session is live. */
-    sessionToolResults: SessionToolResults
-  }
-}
-
 interface LiveResults {
   readonly values: Map<ToolCallId | number, JsonValue>
   readonly listeners: Set<(seq?: number) => void>

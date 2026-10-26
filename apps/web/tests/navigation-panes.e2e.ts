@@ -14,7 +14,7 @@ import { chromium } from 'playwright'
 import { strFromU8, unzipSync } from 'fflate'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTestFailed, onTestFinished } from 'vitest'
 import { ToolCallId, createToolResultMessage } from '@deepseek-ai/dsh-llm'
-import type {} from '@deepseek-ai/dsh-client-ui-trajectory'
+import type SessionToolResults from '@deepseek-ai/dsh-client-ui-trajectory'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import { SESSION_FORMAT_VERSION, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
@@ -662,7 +662,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     expect(resultEvent).toBeDefined()
     expect(resultEvent?.data).not.toHaveProperty('value')
     const abort = new AbortController()
-    const observed = scaffold.ctx.sessionToolResults.watch(
+    const observed = (scaffold.ctx.get('sessionToolResults') as SessionToolResults).watch(
       { sessionId: agent.id, seq: resultEvent!.seq }, abort.signal,
     )[Symbol.asyncIterator]()
     try {

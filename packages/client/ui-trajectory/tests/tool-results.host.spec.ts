@@ -17,7 +17,7 @@ async function setup(value: JsonValue = { answer: 42 }, config: Partial<Config> 
   await ctx.plugin(TypertRegistry)
   const feature = ctx.plugin(SessionToolResults, config)
   await feature
-  const results = ctx.sessionToolResults
+  const results = ctx.get('sessionToolResults') as SessionToolResults
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'value', description: 'Return a structured value.', parameters: {},
     output: { schema: { type: 'json' }, render: () => [{ type: 'text', text: 'rendered' }] },
@@ -216,8 +216,9 @@ it('unloads the Trajectory service without retaining values across a remount', a
   const missed = await execute()
   await ctx.plugin(SessionToolResults)
   const abort = new AbortController()
-  const restored = ctx.sessionToolResults.watch({ sessionId: agent.id, seq: event.seq }, abort.signal)[Symbol.asyncIterator]()
-  const absent = ctx.sessionToolResults.watch({ sessionId: agent.id, seq: missed.seq }, abort.signal)[Symbol.asyncIterator]()
+  const remounted = ctx.get('sessionToolResults') as SessionToolResults
+  const restored = remounted.watch({ sessionId: agent.id, seq: event.seq }, abort.signal)[Symbol.asyncIterator]()
+  const absent = remounted.watch({ sessionId: agent.id, seq: missed.seq }, abort.signal)[Symbol.asyncIterator]()
   onTestFinished(async () => { abort.abort(); await restored.return?.(); await absent.return?.() })
   expect((await restored.next()).value).toEqual({ available: false })
   expect((await absent.next()).value).toEqual({ available: false })
