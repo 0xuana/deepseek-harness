@@ -86,6 +86,9 @@ export class ForgeService extends Service {
         throw new Error(`forge: ${key} must be a positive integer no greater than ${MAX_TIMER_DELAY_MS}`)
       }
     }
+    if (this.config.maxBackoffMs < this.config.activeIntervalMs) {
+      throw new Error('forge: maxBackoffMs must be greater than or equal to activeIntervalMs')
+    }
     ctx.effect(() => async () => {
       this.lifetime.abort(new Error('forge service disposed'))
       clearTimeout(this.timer)
