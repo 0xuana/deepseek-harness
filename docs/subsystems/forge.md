@@ -216,8 +216,11 @@ type BindingOrigin = 'created' | 'referenced' | 'discovered' | 'tracked'
 ```ts type-equiv
 /** Payload of the `plugin:forge-session/binding` record. */
 interface BindingRecord {
-  /** `track` binds or restores, `dismiss` hides, `discover` binds a change request found for a branch the Session pushed or works on. */
-  readonly action: 'track' | 'dismiss' | 'discover'
+  /**
+   * `track` binds or restores, `dismiss` hides, `discover` binds a branch lookup,
+   * and `reference` binds a CLI selector lookup without restoring dismissed entries.
+   */
+  readonly action: 'track' | 'dismiss' | 'discover' | 'reference'
   /** Web URL of the change request. */
   readonly url: string
 }

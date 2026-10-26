@@ -51,6 +51,13 @@ appendFileSync(join(here, 'calls.jsonl'), JSON.stringify(args) + '\\n')
 const statePath = join(here, 'state.json')
 const state = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : { ready: false, mergedAt: null }
 const save = () => { writeFileSync(statePath, JSON.stringify(state)) }
+if (args[0] === 'pr' && args[1] === 'view' && args[2] === '7') {
+  const fields = args[args.indexOf('--json') + 1]
+  process.stdout.write(JSON.stringify(fields === 'url'
+    ? { url: 'https://github.com/octo/demo/pull/7' }
+    : { number: 7, title: 'Add the pull request panel' }))
+  process.exit(0)
+}
 if (args[0] === 'pr' && args[1] === 'ready' && args[2] === '9') {
   state.ready = true
   save()
@@ -191,10 +198,10 @@ interface PanelLaunch {
 /**
  * Launch the bundle against a GitHub checkout of `main` and `release` and open the New Session screen of that workspace.
  * @param failureShot - name of the screenshot saved when the test fails.
- * @param followUp - whether the replay answers a second model call with {@link FOLLOW_UP_REPLY}.
+ * @param scenario - normal conversation, a restoration follow-up, or a numbered PR lookup.
  * @returns the scaffold, page, and checkout.
  */
-async function launchPanel(failureShot: string, followUp = false): Promise<PanelLaunch> {
+async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up' | 'reference' = 'normal'): Promise<PanelLaunch> {
   const resources: { scaffold?: WebScaffold; browser?: Browser } = {}
   const root = await mkdtemp(join(tmpdir(), 'dsh-forge-panel-'))
   onTestFinished(async () => {
@@ -215,12 +222,24 @@ async function launchPanel(failureShot: string, followUp = false): Promise<Panel
   await writeFile(overlay, `- id: forge-github\n  config: ${JSON.stringify({ ghCommand: gh })}\n`)
   const override = join(root, 'replay.override.json')
   // The borrowed scenario records one model call, so index 1 appends the reply to the follow-up.
-  if (followUp) await writeFile(override, JSON.stringify({ patches: [{ at: 1, entry: { kind: 'chunks', chunks: textReply(FOLLOW_UP_REPLY) } }] }))
+  if (scenario === 'follow-up') await writeFile(override, JSON.stringify({ patches: [{ at: 1, entry: { kind: 'chunks', chunks: textReply(FOLLOW_UP_REPLY) } }] }))
+  if (scenario === 'reference') {
+    const command = `PATH=${JSON.stringify(`${root}:${process.env.PATH ?? ''}`)} gh pr view 7 --repo octo/demo --json number,title 2>&1 | head -200`
+    const call = { type: 'tool-call', id: 'view-pr', name: 'bash', arguments: JSON.stringify({ command, description: 'View PR metadata' }) }
+    await writeFile(override, JSON.stringify({ patches: [
+      { at: 0, entry: { kind: 'chunks', chunks: [
+        { type: 'block-start', index: 0, blockType: 'tool-call' },
+        { type: 'block-end', index: 0, block: call },
+        { type: 'finish', reason: { kind: 'tool-calls' } },
+      ] } },
+      { at: 1, entry: { kind: 'chunks', chunks: textReply('Viewed PR 7.') } },
+    ] }))
+  }
   const scaffold = await launchWebScaffold({
     profile: { packages: [{ dir: BUNDLE, enabled: true }] },
     extraOverlayPath: overlay,
     replayFixture: FIXTURE,
-    ...followUp ? { replayOverride: override } : {},
+    ...scenario !== 'normal' ? { replayOverride: override } : {},
     // The worktree notice, worktree records, and bindings are asserted separately from the borrowed conversation.
     compareReplaySession: false,
   })
@@ -267,7 +286,7 @@ function textReply(text: string): unknown[] {
  * @returns the scaffold, page, and checkout.
  */
 async function requestReleaseWorktree(failureShot: string, followUp = false): Promise<PanelLaunch> {
-  const launched = await launchPanel(failureShot, followUp)
+  const launched = await launchPanel(failureShot, followUp ? 'follow-up' : 'normal')
   const { page } = launched
   const option = page.locator('[data-forge-worktree]')
   await option.waitFor({ timeout: 20_000 })
@@ -298,6 +317,29 @@ function worktreeRecords(events: readonly SessionEvent[]): unknown[] {
     return record?.type === 'plugin:client-ui-forge/worktree' ? [record.data] : []
   })
 }
+
+it.skipIf(MODE === 'record')('automatically shows a numbered PR when gh JSON omits its URL', async () => {
+  const { scaffold, page, root, tripwire } = await launchPanel('web-e2e-forge-numbered-reference', 'reference')
+  const { settled } = await sendPrompt(page, scaffold)
+  const sessionId = await settled
+  const header = page.locator('[data-forge-header]')
+  await expect.poll(() => header.getAttribute('aria-label'), { timeout: 20_000 }).toBe('本会话的变更请求需要处理')
+  await header.click()
+  const change = page.locator(`[data-forge-change="${PULL}"]`)
+  await change.getByRole('link', { name: 'Add the pull request panel', exact: true }).waitFor({ timeout: 20_000 })
+  await change.getByText('等待评审 · 1 条未解决讨论', { exact: true }).waitFor()
+  await compareOrRefreshGolden(join(EXPECTED, 'reference.expected.md'),
+    await captureStableAria(page, `[data-forge-change="${PULL}"]`, scaffold.workspaceCwd), MODE)
+  const events = await readPersistedEvents(scaffold, sessionId)
+  expect(events.flatMap((event) => {
+    const record = pluginRecordOf(event)
+    return record?.type === 'plugin:forge-session/binding' ? [record.data] : []
+  })).toEqual([{ action: 'reference', url: PULL }])
+  const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
+  expect(calls).toContainEqual(['pr', 'view', '7', '--repo', 'octo/demo', '--json', 'url'])
+  expect(tripwire.pageErrors).toEqual([])
+  expect(tripwire.warnings).toEqual([])
+})
 
 it.skipIf(MODE === 'record')('starts a Session in a worktree before its first message, follows its change request, and restores the removed worktree', async () => {
   const { scaffold, page, root, project, tripwire } = await requestReleaseWorktree('web-e2e-forge-panel', true)

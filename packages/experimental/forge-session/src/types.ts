@@ -18,14 +18,17 @@ export interface CommandEvidence {
   readonly urls: 'created' | 'referenced' | null
   /** Whether the result can report pushed refs. */
   readonly pushes: boolean
-  /** Change request URLs the command passes as the first argument of `gh pr view`, `gh pr edit`, or `gh pr checkout`. */
+  /** Change request URLs explicitly selected by URL or by number, repository, and host. */
   readonly named: readonly string[]
 }
 
 /** Payload of the `plugin:forge-session/binding` record. */
 export interface BindingRecord {
-  /** `track` binds or restores, `dismiss` hides, `discover` binds a change request found for a branch the Session pushed or works on. */
-  readonly action: 'track' | 'dismiss' | 'discover'
+  /**
+   * `track` binds or restores, `dismiss` hides, `discover` binds a branch lookup,
+   * and `reference` binds a CLI selector lookup without restoring dismissed entries.
+   */
+  readonly action: 'track' | 'dismiss' | 'discover' | 'reference'
   /** Web URL of the change request. */
   readonly url: string
 }

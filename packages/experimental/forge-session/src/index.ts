@@ -10,6 +10,7 @@ import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { deadline, MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { sameChangeRequestUrl } from './commands.ts'
 import { BINDING_RECORD, forgeChangeRequestsProjection } from './projection.ts'
+import { observeReferences } from './reference-lookup.ts'
 import type { BindingState, Config, ForgeChangeRequestsState, SessionChangeRequest, SessionChangeRequestsListener } from './types.ts'
 
 export type * from './types.ts'
@@ -154,6 +155,11 @@ export class ForgeSessionService extends Service {
     // Events react against the projection, so the listener starts once its reader is ready.
     this.home.on('session/event', (session: Session, event: SessionEvent) => {
       this.react(session, event)
+    })
+    observeReferences(this.home, this.discoveryTimeoutMs, (session, url) => {
+      if (!this.state(session).bindings.some(binding => sameChangeRequestUrl(binding.url, url))) {
+        appendPluginRecord(session, BINDING_RECORD, { action: 'reference', url })
+      }
     })
   }
 

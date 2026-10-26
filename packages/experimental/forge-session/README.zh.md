@@ -36,7 +36,9 @@ kind: "package-reference"
 
 `ctx.forgeSession.changeRequests(session)` 按首次记录的顺序返回可见的绑定。每一项包含 URL、其 `origin`（`created`、`referenced`、`discovered` 或 `tracked`）、提供方引用（没有提供方服务该 URL 时为 `null`）以及最近一次轮询结果（尚无结果时为 `null`）。`watch(session, listener)` 是调用方 fiber 上的 effect：Session 有监听方期间，提供方服务的每个可见绑定都会被轮询；此后每次绑定变化或轮询结果到达时，监听方都会收到完整列表。`track(session, url)` 以提供方的规范形式绑定 URL，或恢复已隐藏的绑定；没有提供方识别该 URL 时抛错。`dismiss(session, url)` 隐藏一个可见绑定；其他 URL 不会改变日志。`discoverBranch(session, remote, branch)` 为位于 `remote` 远端的分支执行推送之后的那次查找，记录完绑定或失败后 resolve；没有提供方服务的远端不会带来任何变化。
 
-`bash` 或 `pwsh` 调用只从其第一个结果中提取证据，且仅当工具执行本身成功时才提取；命令的退出状态不影响结果。包含 `gh pr create` 或 `gh pr new` 的命令会绑定其文本输出中的每个 `/pull/<number>` URL。包含 `gh pr view`、`gh pr edit` 或 `gh pr checkout` 的命令以 `referenced` 绑定：作为该子命令第一个参数给出的 `/pull/<number>` URL，以及输出为它所操作的变更请求本身打印的 URL，即 gh 的 `url:` 字段、开始描述正文的 `--` 行之前单独成行的 URL，以及 JSON 的 `url` 成员。描述正文或其他字段里的链接不会绑定；同一命令里还包含 `gh pr create` 时，其 URL 以 `created` 绑定。包含 `git push` 的命令（可带前置的 `-C`、`-c` 或 Git 长选项）会记录 `To <remote>` 行下列出的每个已创建、已更新、已强制推送或已是最新的分支；被拒绝、已删除、标签以及非分支的引用会被跳过。对远端由提供方服务的每个被推送分支，服务在 `discoveryTimeoutMs` 内调用 `ctx.forge.findByHead`，并为返回的每个尚未绑定（包括已隐藏）的变更请求追加一条 `discover` 记录。每次推送都会重新查找；失败记录为警告日志。仅在协议、大小写、查询、片段或末尾斜杠上不同的 URL 指向同一个绑定。
+`bash` 或 `pwsh` 调用只从其第一个结果中提取证据，且仅当工具执行本身成功时才提取；命令的退出状态不影响结果。包含 `gh pr create` 或 `gh pr new` 的命令会绑定其文本输出中的每个 `/pull/<number>` URL。包含 `gh pr view`、`gh pr edit` 或 `gh pr checkout` 的命令以 `referenced` 绑定：命令选中的 `/pull/<number>` URL，或带有明确仓库和主机的数字编号，以及输出为它所操作的变更请求本身打印的 URL，即 gh 的 `url:` 字段、开始描述正文的 `--` 行之前单独成行的 URL，以及 JSON 的 `url` 成员。描述正文或其他字段里的链接不会绑定；同一命令里还包含 `gh pr create` 时，其 URL 以 `created` 绑定。包含 `git push` 的命令（可带前置的 `-C`、`-c` 或 Git 长选项）会记录 `To <remote>` 行下列出的每个已创建、已更新、已强制推送或已是最新的分支；被拒绝、已删除、标签以及非分支的引用会被跳过。对远端由提供方服务的每个被推送分支，服务在 `discoveryTimeoutMs` 内调用 `ctx.forge.findByHead`，并为返回的每个尚未绑定（包括已隐藏）的变更请求追加一条 `discover` 记录。每次推送都会重新查找；失败记录为警告日志。仅在协议、大小写、查询、片段或末尾斜杠上不同的 URL 指向同一个绑定。
+
+`gh pr view`、`edit` 和 `checkout` 的数字编号支持 `--repo OWNER/REPO`、`--repo=OWNER/REPO` 和 `-R OWNER/REPO`，参数可位于编号前后。仓库参数中的主机或字面量 `GH_HOST` 赋值可直接确定 URL；对于单条命令（可通过管道传给 `head`、`tail` 或 `cat`），未写明主机且已完成的前台 Bash 调用会通过相同的 shell 服务、工作目录、字面量环境赋值、托管环境和常设沙箱策略，执行只读的 `gh pr view <number> --repo <repository> --json url` 查询，由 CLI 解析其配置的主机。查询成功后追加 `reference` 绑定记录；失败时保留现有绑定并记录警告。此实时观察器需要 `tools`、`shell` 和 `shellEnv`，仅含投影的组合仍可恢复已记录的 URL。查询共用 `discoveryTimeoutMs`，调用方取消会停止查询，销毁服务会中止并等待查询结束。
 
 绑定操作是 `plugin:forge-session/binding` 插件记录，列于[实验性持久化目录](../../../docs/experimental-persistence-catalog.zh.md)；fork 与恢复会把它们与 shell 事件一同带上，因此 fork 出的 Session 从父 Session 的绑定开始。`discoveryTimeoutMs` 见[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-forge-session)。
 
@@ -84,7 +86,7 @@ kind: "package-reference"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **按文本识别命令**——只有包含 `gh pr create`、`gh pr new`、`gh pr view`、`gh pr edit`、`gh pr checkout` 或 `git push` 的 `bash` 与 `pwsh` 命令计入，也只有 `/pull/<number>` URL 会被绑定。以编号或分支指定变更请求的 view、edit 或 checkout，只有输出打印了它的 URL 时才会绑定，而 `gh pr checkout` 从不打印。脚本、别名、`gh api` 调用、`glab` 等其他 CLI 以及 `git push --porcelain` 输出都无法识别；这类变更请求需用 `track` 绑定。
+- **有限的 shell 识别**——数字编号需要字面量仓库参数。不识别变量展开、替换、多行脚本、未知选项、别名和其他 CLI。复合命令或 PowerShell 中未写明主机的仓库需要输出 URL 或使用 `track`，实时解析器无法恢复它们原本的环境。重放会恢复已确认的引用记录和主机明确的编号参数，不会执行 `gh`；没有记录 URL 的旧调用若未写明主机，需要再次调用或使用 `track`。分支选择器和 `git push --porcelain` 仍不受支持。
 - **发现时机**——在别处为某个分支打开的变更请求，要等到该分支的下一次推送、forge 面板等调用方再次报告该分支，或 `track` 之后才会出现。
 - **没有模型工具**——模型目前还不能读取或修改绑定。
 - **按 Session 绑定**——subagent 的 Session 保有自己的绑定；父 Session 不会汇总它们。
