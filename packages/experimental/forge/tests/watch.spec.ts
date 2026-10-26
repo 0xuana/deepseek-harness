@@ -131,7 +131,7 @@ describe('forge watch', () => {
 
     await vi.advanceTimersByTimeAsync(0)
     expect(updates[0]).toEqual({ key, fetchedAt: 1_000_000, failure: { code: 'not-found', message: 'missing' } })
-    await vi.advanceTimersByTimeAsync(config.idleIntervalMs - 1)
+    await vi.advanceTimersByTimeAsync(config.activeIntervalMs * 2 - 1)
     expect(provider.fetches).toHaveLength(1)
     await vi.advanceTimersByTimeAsync(1)
     expect(provider.fetches).toHaveLength(2)
