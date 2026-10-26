@@ -423,3 +423,44 @@ describe.skipIf(!sandboxUsable)('Git inspection under the local sandbox', () => 
     await expect(access(join(repo, '.git', 'index.lock'))).rejects.toThrow()
   })
 })
+
+
+describe('parallel inspection cleanup', () => {
+  it.each(['checkout', 'branches'] as const)('cancels and joins sibling reads when %s inspection fails', async (kind) => {
+    const root = await directory()
+    const repo = await repository(root)
+    const ctx = await context(sandboxRecord(), repo)
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const released: PromiseWithResolvers<void> = Promise.withResolvers()
+    const original = ctx.sandbox.confine.bind(ctx.sandbox)
+    let sibling: AbortSignal | undefined
+    const failure = new Error('inspection failed')
+    const heldArg = kind === 'checkout' ? '--git-common-dir' : 'symbolic-ref'
+    const failedArg = kind === 'checkout' ? 'remote' : 'for-each-ref'
+    const probe = vi.spyOn(ctx.sandbox, 'confine').mockImplementation(async (argv, policy, signal) => {
+      if (argv.includes(heldArg)) {
+        sibling = signal
+        entered.resolve()
+        await released.promise
+      }
+      if (argv.includes(failedArg)) { await entered.promise; throw failure }
+      return original(argv, policy, signal)
+    })
+    let settled = false
+    const operation = (kind === 'checkout'
+      ? inspectCheckout(ctx, CONFIG, session(repo), repo, live())
+      : listBranches(ctx, CONFIG, session(repo), repo, 50, live()))
+      .then(() => { settled = true; return undefined }, (error: unknown) => { settled = true; return error })
+    try {
+      await entered.promise
+      await vi.waitFor(() => { expect(sibling?.aborted).toBe(true) })
+      expect(settled).toBe(false)
+      released.resolve()
+      expect(await operation).toBe(failure)
+    } finally {
+      released.resolve()
+      await operation
+      probe.mockRestore()
+    }
+  })
+})
