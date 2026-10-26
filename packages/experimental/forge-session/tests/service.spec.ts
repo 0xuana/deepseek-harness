@@ -66,6 +66,49 @@ describe('forgeSession bindings', () => {
 })
 
 describe('forgeSession discovery', () => {
+  it('cancels a closed Session lookup and never writes its result into a same-id replacement', async () => {
+    const { ctx, provider } = await open()
+    const owner = ctx.plugin({ inject: ['sessions'], apply() {} })
+    await owner
+    const session = owner.ctx.sessions.create()
+    const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
+    const result = Promise.withResolvers<readonly ReturnType<typeof pull>[]>()
+    provider.findImpl = () => result.promise
+    try {
+      push(session, 'push', 'feat')
+      expect(provider.lookups).toHaveLength(1)
+      await owner.dispose()
+      expect(provider.lookups[0]?.signal.aborted).toBe(true)
+      const replacement = ctx.sessions.create(session.id)
+      result.resolve([pull(7)])
+      await settle()
+      expect(records(session)).toEqual([])
+      expect(records(replacement)).toEqual([])
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      result.resolve([])
+    }
+  })
+
+  it('stops publishing lookup results when the Session closes after the first binding', async () => {
+    const { ctx, provider } = await open()
+    const session = ctx.sessions.prepare()
+    const detach = ctx.sessions.enter(session)
+    ctx.sessions.announce(session)
+    ctx.on('session/event', (changed, event) => {
+      if (changed === session && pluginRecordOf(event)?.type === 'plugin:forge-session/binding') detach()
+    })
+    provider.heads.set('feat', [pull(7), pull(8)])
+    try {
+      push(session, 'push', 'feat')
+      await settle()
+      expect(records(session)).toEqual([{ action: 'discover', url: pullUrl(7) }])
+      expect(ctx.sessions.get(session.id)).toBeUndefined()
+    } finally {
+      detach()
+    }
+  })
+
   it('records change requests found for a pushed branch', async () => {
     const { ctx, provider, session } = await open()
     provider.heads.set('feat', [pull(7)])

@@ -37,7 +37,7 @@ interface SessionWatch {
  * requests through `ctx.forge`.
  */
 export class ForgeSessionService extends Service {
-  static inject = ['forge', 'sessionProjections']
+  static inject = ['forge', 'sessions', 'sessionProjections']
 
   static Config: z<Config> = z.object({
     discoveryTimeoutMs: z.number().default(30_000),
@@ -47,6 +47,7 @@ export class ForgeSessionService extends Service {
   private readonly discoveryTimeoutMs: number
   private readonly watches = new WeakMap<Session, SessionWatch>()
   private readonly discoveries = new Set<Promise<void>>()
+  private readonly sessionLifetimes = new WeakMap<Session, AbortController>()
   private readonly lifetime = new AbortController()
   private projection!: ProjectionHandle<ForgeChangeRequestsState>
 
@@ -139,6 +140,10 @@ export class ForgeSessionService extends Service {
     this.home.on('session/event', (session: Session, event: SessionEvent) => {
       this.react(session, event)
     })
+    this.home.on('session/disposed', (session: Session) => {
+      this.sessionLifetimes.get(session)?.abort(new Error('forge-session: Session was disposed'))
+      this.sessionLifetimes.delete(session)
+    })
   }
 
   private state(session: Session): ForgeChangeRequestsState {
@@ -200,19 +205,25 @@ export class ForgeSessionService extends Service {
   private discover(session: Session, push: PushedBranch): void {
     const repository = this.home.forge.repositoryFromRemote(push.remote)
     if (repository === undefined) return
-    const task = this.lookup(session, repository, push.branch).catch((error: unknown) => {
-      if (this.lifetime.signal.aborted) return
+    let lifetime = this.sessionLifetimes.get(session)
+    if (lifetime === undefined) {
+      lifetime = new AbortController()
+      this.sessionLifetimes.set(session, lifetime)
+    }
+    const signal = AbortSignal.any([this.lifetime.signal, lifetime.signal])
+    const task = this.lookup(session, repository, push.branch, signal).catch((error: unknown) => {
+      if (signal.aborted) return
       this.home.logger.warn(`forge-session: change request lookup for ${push.branch} failed: ${error instanceof Error ? error.message : String(error)}`)
     })
     this.discoveries.add(task)
     void task.then(() => this.discoveries.delete(task))
   }
 
-  private async lookup(session: Session, repository: ForgeRepository, branch: string): Promise<void> {
-    using timeout = deadline(this.lifetime.signal, this.discoveryTimeoutMs, 'FORGE_DISCOVERY_TIMEOUT')
+  private async lookup(session: Session, repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<void> {
+    using timeout = deadline(signal, this.discoveryTimeoutMs, 'FORGE_DISCOVERY_TIMEOUT')
     const refs = await this.home.forge.findByHead(repository, branch, timeout.signal)
-    if (this.lifetime.signal.aborted) return
     for (const ref of refs) {
+      if (signal.aborted || this.home.sessions.get(session.id) !== session) return
       const url = this.home.forge.changeRequestUrl(ref)
       if (this.state(session).bindings.some(binding => sameChangeRequestUrl(binding.url, url))) continue
       appendPluginRecord(session, BINDING_RECORD, { action: 'discover', url })

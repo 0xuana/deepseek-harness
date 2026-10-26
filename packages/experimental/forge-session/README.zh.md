@@ -36,7 +36,7 @@ kind: "package-reference"
 
 `ctx.forgeSession.changeRequests(session)` 按首次记录的顺序返回可见的绑定。每一项包含 URL、其 `origin`（`created`、`discovered` 或 `tracked`）、提供方引用（没有提供方服务该 URL 时为 `null`）以及最近一次轮询结果（尚无结果时为 `null`）。`watch(session, listener)` 是调用方 fiber 上的 effect：Session 有监听方期间，提供方服务的每个可见绑定都会被轮询；此后每次绑定变化或轮询结果到达时，监听方都会收到完整列表。`track(session, url)` 以提供方的规范形式绑定 URL，或恢复已隐藏的绑定；没有提供方识别该 URL 时抛错。`dismiss(session, url)` 隐藏一个可见绑定；其他 URL 不会改变日志。
 
-`bash` 或 `pwsh` 调用只从其第一个结果中提取证据，且仅当工具执行本身成功时才提取；命令的退出状态不影响结果。包含 `gh pr create` 或 `gh pr new` 的命令会绑定其文本输出中的每个 `/pull/<number>` URL。包含 `git push` 的命令（可带前置的 `-C`、`-c` 或 Git 长选项）会记录 `To <remote>` 行下列出的每个已创建、已更新、已强制推送或已是最新的分支；被拒绝、已删除的引用、新标签，以及明确位于 `refs/heads/` 之外的引用会被跳过。对远端由提供方服务的每个被推送分支，服务在 `discoveryTimeoutMs` 内调用 `ctx.forge.findByHead`，并为返回的每个尚未绑定的变更请求追加一条 `discover` 记录。已隐藏的绑定仍视为已绑定而被跳过；只有 `track` 会恢复它们。每次推送都会重新查找；失败记录为警告日志。仅在协议、大小写、查询、片段或末尾斜杠上不同的 URL 指向同一个绑定。
+`bash` 或 `pwsh` 调用只从其第一个结果中提取证据，且仅当工具执行本身成功时才提取；命令的退出状态不影响结果。包含 `gh pr create` 或 `gh pr new` 的命令会绑定其文本输出中的每个 `/pull/<number>` URL。包含 `git push` 的命令（可带前置的 `-C`、`-c` 或 Git 长选项）会记录 `To <remote>` 行下列出的每个已创建、已更新、已强制推送或已是最新的分支；被拒绝、已删除的引用、新标签，以及明确位于 `refs/heads/` 之外的引用会被跳过。对远端由提供方服务的每个被推送分支，服务在 `discoveryTimeoutMs` 内调用 `ctx.forge.findByHead`，并为返回的每个尚未绑定的变更请求追加一条 `discover` 记录。已隐藏的绑定仍视为已绑定而被跳过；只有 `track` 会恢复它们。每次推送都会重新查找；失败记录为警告日志。关闭 Session 会取消其未完成的查找，不追加绑定。重新打开不会补做这些查找；可再次推送或用 `track` 绑定变更请求。仅在协议、大小写、查询、片段或末尾斜杠上不同的 URL 指向同一个绑定。
 
 绑定操作是 `plugin:forge-session/binding` 插件记录，列于[实验性持久化目录](../../../docs/experimental-persistence-catalog.zh.md)；fork 与恢复会把它们与 shell 事件一同带上，因此 fork 出的 Session 从父 Session 的绑定开始。`discoveryTimeoutMs` 见[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-forge-session)。
 
