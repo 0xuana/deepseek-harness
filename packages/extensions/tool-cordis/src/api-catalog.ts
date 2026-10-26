@@ -987,7 +987,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote async applicationIcons(): Promise<Record<string, string>>',
         description: 'Load presentation icons separately from application decisions.',
         parameters: [],
-        returns: 'Optional native PNG icons keyed by executable path for saved and blocked applications.',
+        returns: 'Optional native PNG icons keyed by executable path; applications without paths are skipped.',
       },
       {
         signature: '@Remote async requestPermission(permission: CuaSystemPermission): Promise<CuaSystemPermissionState>',
@@ -5630,7 +5630,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CuaApplicationGrant',
-    declaration: 'export interface CuaApplicationGrant {\n    id: CuaApplicationId;\n    name: string;\n    executablePath: string;\n}',
+    declaration: 'export interface CuaApplicationGrant {\n    id: CuaApplicationId;\n    name: string;\n    executablePath?: string | undefined;\n}',
   },
   {
     name: 'CuaApplicationId',
