@@ -2,16 +2,16 @@
  * Validate the tree a pull request produces once merged with its base branch: the install,
  * the version synchronization of the released manifests, and the Host and Client builds.
  *
- * The pull-request check runs this through `pnpm run pre-merge-check` and knows only that
- * script's name, so what the merged tree needs changes here without touching the check. The
- * script itself runs under plain Node: it spawns pnpm, so no dependency is installed first.
+ * The `Policy / Pre-Merge Check` job runs this file with `node`, and knows nothing else about the
+ * merged tree, so what that tree needs changes here without touching the check. The file runs under
+ * plain Node and spawns pnpm itself, so no dependency is installed before it starts.
  */
 
 import { spawn, spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { describeVersions, readVersions } from './verify-version-sync.ts'
+import { describeVersions, readVersions, versionsSynchronized, type VersionReport } from './verify-version-sync.ts'
 
 /** One command of the check. */
 export interface PreMergeStep {
@@ -44,6 +44,13 @@ export const INSTALL_STEP: PreMergeStep = { name: 'install', command: 'pnpm', ar
 /** The plan the repository uses. */
 export const DEFAULT_PLAN: PreMergePlan = { install: INSTALL_STEP, steps: buildSteps() }
 
+/** How the install ended. */
+interface InstallOutcome {
+  readonly code: number
+  /** Why the install could not even start, when it could not. */
+  readonly error?: string
+}
+
 /** Options of the check. */
 export interface PreMergeOptions {
   /** Sink for the check's own lines. */
@@ -63,11 +70,17 @@ export interface PreMergeOutcome {
  * Run one step to completion with the caller's terminal, so its output lands in the job log.
  * @param step - Step to run.
  * @param root - Working directory.
- * @returns Its exit code, or 1 when a signal ended it.
+ * @param report - Sink for the check's own lines.
+ * @returns Why the step failed, or `undefined` when it succeeded.
  */
-function run(step: PreMergeStep, root: string): number {
+function run(step: PreMergeStep, root: string, report: (line: string) => void): string | undefined {
   const result = spawnSync(step.command, [...step.args], { cwd: root, stdio: 'inherit' })
-  return result.status ?? 1
+  if (result.error !== undefined) {
+    const reason = `cannot run ${step.command}: ${result.error.message}`
+    report(`pre-merge-check: ${reason}`)
+    return reason
+  }
+  return result.status === 0 ? undefined : `the ${step.name} build failed`
 }
 
 /**
@@ -81,26 +94,34 @@ export async function preMergeCheck(root: string, options: PreMergeOptions = {})
     process.stdout.write(`${line}\n`)
   })
   const plan = options.plan ?? DEFAULT_PLAN
-  // The manifests are read while the install runs: the version check needs no installed dependency.
   const install = spawn(plan.install.command, [...plan.install.args], { cwd: root, stdio: 'inherit' })
-  const versions = readVersions(root)
-  const lines = describeVersions(versions)
-  const installCode = await new Promise<number>((settle) => {
+  // Listen before anything else can throw: a pnpm that cannot start must not leave the check hanging.
+  const installed = await new Promise<InstallOutcome>((settle) => {
     install.once('close', (code) => {
-      settle(code ?? 1)
+      settle({ code: code ?? 1 })
     })
-    install.once('error', () => {
-      settle(1)
+    install.once('error', (error: Error) => {
+      settle({ code: 1, error: error.message })
     })
-  })
-  const versionsOk = versions.rootVersion !== undefined && lines.length === 1
-  for (const line of lines) report(`verify-version-sync: ${line}`)
-  if (installCode !== 0) return { ok: false, reason: 'the install failed' }
+  }).catch((error: unknown) => ({ code: 1, error: error instanceof Error ? error.message : String(error) }))
+  let versions: VersionReport | undefined
+  let versionsError: string | undefined
+  try {
+    versions = readVersions(root)
+  } catch (error) {
+    versionsError = error instanceof Error ? error.message : String(error)
+  }
+  // The install runs while the manifests are read, so the version lines appear beside its output.
+  if (versions !== undefined) for (const line of describeVersions(versions)) report(`verify-version-sync: ${line}`)
+  if (installed.error !== undefined) return { ok: false, reason: `cannot run ${plan.install.command}: ${installed.error}` }
+  if (installed.code !== 0) return { ok: false, reason: 'the install failed' }
   for (const step of plan.steps) {
     report(`pre-merge-check: building ${step.name}`)
-    if (run(step, root) !== 0) return { ok: false, reason: `the ${step.name} build failed` }
+    const failure = run(step, root, report)
+    if (failure !== undefined) return { ok: false, reason: failure }
   }
-  if (!versionsOk) return { ok: false, reason: 'the released manifests do not carry the root version' }
+  if (versions === undefined) return { ok: false, reason: `cannot read the released manifests: ${versionsError ?? 'unknown error'}` }
+  if (!versionsSynchronized(versions)) return { ok: false, reason: 'the released manifests do not carry the root version' }
   return { ok: true }
 }
 

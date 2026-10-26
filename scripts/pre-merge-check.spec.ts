@@ -32,18 +32,18 @@ function plan(codes: readonly number[]): PreMergePlan {
 
 describe('pre-merge check', () => {
   it('passes an install, a version check, and the builds that all succeed', async () => {
-    const root = repository({ 'package.json': '1.0.0', 'packages/core/session/package.json': '1.0.0' })
+    const root = repository({ 'package.json': '1.0.0', 'packages/core/session/package.json': '1.0.0', 'apps/web/package.json': '1.0.0' })
     try {
       const lines: string[] = []
       expect(await preMergeCheck(root, { plan: plan([0, 0, 0]), report: line => void lines.push(line) })).toEqual({ ok: true })
-      expect(lines[0]).toBe('verify-version-sync: 1 released manifest(s) carry 1.0.0')
+      expect(lines[0]).toBe('verify-version-sync: 2 released manifest(s) carry 1.0.0')
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
   })
 
   it('reports a failed install without running the builds', async () => {
-    const root = repository({ 'package.json': '1.0.0', 'packages/core/session/package.json': '1.0.0' })
+    const root = repository({ 'package.json': '1.0.0', 'packages/core/session/package.json': '1.0.0', 'apps/web/package.json': '1.0.0' })
     try {
       const lines: string[] = []
       const outcome = await preMergeCheck(root, { plan: plan([2, 0]), report: line => void lines.push(line) })
@@ -55,10 +55,34 @@ describe('pre-merge check', () => {
   })
 
   it('fails a tree whose released manifests carry another version', async () => {
-    const root = repository({ 'package.json': '2.0.0', 'packages/core/session/package.json': '1.0.0' })
+    const root = repository({ 'package.json': '2.0.0', 'packages/core/session/package.json': '1.0.0', 'apps/web/package.json': '2.0.0' })
     try {
       const outcome = await preMergeCheck(root, { plan: plan([0, 0, 0]), report: () => {} })
       expect(outcome).toEqual({ ok: false, reason: 'the released manifests do not carry the root version' })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('stops at the first build that fails', async () => {
+    const root = repository({ 'package.json': '1.0.0', 'packages/core/session/package.json': '1.0.0', 'apps/web/package.json': '1.0.0' })
+    try {
+      const lines: string[] = []
+      const outcome = await preMergeCheck(root, { plan: plan([0, 1, 0]), report: line => void lines.push(line) })
+      expect(outcome).toEqual({ ok: false, reason: 'the build-0 build failed' })
+      expect(lines).toContain('pre-merge-check: building build-0')
+      expect(lines).not.toContain('pre-merge-check: building build-1')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('fails when a manifest directory cannot be read', async () => {
+    const root = repository({ 'package.json': '1.0.0', 'packages/core/session/package.json': '1.0.0' })
+    try {
+      const outcome = await preMergeCheck(root, { plan: plan([0]), report: () => {} })
+      expect(outcome.ok).toBe(false)
+      expect(outcome.reason).toContain('cannot read the released manifests')
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

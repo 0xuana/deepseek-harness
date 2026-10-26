@@ -100,7 +100,11 @@ jobs:
         run: |
           # The check names one file and knows nothing else about how the merged tree builds itself.
           if [ ! -f scripts/pre-merge-check.ts ]; then
-            echo "This tree has no scripts/pre-merge-check.ts; the check is skipped."
+            if [ "$CHECK_MODE" = block ]; then
+              echo "::error title=Pre-Merge Check::this tree has no scripts/pre-merge-check.ts, so nothing was installed, compiled, or checked"
+              exit 1
+            fi
+            echo "::warning title=Pre-Merge Check::this tree has no scripts/pre-merge-check.ts, so nothing was installed, compiled, or checked"
             exit 0
           fi
           if node scripts/pre-merge-check.ts; then
@@ -111,4 +115,3 @@ jobs:
             exit 1
           fi
           echo "::warning title=Pre-Merge Check::the merged tree fails its pre-merge check; this check does not block"
-          fi

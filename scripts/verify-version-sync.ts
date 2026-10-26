@@ -28,8 +28,14 @@ export interface VersionReport {
 /** Directories that hold released manifests below the repository root. */
 const MANIFEST_DIRECTORIES = ['packages', 'apps'] as const
 
-/** Directories whose manifests follow another version line. */
-const EXCLUDED_DIRECTORIES = ['vendor', 'native'] as const
+/**
+ * Describe an error for a reader.
+ * @param error - Caught value.
+ * @returns Its message.
+ */
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
 
 /**
  * Read the version one `package.json` declares.
@@ -44,8 +50,9 @@ function versionOf(path: string): string | undefined {
 }
 
 /**
- * Collect the manifests that must carry the root version: two levels under each
- * workspace directory, so `packages/<group>/<package>` and `apps/<application>`.
+ * Collect the manifests that must carry the root version: `packages/<group>/<package>` and
+ * `apps/<application>`. A directory that cannot be read, and a walk that finds nothing, are
+ * errors rather than a clean tree, so a narrowed corpus cannot pass the check.
  * @param root - Repository root.
  * @returns Manifest paths relative to the root, sorted.
  */
@@ -55,13 +62,18 @@ export function releasedManifests(root: string): string[] {
     let groups: string[]
     try {
       groups = readdirSync(join(root, directory))
-    } catch {
-      continue
+    } catch (error) {
+      throw new Error(`cannot read ${directory}/: ${messageOf(error)}`)
     }
     for (const group of groups) {
-      if ((EXCLUDED_DIRECTORIES as readonly string[]).includes(group)) continue
       const groupDirectory = join(root, directory, group)
-      if (!statSync(groupDirectory).isDirectory()) continue
+      let isDirectory: boolean
+      try {
+        isDirectory = statSync(groupDirectory).isDirectory()
+      } catch (error) {
+        throw new Error(`cannot read ${directory}/${group}: ${messageOf(error)}`)
+      }
+      if (!isDirectory) continue
       const manifest = join(groupDirectory, 'package.json')
       try {
         if (statSync(manifest).isFile()) paths.push(`${directory}/${group}/package.json`)
@@ -78,6 +90,7 @@ export function releasedManifests(root: string): string[] {
       }
     }
   }
+  if (paths.length === 0) throw new Error(`no released manifest was found under ${MANIFEST_DIRECTORIES.map(directory => `${directory}/`).join(' or ')}`)
   return paths.sort()
 }
 
@@ -103,6 +116,16 @@ export function readVersions(root: string): VersionReport {
 }
 
 /**
+ * Report whether every released manifest carries the root version.
+ * @param report - Root version and manifests.
+ * @returns Whether the tree is synchronized; a tree without a root version or without manifests is not.
+ */
+export function versionsSynchronized(report: VersionReport): boolean {
+  const { rootVersion, manifests } = report
+  return rootVersion !== undefined && manifests.length > 0 && mismatchedVersions(rootVersion, manifests).length === 0
+}
+
+/**
  * Describe a version mismatch for a reader.
  * @param report - Root version and manifests.
  * @returns One line when the tree is consistent, otherwise a header and one line per mismatched manifest.
@@ -121,8 +144,13 @@ export function describeVersions(report: VersionReport): string[] {
 const invokedPath = process.argv[1]
 const isMain = invokedPath !== undefined && import.meta.url === pathToFileURL(resolve(invokedPath)).href
 if (isMain) {
-  const lines = describeVersions(readVersions(resolve(import.meta.dirname, '..')))
-  const failed = lines.length > 1 || lines[0]?.includes('declares no version') === true
-  for (const line of lines) (failed ? console.error : console.log)(`verify-version-sync: ${line}`)
-  if (failed) process.exitCode = 1
+  try {
+    const report = readVersions(resolve(import.meta.dirname, '..'))
+    const synchronized = versionsSynchronized(report)
+    for (const line of describeVersions(report)) (synchronized ? console.log : console.error)(`verify-version-sync: ${line}`)
+    if (!synchronized) process.exitCode = 1
+  } catch (error) {
+    console.error(`verify-version-sync: ${messageOf(error)}`)
+    process.exitCode = 1
+  }
 }
