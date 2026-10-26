@@ -1154,7 +1154,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-experimental-forge-session`
 
-- `inject`: `forge` · `sessionProjections`
+- `inject`: `forge` · `sessions` · `sessionProjections`
 - `source`: [`packages/experimental/forge-session/src/types.ts:91`](../packages/experimental/forge-session/src/types.ts)
 
 ```ts config-catalog

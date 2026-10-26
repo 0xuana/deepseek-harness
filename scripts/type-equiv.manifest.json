@@ -2534,12 +2534,47 @@
     },
     {
       "doc": "docs/subsystems/forge.md",
-      "symbol": "ChangeRequestSnapshot",
+      "symbol": "ChangeRequestKey",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestState",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "CheckState",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestCheck",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChecksRollup",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "Mergeability",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ReviewDecision",
       "source": "packages/experimental/forge/src/types.ts"
     },
     {
       "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeFailure",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestSnapshot",
       "source": "packages/experimental/forge/src/types.ts"
     },
     {

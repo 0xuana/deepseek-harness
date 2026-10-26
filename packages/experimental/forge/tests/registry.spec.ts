@@ -11,6 +11,18 @@ afterEach(async () => {
 })
 
 describe('forge registry', () => {
+  it('rejects a backoff cap shorter than the active poll interval', async () => {
+    ctx = new Context()
+    await expect(ctx.plugin(ForgeService, { activeIntervalMs: 30_000, maxBackoffMs: 1_000 }))
+      .rejects.toThrow('maxBackoffMs must be greater than or equal to activeIntervalMs')
+  })
+
+  it.each([1_000, 2_000])('accepts backoff cap %s at or above the active interval', async (maxBackoffMs) => {
+    ctx = new Context()
+    await ctx.plugin(ForgeService, { activeIntervalMs: 1_000, maxBackoffMs })
+    expect(ctx.forge).toBeDefined()
+  })
+
   it('resolves remotes and change request URLs through the first provider that serves them', async () => {
     ctx = await forgeContext()
     await provide(ctx, new FakeProvider('fake'))
@@ -101,7 +113,7 @@ describe('forge registry', () => {
     const unregister = ctx.forge.register(new FakeProvider())
     expect(ctx.forge.repositoryFromRemote('fake://fake.test/Octo/Demo')).toBeDefined()
 
-    unregister()
+    await unregister()
 
     expect(ctx.forge.repositoryFromRemote('fake://fake.test/Octo/Demo')).toBeUndefined()
   })

@@ -38,11 +38,11 @@ export function apply(ctx: Context, config: Config): void {
   for (const host of resolved.hosts) {
     if (!HOST.test(host)) throw new Error(`forge-github: invalid host ${JSON.stringify(host)}`)
   }
-  for (const key of ['timeoutMs', 'maxOutputBytes'] as const) {
-    const value = resolved[key]
-    if (!Number.isSafeInteger(value) || value <= 0 || value > MAX_TIMER_DELAY_MS) {
-      throw new Error(`forge-github: ${key} must be a positive integer no greater than ${MAX_TIMER_DELAY_MS}`)
-    }
+  if (!Number.isSafeInteger(resolved.timeoutMs) || resolved.timeoutMs <= 0 || resolved.timeoutMs > MAX_TIMER_DELAY_MS) {
+    throw new Error(`forge-github: timeoutMs must be a positive integer no greater than ${MAX_TIMER_DELAY_MS}`)
+  }
+  if (!Number.isSafeInteger(resolved.maxOutputBytes) || resolved.maxOutputBytes <= 0) {
+    throw new Error('forge-github: maxOutputBytes must be a positive safe integer')
   }
   ctx.forge.register(new GitHubProvider(ghRunner(resolved), resolved.hosts))
 }
