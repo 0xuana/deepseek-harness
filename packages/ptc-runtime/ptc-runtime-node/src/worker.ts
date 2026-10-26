@@ -1,5 +1,6 @@
 /** Managed Node process shared by temporary and owner-retained evaluations. */
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { inspect } from 'node:util'
 import { Context } from '@deepseek-ai/cordis'
 import type { PtcRunSpec, PtcRunResult, PtcRunSandbox, PtcRunFailure, PtcBindingNamespace, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import { SandboxUnavailableError, classifyRunnerFailure, isRunnerSpawnFailure } from '@deepseek-ai/dsh-sandbox'
@@ -18,7 +19,8 @@ import { OutputLedger } from './output-ledger.ts'
 import { drainOutput, terminateProcess } from './output-stream.ts'
 import { readProgramResult, type ProgramBootData, type ProgramMethods, type HostMethods } from './protocol.ts'
 
-const messageOf = (error: unknown): string => error instanceof Error ? error.message : String(error)
+const messageOf = (error: unknown): string => error instanceof Error ? error.message
+  : typeof error === 'string' ? error : inspect(error, { customInspect: false })
 
 interface Evaluation {
   settled: boolean
@@ -107,9 +109,7 @@ export class ProgramWorker {
   }
 
   private abortMessage(signal: AbortSignal | undefined): string {
-    if (this.retainsState) return 'execution canceled; retained variables were cleared'
-    const reason: unknown = signal?.reason
-    return typeof reason === 'string' || reason instanceof Error ? messageOf(reason) : 'execution canceled'
+    return this.message(messageOf(signal?.reason))
   }
 
   private async evaluate(spec: PtcRunSpec, bindings: Map<string, PtcBindingNamespace>): Promise<PtcRunResult> {

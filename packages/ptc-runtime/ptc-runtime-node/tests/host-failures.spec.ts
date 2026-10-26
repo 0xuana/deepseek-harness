@@ -130,17 +130,36 @@ describe('Node runtime host failures', () => {
   })
 
   it.each<[unknown, string]>([
-    [{ kind: 'user' }, 'execution canceled'],
-    [{ kind: 'parent' }, 'execution canceled'],
-    [{ kind: 'hook', reason: 'policy stopped the turn' }, 'execution canceled'],
-    [{ kind: 'disposed' }, 'execution canceled'],
-    [null, 'execution canceled'],
+    [{ kind: 'user' }, "{ kind: 'user' }"],
+    [{ kind: 'parent' }, "{ kind: 'parent' }"],
+    [{ kind: 'hook', reason: 'policy stopped the turn' }, "{ kind: 'hook', reason: 'policy stopped the turn' }"],
+    [{ kind: 'disposed' }, "{ kind: 'disposed' }"],
+    [null, 'null'],
     [new Error('stop requested'), 'stop requested'],
     ['stop requested', 'stop requested'],
   ])('renders pre-start cancellation %j as %s', async (reason, message) => {
     const h = await setup()
     const result = await h.start({ ...request, signal: AbortSignal.abort(reason) }, NO_INITIAL_FRAME)
     expect(result.error).toEqual({ kind: 'abort', message })
+    expect(h.resolveExecutable).not.toHaveBeenCalled()
+  })
+
+  it('keeps structured startup failure details', async () => {
+    const h = await setup()
+    h.resolveExecutable.mockRejectedValue({ code: 'EXECUTABLE_UNAVAILABLE', executable: 'node' })
+    const result = await h.start()
+    expect(result.error).toEqual({
+      kind: 'worker-exit', message: "{ code: 'EXECUTABLE_UNAVAILABLE', executable: 'node' }",
+    })
+    expect(h.spawn).not.toHaveBeenCalled()
+  })
+
+  it('renders a circular cancellation reason without interrupting settlement', async () => {
+    const h = await setup()
+    const reason: { kind: string; cause?: object } = { kind: 'hook' }
+    reason.cause = reason
+    const result = await h.start({ ...request, signal: AbortSignal.abort(reason) }, NO_INITIAL_FRAME)
+    expect(result.error).toEqual({ kind: 'abort', message: "<ref *1> { kind: 'hook', cause: [Circular *1] }" })
     expect(h.resolveExecutable).not.toHaveBeenCalled()
   })
 

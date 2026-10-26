@@ -16,6 +16,6 @@
 {"type":"tool/call","data":{"turn":1,"step":1,"callId":"ptc-cancel","name":"run_code","arguments":"{\"code\":\"await tools.working_directory({}); for (;;) {}\",\"description\":\"Run until stopped\"}"}}
 {"type":"tool/ptc-dispatch-start","data":{"rootCallId":"ptc-cancel","parentCallId":"ptc-cancel","subCallId":"ptc-cancel:ptc:1","name":"working_directory","arguments":{}}}
 {"type":"tool/ptc-dispatch","data":{"rootCallId":"ptc-cancel","parentCallId":"ptc-cancel","subCallId":"ptc-cancel:ptc:1","name":"working_directory","arguments":{},"isError":false,"content":[{"type":"text","text":"{{cwd}}"}]}}
-{"type":"tool/result","data":{"turn":1,"step":1,"message":{"role":"tool","source":{"kind":"tool","callId":"ptc-cancel"},"toolCallId":"ptc-cancel","content":[{"type":"text","text":"Error: code run failed (abort): execution canceled\nFile sandbox: danger-full-access."}],"isError":true,"id":"{{message:5}}"},"error":{"name":"CodeRunFailedError","code":"CODE_RUN_FAILED"}},"sourceEventSeqs":[14],"surfaceOp":"append"}
+{"type":"tool/result","data":{"turn":1,"step":1,"message":{"role":"tool","source":{"kind":"tool","callId":"ptc-cancel"},"toolCallId":"ptc-cancel","content":[{"type":"text","text":"Error: code run failed (abort): { kind: 'user' }\nFile sandbox: danger-full-access."}],"isError":true,"id":"{{message:5}}"},"error":{"name":"CodeRunFailedError","code":"CODE_RUN_FAILED"}},"sourceEventSeqs":[14],"surfaceOp":"append"}
 {"type":"step/end","data":{"turn":1,"step":1}}
 {"type":"turn/end","data":{"turn":1,"reason":{"kind":"aborted","reason":{"kind":"user"}}}}

@@ -207,10 +207,18 @@ describe.each([
       signal: controller.signal,
       bindings: bindings(async () => { entered.resolve(true); return null }),
     })
-    await entered.promise
-    controller.abort()
-    expect((await pending).error?.kind).toBe('abort')
-    expect((await run('typeof app')).value).toBe('undefined')
+    try {
+      await entered.promise
+      controller.abort({ kind: 'hook', reason: 'policy stopped the turn' })
+      expect((await pending).error).toEqual({
+        kind: 'abort',
+        message: "{ kind: 'hook', reason: 'policy stopped the turn' }; retained variables were cleared",
+      })
+      expect((await run('typeof app')).value).toBe('undefined')
+    } finally {
+      controller.abort('test cleanup')
+      await pending
+    }
   })
 
   it('resets a timed-out environment and does not reuse an exited process', async () => {

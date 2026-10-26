@@ -109,7 +109,7 @@ PTC 消费方按 [dsh-tool-executor-ptc](../../core/tool-executor-ptc/README.zh.
 
 程序解析错误与抛出异常为 `exception`；截止到期为 `timeout`；取消为 `abort`；无法解析或超量的控制通信以及无效的程序消息为 `protocol`；约束不可用为 `sandbox-unavailable`；进程提前退出、控制通道丢失或受管清理失败为 `worker-exit`。控制通道 I/O 失败时，在观测到的进程退出状态之外保留通道诊断原因。进程提供方保留与执行基底无关的失败名 `worker-exit`。有损完成值为 `invalid-output`，外层结果超限为 `output-limit`，并保留能容纳的日志前缀。无效或不支持的选项，以及资源释放后的调用，以调用方误用拒绝。
 
-临时环境保留调用方提供的字符串或 `Error` 消息；其他取消原因（包括结构化 Agent 原因）显示为 `execution canceled`。保留状态的环境显示为 `execution canceled; retained variables were cleared`。
+Host 失败诊断保留原始字符串与 `Error` 消息，并用 Node 检查格式化其他值，包括含有循环引用的对象。取消诊断保留结构化原因的字段，如 `kind` 与 hook 的 `reason`；保留状态的环境会追加 `; retained variables were cleared`。
 
 -----
 

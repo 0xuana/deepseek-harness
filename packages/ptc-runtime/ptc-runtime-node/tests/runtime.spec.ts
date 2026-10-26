@@ -189,7 +189,7 @@ describe('Node program process', () => {
     try {
       await entered.promise
       controller.abort({ kind: 'user' })
-      expect((await active).error).toEqual({ kind: 'abort', message: 'execution canceled' })
+      expect((await active).error).toEqual({ kind: 'abort', message: "{ kind: 'user' }" })
     } finally {
       controller.abort('test cleanup')
       await active
