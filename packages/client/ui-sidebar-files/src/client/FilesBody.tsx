@@ -139,7 +139,7 @@ function Level({ path, tree }: { path: string; tree: TreeContext }): ReactNode {
 /** The file tree's body: the workspace root and whatever the reader has opened under it. */
 export function FilesBody({
   useTabInfo, sessionId, useSessions, useStore, actions,
-  start, refresh, setAutoRefresh, toggle, retain, t, renderSlot,
+  start, refresh, setAutoRefresh, toggle, t, renderSlot,
 }: FilesBodyProps): ReactNode {
   const { tab } = useTabInfo()
   useEffect(() => tab.actions.bindCommands({ refresh: () => { refresh(tab.id) } }), [tab.actions, tab.id, refresh])
@@ -149,8 +149,7 @@ export function FilesBody({
   const bodyRef = useRef<HTMLDivElement>(null)
   const scrollTopRef = useRef(0)
   // Come back where the reader was: loaded levels outlive the body in the
-  // store, or in the face's retained tree once the Session's store was
-  // released, so a remounted tree lays out at its full height before this runs
+  // store, so a remounted tree lays out at its full height before this runs
   // and the stored offset re-lands exactly. A fresh tree stores 0.
   const seeded = state !== undefined
   useLayoutEffect(() => {
@@ -160,17 +159,12 @@ export function FilesBody({
       scrollTopRef.current = body.scrollTop
     }
   }, [seeded])
-  const treeRef = useRef(state)
-  useEffect(() => { treeRef.current = state }, [state])
-  // Scrolling only moves the ref; the store and the face hear about it once,
-  // on unmount, so a scroll neither re-renders the tree nor writes after the
-  // owner's abort has forgotten the bucket.
+  // Scrolling only moves the ref; the store hears about it once, on unmount,
+  // so a scroll neither re-renders the tree nor writes after the owner's
+  // abort has forgotten the bucket.
   useEffect(() => () => {
-    const tree = treeRef.current
-    if (tree === undefined || signal.aborted) return
-    actions.scrolled(tab.id, scrollTopRef.current)
-    retain(tab.id, { ...tree, scrollTop: scrollTopRef.current })
-  }, [signal, tab.id, actions, retain])
+    if (seeded && !signal.aborted) actions.scrolled(tab.id, scrollTopRef.current)
+  }, [seeded, signal, tab.id, actions])
   useEffect(() => {
     // A bucket gone because the record aborted must not be re-seeded by a
     // component that has not unmounted yet.
