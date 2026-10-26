@@ -2048,30 +2048,36 @@ describe('the run_code dispatch bridge', () => {
     expect(calls).toEqual([])
   })
 
-  it.each<AgentCancelCause>([
-    { kind: 'user' },
-    { kind: 'parent' },
-    { kind: 'hook', reason: 'policy stopped the turn' },
-    { kind: 'disposed' },
-  ])('maps a $kind caller cancellation to the native tool abort result', async (cause) => {
-    const { ctx, runtime } = await setup({ mode: 'ptc' })
-    onTestFinished(async () => { await ctx.fiber.dispose() })
-    const controller = new AbortController()
-    runtime.behavior = async (request) => {
-      controller.abort(cause)
-      expect(request.signal?.reason).toBe(cause)
-      return { logs: [], error: { kind: 'abort', message: '[object Object]' } }
-    }
+  describe.each(['typescript', 'python'])('%s caller cancellation', (language) => {
+    it.each<AgentCancelCause | undefined>([
+      { kind: 'user' },
+      { kind: 'parent' },
+      { kind: 'hook', reason: 'policy stopped the turn' },
+      { kind: 'disposed' },
+      undefined,
+    ])('maps reason %j to the native tool abort result', async (cause) => {
+      const { ctx, runtime } = await setup({ mode: 'ptc', runtime: { language } })
+      onTestFinished(async () => { await ctx.fiber.dispose() })
+      const controller = new AbortController()
+      runtime.behavior = async (request) => {
+        if (cause === undefined) controller.abort()
+        else controller.abort(cause)
+        expect(request.signal?.reason).toBe(controller.signal.reason)
+        const reason: unknown = request.signal?.reason
+        const message = reason instanceof Error ? reason.message : String(reason)
+        return { logs: [], error: { kind: 'abort', message } }
+      }
 
-    const result = await runCode(ctx, 'program', { signal: controller.signal })
+      const result = await runCode(ctx, 'program', { signal: controller.signal })
 
-    expect(result).toEqual({
-      content: [{ type: 'text', text: 'Error: tool call aborted' }],
-      isError: true,
-      error: {
-        message: 'tool call aborted',
-        info: { name: 'AbortError', code: TOOL_ABORTED },
-      },
+      expect(result).toEqual({
+        content: [{ type: 'text', text: 'Error: tool call aborted' }],
+        isError: true,
+        error: {
+          message: 'tool call aborted',
+          info: { name: 'AbortError', code: TOOL_ABORTED },
+        },
+      })
     })
   })
 
