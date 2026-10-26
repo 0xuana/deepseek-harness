@@ -83,12 +83,13 @@ export class CuaAccess extends TypertRemoteService {
 
   /**
    * Load presentation icons separately from application decisions.
-   * @returns Optional native PNG icons keyed by executable path for saved and blocked applications.
+   * @returns Optional native PNG icons keyed by executable path; applications without paths are skipped.
    */
   @Remote
   async applicationIcons(): Promise<Record<string, string>> {
     const state = await this.policy.status()
-    const paths = [...new Set([...state.allowedApps, ...state.blockedApps].map(app => app.executablePath))]
+    const paths = [...new Set([...state.allowedApps, ...state.blockedApps]
+      .flatMap(app => app.executablePath === undefined ? [] : [app.executablePath]))]
     return paths.length === 0 ? {} : z.record(z.string(), ApplicationIcon).parse(await this.control('applicationIcons', { paths }))
   }
 
