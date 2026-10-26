@@ -115,7 +115,7 @@ if (args[0] === 'api' && args[1] === 'graphql') {
     9: {
       number: 9, url: 'https://github.com/octo/demo/pull/9', title: 'Add the merge button', state: state.mergedAt === null ? 'OPEN' : 'MERGED',
       isDraft: !state.ready, updatedAt: '2026-10-09T00:00:00Z', closedAt: state.mergedAt, author: { login: 'octo' },
-      headRefName: 'feat/merge', headRefOid: 'b'.repeat(40), baseRefName: 'main', additions: 30, deletions: 2, mergeable: 'MERGEABLE',
+      headRefName: 'feat/merge', headRefOid: state.head ?? 'b'.repeat(40), baseRefName: 'main', additions: 30, deletions: 2, mergeable: 'MERGEABLE',
       mergeStateStatus: state.ready ? 'CLEAN' : 'BLOCKED', reviewDecision: 'APPROVED', reviewThreads: { nodes: [] },
       commits: { nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS', contexts: {
         pageInfo: { hasNextPage: false }, nodes: [check('lint', 'SUCCESS', '2026-10-09T00:00:42Z')],
@@ -514,6 +514,14 @@ it.skipIf(MODE === 'record')('marks a draft change request ready for review and 
   const menu = page.getByRole('menu')
   await menu.getByText('将 #9 合并到 main', { exact: true }).waitFor()
   await compareOrRefreshGolden(join(EXPECTED, 'merge-menu.expected.md'), await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd), MODE)
+  await writeFile(join(root, 'state.json'), JSON.stringify({ ready: true, mergedAt: null, head: 'c'.repeat(40) }))
+  scaffold.ctx.forge.refresh({ repository: { forge: 'github', host: 'github.com', owner: 'octo', name: 'demo' }, number: 9 })
+  const stale = menu.getByRole('menuitem', { name: '提交已更新，请重新检查后再打开合并菜单', exact: true })
+  await stale.waitFor()
+  expect(await stale.isDisabled()).toBe(true)
+  await compareOrRefreshGolden(join(EXPECTED, 'merge-stale.expected.md'), await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd), MODE)
+  await merge.click()
+  await merge.click()
   await menu.getByRole('menuitem', { name: '确认合并', exact: true }).click()
   await page.getByRole('alert').filter({ hasText: '已合并 #9' }).waitFor()
   // Merged, the change request is no longer open, so its card collapses to the merge line.
@@ -522,7 +530,7 @@ it.skipIf(MODE === 'record')('marks a draft change request ready for review and 
   const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
   expect(calls).toContainEqual(['pr', 'ready', '9', '--repo', 'github.com/octo/demo'])
   expect(calls).toContainEqual([
-    'api', '--hostname', 'github.com', '--method', 'PUT', 'repos/octo/demo/pulls/9/merge', '-f', 'merge_method=squash', '-f', `sha=${'b'.repeat(40)}`,
+    'api', '--hostname', 'github.com', '--method', 'PUT', 'repos/octo/demo/pulls/9/merge', '-f', 'merge_method=squash', '-f', `sha=${'c'.repeat(40)}`,
   ])
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])

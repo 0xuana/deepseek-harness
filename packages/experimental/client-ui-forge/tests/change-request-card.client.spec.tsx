@@ -448,6 +448,25 @@ describe('ChangeRequestCard actions', () => {
     expect(merge).toHaveBeenCalledOnce()
   })
 
+  it('requires a new confirmation after the head changes while the menu is open', async () => {
+    const merge = vi.fn<NonNullable<ChangeRequestActions['merge']>>(async () => {})
+    const actions: ChangeRequestActions = { openLink: vi.fn(), copyLink: vi.fn(), retry: vi.fn(), merge }
+    const view = (headSha: string) => <ChangeRequestCard entry={entry(7, snapshot(7, { mergeReady: true, headSha }))}
+      expanded onToggle={vi.fn()} now={NOW} actions={actions} t={t} />
+    const rendered = render(view(head))
+    const button = screen.getByRole('button', { name: en['change.merge'] })
+    fireEvent.click(button)
+    rendered.rerender(view('c'.repeat(40)))
+    const changed = screen.getByRole('menuitem', { name: en['change.mergeChanged'] })
+    expect(changed.hasAttribute('disabled')).toBe(true)
+    fireEvent.click(changed)
+    expect(merge).not.toHaveBeenCalled()
+    fireEvent.click(button)
+    fireEvent.click(button)
+    await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: en['change.mergeConfirm'] })) })
+    expect(merge).toHaveBeenCalledWith(expect.anything(), { method: 'squash', headSha: 'c'.repeat(40) })
+  })
+
   it('falls back to the usual method once the repository stops allowing the chosen one', async () => {
     const merge = vi.fn<(entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>>(async () => {})
     const actions: ChangeRequestActions = { openLink: vi.fn(), copyLink: vi.fn(), retry: vi.fn(), merge }

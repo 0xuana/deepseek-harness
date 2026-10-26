@@ -258,11 +258,13 @@ function MergeMenu({ snapshot, name, usual, busy, onMerge, t }: {
   readonly name: string
   readonly usual: MergeMethod
   readonly busy: boolean
-  readonly onMerge: (method: MergeMethod) => void
+  readonly onMerge: (method: MergeMethod, headSha: string) => void
   readonly t: Translate
 }): ReactNode {
   const [open, setOpen] = useState(false)
+  const [confirmedHead, setConfirmedHead] = useState(snapshot.headSha)
   const [chosen, setChosen] = useState<string>(usual)
+  const stale = confirmedHead !== snapshot.headSha
   // The methods can change between polls; a choice the repository no longer allows falls back to the usual one.
   const method = snapshot.mergeMethods.find(entry => entry === chosen) ?? usual
   const close = (): void => { setOpen(false) }
@@ -293,7 +295,10 @@ function MergeMenu({ snapshot, name, usual, busy, onMerge, t }: {
           aria-haspopup="menu"
           aria-expanded={open}
           disabled={busy}
-          onClick={() => { setOpen(!open) }}
+          onClick={() => {
+            if (!open) setConfirmedHead(snapshot.headSha)
+            setOpen(!open)
+          }}
         >
           {t('change.merge')}
           <IconChevronDownOutlineRegular size={12} className={clsx(css.chevron, open && css.chevronOpen)} />
@@ -305,12 +310,13 @@ function MergeMenu({ snapshot, name, usual, busy, onMerge, t }: {
     >
       <MenuItemButton
         separatorBefore
+        disabled={stale}
         onSelect={() => {
           close()
-          onMerge(method)
+          onMerge(method, confirmedHead)
         }}
       >
-        {t('change.mergeConfirm')}
+        {t(stale ? 'change.mergeChanged' : 'change.mergeConfirm')}
       </MenuItemButton>
     </Menu>
   )
@@ -351,7 +357,7 @@ function Primary({ entry, snapshot, name, actions, t }: {
         name={name}
         usual={usual}
         busy={busy}
-        onMerge={(method) => { run(() => merge(entry, { method, headSha: snapshot.headSha })) }}
+        onMerge={(method, headSha) => { run(() => merge(entry, { method, headSha })) }}
         t={t}
       />
     </div>
@@ -481,7 +487,9 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, t }
             : <Button size="sm" variant="outline" onClick={actions.retry}>{t('retry')}</Button>}
         </div>
       )}
-      {expanded && snapshot !== null && <Details entry={entry} snapshot={snapshot} name={name} now={now} actions={actions} t={t} />}
+      {expanded && snapshot !== null && (
+        <Details entry={entry} snapshot={snapshot} name={name} now={now} actions={actions} t={t} />
+      )}
       {expanded && snapshot !== null && <Primary entry={entry} snapshot={snapshot} name={name} actions={actions} t={t} />}
     </li>
   )
