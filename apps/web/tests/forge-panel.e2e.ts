@@ -392,6 +392,18 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   const header = page.locator('[data-forge-header]')
   await expect.poll(() => header.getAttribute('aria-label'), { timeout: 20_000 }).toBe('本会话的变更请求需要处理')
   expect(await header.getAttribute('aria-pressed')).toBe('false')
+
+  // The Session row marks the worktree and its change request's state, and its hover card names both.
+  const row = page.locator(`[data-row-key="session:${sessionId}"]`)
+  await row.getByRole('img', { name: '在自己的工作树中', exact: true }).waitFor({ timeout: 20_000 })
+  await row.getByRole('img', { name: '变更请求状态：需要处理 · 检查失败', exact: true }).waitFor({ timeout: 20_000 })
+  await row.hover()
+  const rowHover = page.locator('[data-forge-session-hover]')
+  await rowHover.getByText('#7 Add the pull request panel', { exact: true }).waitFor({ timeout: 20_000 })
+  await compareOrRefreshGolden(join(EXPECTED, 'session-row-hover.expected.md'),
+    await captureStableAria(page, '[data-forge-session-hover]', scaffold.workspaceCwd, { replacements: [[branch, 'dsh-{{worktree}}']] }), MODE)
+  await page.mouse.move(0, 0)
+  await rowHover.waitFor({ state: 'detached' })
   await header.click()
   await expect.poll(() => header.getAttribute('aria-pressed')).toBe('true')
   const panel = page.locator('[data-forge-panel]')
