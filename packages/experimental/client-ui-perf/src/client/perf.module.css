@@ -212,6 +212,46 @@
   font: var(--dsw-font-xxxs-11);
 }
 
+/* Event/compaction scope: the tag and clock share a narrow first column. They
+   wrap instead of overflowing into the trigger/provider column when the table
+   is squeezed. */
+.rowTagWhen {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.rowTagWhen .compactionTag {
+  max-width: 100%;
+  margin-right: 0;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.rowTagWhen .stepClock {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.eventRow .stepCell,
+.compactionRow .stepCell {
+  height: auto;
+  min-height: 30px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  overflow: hidden;
+  white-space: normal;
+}
+
+.eventRow .rowTagWhen,
+.compactionRow .rowTagWhen {
+  max-width: 100%;
+}
+
 .stepWhen {
   display: inline-flex;
   align-items: center;

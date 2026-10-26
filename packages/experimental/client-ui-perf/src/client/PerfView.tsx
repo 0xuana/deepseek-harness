@@ -1611,8 +1611,10 @@ function eventRow(event: PerfEventMetrics, t: PerfTranslate): ReactElement {
   return (
     <tr className={css.eventRow} title={title}>
       <td className={css.stepCell}>
-        <span className={css.compactionTag}>{eventLabel(event.kind, t)}</span>
-        <span className={css.stepClock}>{formatClock(event.time)}</span>
+        <span className={css.rowTagWhen}>
+          <span className={css.compactionTag}>{eventLabel(event.kind, t)}</span>
+          <span className={css.stepClock}>{formatClock(event.time)}</span>
+        </span>
       </td>
       <td className={css.promptCell}><span className={css.stepWhen}>{side}</span></td>
       <td className={css.stepDid}>{detail}</td>
@@ -1674,8 +1676,10 @@ function compactionRow(
   return (
     <tr className={css.compactionRow} title={t('compaction.title')}>
       <td className={css.stepCell}>
-        <span className={css.compactionTag}>{t('compaction.label')}</span>
-        <span className={css.stepClock}>{range}</span>
+        <span className={css.rowTagWhen}>
+          <span className={css.compactionTag}>{t('compaction.label')}</span>
+          <span className={css.stepClock}>{range}</span>
+        </span>
       </td>
       <td className={cx(css.promptCell, css.stepWhen)} title={model}>{model}</td>
       <td className={css.stepDid}>{parts.join(' · ')}</td>

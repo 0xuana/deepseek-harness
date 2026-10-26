@@ -1024,6 +1024,8 @@ describe('turn rows', () => {
     expect(screen.getByText(say('event.refresh.detail', {
       source: say('event.source.time'), chars: formatChars(16),
     }))).toBeTruthy()
+    const scope = screen.getAllByText(say('event.system-prompt'))[0]?.closest('td')
+    expect(scope?.querySelector('[class*="rowTagWhen"]')?.textContent).toContain(say('event.system-prompt'))
     expect(screen.getAllByText(say('event.approval'))).toHaveLength(7)
     for (const status of ['asked', 'allowed', 'rejected', 'cancelled', 'unavailable'] as const) {
       expect(screen.getAllByText(say(`event.approval.${status}`)).length).toBeGreaterThan(0)
