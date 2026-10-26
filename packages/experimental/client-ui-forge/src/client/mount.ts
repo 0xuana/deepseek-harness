@@ -245,8 +245,10 @@ function registerUi(ctx: Context): void {
       return {
         hooks: { panel: store.panel.hooks.panel, visible: store.visibility.hooks.visible },
         toggle: (visible) => {
-          if (visible) ctx.sidebarRight.toggleExpanded()
-          else ctx.sidebarRight.openTab(TAB_KIND)
+          if (!visible) { ctx.sidebarRight.openTab(TAB_KIND); return }
+          const tab = ctx.sidebarRight.tabsIn(sessionId).find(tab => tab.kind === TAB_KIND)
+          if (tab === undefined) return
+          ctx.sidebarRight.hide(tab.id)
         },
       }
     },
