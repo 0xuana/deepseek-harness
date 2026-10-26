@@ -109,8 +109,6 @@ Omitting `timeoutMs` uses the configured elapsed default; numeric requests are v
 
 Program parse errors and thrown exceptions are `exception`; deadline expiry is `timeout`; cancellation is `abort`; unparsable or oversized control traffic and invalid program messages are `protocol`; unavailable confinement is `sandbox-unavailable`; early process exit, lost control transport or failed managed cleanup is `worker-exit`. Control I/O failures retain the transport diagnostic alongside the observed process exit status. The substrate-independent failure name remains `worker-exit` for process providers. Lossy completions are `invalid-output`, and an oversized outer result is `output-limit`, retaining the fitting log prefix. Invalid or unsupported options and calls after disposal reject as caller misuse.
 
-Host failure diagnostics keep strings and `Error` messages unchanged and use Node inspection for other values, including objects with circular references. Cancellation diagnostics retain structured cause fields such as `kind` and a hook's `reason`; retained environments append `; retained variables were cleared`.
-
 -----
 
 <a id="understand-the-implementation"></a>

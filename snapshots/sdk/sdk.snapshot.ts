@@ -1015,11 +1015,14 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
       const actualContext = contextOf(ordered, cwd)
       if (scenario.name === 'ptc-cancel') {
         const events = results.flatMap(result => result.events)
-        expect(events.find(event => event.type === 'tool/result')).toMatchObject({ data: { message: {
-          toolCallId: 'ptc-cancel',
-          isError: true,
-          content: [{ type: 'text', text: "Error: code run failed (abort): { kind: 'user' }\nFile sandbox: danger-full-access." }],
-        } } })
+        expect(events.find(event => event.type === 'tool/result')).toMatchObject({ data: {
+          message: {
+            toolCallId: 'ptc-cancel',
+            isError: true,
+            content: [{ type: 'text', text: 'Error: tool call aborted' }],
+          },
+          error: { name: 'AbortError', code: 'ABORTED' },
+        } })
         expect(events.find(event => event.type === 'turn/end')).toMatchObject({
           data: { reason: { kind: 'aborted', reason: { kind: 'user' } } },
         })

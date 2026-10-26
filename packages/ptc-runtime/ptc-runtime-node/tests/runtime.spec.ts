@@ -186,14 +186,9 @@ describe('Node program process', () => {
     const entered = Promise.withResolvers<undefined>()
     const controller = new AbortController()
     const active = run({ ...timing, program: 'void tools.enter({}); for (;;) {}', signal: controller.signal, bindings: bindings({ enter: async () => { entered.resolve(undefined); return null } }) })
-    try {
-      await entered.promise
-      controller.abort({ kind: 'user' })
-      expect((await active).error).toEqual({ kind: 'abort', message: "{ kind: 'user' }" })
-    } finally {
-      controller.abort('test cleanup')
-      await active
-    }
+    await entered.promise
+    controller.abort('stop')
+    expect((await active).error).toEqual({ kind: 'abort', message: 'stop' })
   })
 
   it('closes a still-running descendant before returning the program result', async () => {
