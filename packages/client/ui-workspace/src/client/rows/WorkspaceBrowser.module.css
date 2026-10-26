@@ -70,6 +70,10 @@
 .root:not(.rail) .sectionHeader {
   margin-top: 2px;
   margin-right: -4px;
+  transition:
+    margin-right 180ms var(--ds-ease-in-out),
+    padding-inline 180ms var(--ds-ease-in-out),
+    gap 180ms var(--ds-ease-in-out);
 }
 
 .root:not(.rail) .sectionHeader:not(:has(.searchExpanded)) {
@@ -637,6 +641,7 @@
     animation: none;
   }
 
+  .root:not(.rail) .sectionHeader,
   .search,
   .sectionLabel,
   .searchSlot,

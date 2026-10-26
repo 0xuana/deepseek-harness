@@ -8,11 +8,6 @@
   margin: 4px 0;
 }
 
-.triggerRow:not(.railRow):has(button[data-signed-out='false']) {
-  width: calc(100% - 4px);
-  margin-inline: 2px;
-}
-
 .triggerRow.railRow {
   width: 36px;
   margin: 8px 0 10px;

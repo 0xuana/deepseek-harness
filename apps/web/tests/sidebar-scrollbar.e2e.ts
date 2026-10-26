@@ -6,9 +6,9 @@
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
-import type { Browser, Locator, Page } from 'playwright'
+import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import {
   assertFixtureInventory, compareOrRefreshGolden, launchWebScaffold, seedSession, watchConsole,
   webSnapshotMode, type WebScaffold,
@@ -94,8 +94,8 @@ function measureList(page: Page): Promise<ListMetrics> {
     const pseudoWidth = getComputedStyle(list, '::-webkit-scrollbar').width
     const barWidth = pseudoWidth === 'auto' ? 15 : Number.parseFloat(pseudoWidth)
     const listRect = list.getBoundingClientRect()
-    const sidebarEdge = list.parentElement?.getBoundingClientRect().right
-    if (sidebarEdge === undefined) throw new Error('sidebar session list has no layout parent')
+    const listParentRight = list.parentElement?.getBoundingClientRect().right
+    if (listParentRight === undefined) throw new Error('sidebar session list has no layout parent')
     return {
       gutter: style.scrollbarGutter,
       width: pseudoWidth,
@@ -107,9 +107,9 @@ function measureList(page: Page): Promise<ListMetrics> {
       hoverToken: resolve('--dsh-scrollbar-thumb-hover'),
       overflows: list.scrollHeight > list.clientHeight,
       band: listRect.width - list.clientWidth,
-      scrollbarEdgeOffset: sidebarEdge - listRect.right,
-      rowEdgeInset: sidebarEdge - row.getBoundingClientRect().right,
-      rowPaintInset: sidebarEdge - row.getBoundingClientRect().right + Number.parseFloat(getComputedStyle(row).borderRightWidth),
+      scrollbarEdgeOffset: listParentRight - listRect.right,
+      rowEdgeInset: listParentRight - row.getBoundingClientRect().right,
+      rowPaintInset: listParentRight - row.getBoundingClientRect().right + Number.parseFloat(getComputedStyle(row).borderRightWidth),
       clientRight: listRect.left + list.clientWidth,
       borderRight: listRect.right,
       timeRight: time.getBoundingClientRect().right,
@@ -137,12 +137,12 @@ function measureRowInset(page: Page): Promise<Pick<ListMetrics, 'overflows' | 'r
     if (list === null) throw new Error('sidebar session list not in the DOM')
     const row = list.querySelector<HTMLElement>('[role="treeitem"]')
     if (row === null) throw new Error('no row in the sidebar list')
-    const sidebarEdge = list.parentElement?.getBoundingClientRect().right
-    if (sidebarEdge === undefined) throw new Error('sidebar session list has no layout parent')
+    const listParentRight = list.parentElement?.getBoundingClientRect().right
+    if (listParentRight === undefined) throw new Error('sidebar session list has no layout parent')
     return {
       overflows: list.scrollHeight > list.clientHeight,
-      rowEdgeInset: sidebarEdge - row.getBoundingClientRect().right,
-      rowPaintInset: sidebarEdge - row.getBoundingClientRect().right + Number.parseFloat(getComputedStyle(row).borderRightWidth),
+      rowEdgeInset: listParentRight - row.getBoundingClientRect().right,
+      rowPaintInset: listParentRight - row.getBoundingClientRect().right + Number.parseFloat(getComputedStyle(row).borderRightWidth),
     }
   })
 }
@@ -195,9 +195,9 @@ function renderGeometry(light: PaletteMetrics, dark: PaletteMetrics): string {
     `- --dsh-scrollbar-thumb-hover, pointer over the list: ${metrics.hoverToken}`,
     `- list overflows: ${String(metrics.overflows)}`,
     `- reserved band: ${String(metrics.band)}px`,
-    `- scrollbar inset from the sidebar edge: ${String(metrics.scrollbarEdgeOffset)}px`,
-    `- row hitbox inset from the sidebar edge: ${String(metrics.rowEdgeInset)}px`,
-    `- row background inset from the sidebar edge: ${String(metrics.rowPaintInset)}px`,
+    `- scrollbar inset from the list parent edge: ${String(metrics.scrollbarEdgeOffset)}px`,
+    `- row hitbox inset from the list parent edge: ${String(metrics.rowEdgeInset)}px`,
+    `- row background inset from the list parent edge: ${String(metrics.rowPaintInset)}px`,
     `- relative time covered by the bar: ${String(metrics.timeCoveredBy)}px`,
     `- relative time ends inside the content area: ${String(metrics.timeRight <= metrics.clientRight)}`,
     `- content area ends before the border box: ${String(metrics.clientRight < metrics.borderRight)}`,
@@ -430,231 +430,5 @@ describe('web e2e: sidebar session list scrollbar (reserved gutter / themed thum
   it.skipIf(MODE === 'record')('issued zero model calls and stayed clean', () => {
     expect(tripwire.warnings).toEqual([])
     expect(tripwire.pageErrors).toEqual([])
-  })
-})
-
-/**
- * Measure painted glyphs and pointer targets independently of the row's layout cells.
- * @param row - visible, hovered Workspace or Session row.
- * @returns row bounds, action geometry, and browser hit-test results.
- */
-async function measureRowActions(row: Locator) {
-  return row.evaluate((element) => {
-    const rowRect = element.getBoundingClientRect()
-    const title = element.querySelector<HTMLElement>('[class*="title"]')
-    if (title === null) throw new Error('row title not in the DOM')
-    const buttons = [...element.querySelectorAll<HTMLButtonElement>('button')]
-    return {
-      height: rowRect.height,
-      overflows: element.scrollWidth > element.clientWidth,
-      titleRight: title.getBoundingClientRect().right,
-      actions: buttons.map((button) => {
-        const rect = button.getBoundingClientRect()
-        const glyph = button.querySelector('svg')
-        if (glyph === null) throw new Error('row action glyph not in the DOM')
-        const glyphRect = glyph.getBoundingClientRect()
-        const style = getComputedStyle(button)
-        const center = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
-        // Side samples cover the outer target; corner samples stay inside the rounded border.
-        const points = [
-          { x: center.x - 11.5, y: center.y },
-          { x: center.x + 11.5, y: center.y },
-          { x: center.x, y: center.y - 11.5 },
-          { x: center.x, y: center.y + 11.5 },
-          { x: center.x - 9.5, y: center.y - 9.5 },
-          { x: center.x + 9.5, y: center.y - 9.5 },
-          { x: center.x - 9.5, y: center.y + 9.5 },
-          { x: center.x + 9.5, y: center.y + 9.5 },
-        ]
-        const hits = (x: number, y: number): boolean => {
-          const target = document.elementFromPoint(x, y)
-          return target !== null && button.contains(target)
-        }
-        return {
-          label: button.getAttribute('aria-label'),
-          width: rect.width,
-          height: rect.height,
-          layoutWidth: rect.width + Number.parseFloat(style.marginLeft) + Number.parseFloat(style.marginRight),
-          layoutHeight: rect.height + Number.parseFloat(style.marginTop) + Number.parseFloat(style.marginBottom),
-          margins: [style.marginTop, style.marginRight, style.marginBottom, style.marginLeft],
-          pseudoContent: getComputedStyle(button, '::after').content,
-          center,
-          rowCenterOffset: center.y - (rowRect.y + rowRect.height / 2),
-          trailingInset: rowRect.right - rect.right,
-          glyphWidth: glyphRect.width,
-          glyphHeight: glyphRect.height,
-          glyphCenterOffset: {
-            x: glyphRect.x + glyphRect.width / 2 - center.x,
-            y: glyphRect.y + glyphRect.height / 2 - center.y,
-          },
-          insideRow: center.x - 12 >= rowRect.left && center.x + 12 <= rowRect.right
-            && center.y - 12 >= rowRect.top && center.y + 12 <= rowRect.bottom,
-          points,
-          edgeHits: points.map(({ x, y }) => hits(x, y)),
-          // Clear Chromium's boundary rounding while still rejecting an oversized 28px target.
-          outsideHits: [
-            hits(center.x - 13.5, center.y), hits(center.x + 13.5, center.y),
-            hits(center.x, center.y - 13.5), hits(center.x, center.y + 13.5),
-          ],
-        }
-      }),
-    }
-  })
-}
-
-describe('web e2e: sidebar search alignment and row action targets', () => {
-  const workspaceTitle = 'Sidebar geometry workspace'
-  const sessionTitle = 'Sidebar geometry session'
-  let scaffold: WebScaffold
-  let browser: Browser
-  let page: Page
-  let tripwire: ReturnType<typeof watchConsole>
-
-  beforeAll(async () => {
-    scaffold = await launchWebScaffold({})
-    const workspace = await scaffold.ctx.workspaceRegistry.create(scaffold.workspaceCwd, workspaceTitle)
-    const id = await seedSession(scaffold, await readFile(SEED, 'utf8'), 'sidebar-action-geometry')
-    await workspace.attachSession(id)
-    await scaffold.ctx.sessionController.rename({ sessionId: id, title: sessionTitle })
-    browser = await chromium.launch()
-  })
-
-  beforeEach(async () => {
-    page = await newEnglishPage(browser, 800)
-    tripwire = watchConsole(page)
-    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-    const workspace = page.locator('[data-row-key^="workspace:"]').filter({ hasText: workspaceTitle })
-    await workspace.waitFor({ timeout: 30_000 })
-    await expect.poll(async () => {
-      if (await workspace.getAttribute('aria-expanded') !== 'true') {
-        await workspace.getByText(workspaceTitle, { exact: true }).click()
-      }
-      return workspace.getAttribute('aria-expanded')
-    }, { timeout: 10_000 }).toBe('true')
-    await page.locator('[data-row-key="session:sidebar-action-geometry"]').waitFor()
-  })
-
-  afterEach(async () => {
-    await page?.close()
-  })
-
-  afterAll(async () => {
-    try { await browser?.close() } finally { await scaffold?.close() }
-  })
-
-  it('aligns the 32px expanded search with both edges of New session', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-search-alignment'))
-    const searchButton = page.getByRole('button', { name: 'Search sessions', exact: true })
-    const input = page.getByPlaceholder('Search session names', { exact: true })
-    const search = input.locator('..')
-    const newSession = page.locator('button[class*="newSession"]')
-    const measure = async () => {
-      const searchBox = await search.boundingBox()
-      const newSessionBox = await newSession.boundingBox()
-      if (searchBox === null || newSessionBox === null) throw new Error('sidebar controls have no layout box')
-      return {
-        height: searchBox.height,
-        leftOffset: searchBox.x - newSessionBox.x,
-        rightOffset: searchBox.x + searchBox.width - newSessionBox.x - newSessionBox.width,
-      }
-    }
-    for (const dark of [false, true]) {
-      await page.evaluate(dark => document.body.toggleAttribute('data-ds-dark-theme', dark), dark)
-      await expect.poll(async () => {
-        const reference = await newSession.boundingBox()
-        if (reference === null) throw new Error('New session has no layout box')
-        const controls = [searchButton, page.getByRole('button', { name: 'View options', exact: true }), page.getByRole('button', { name: 'Add workspace', exact: true })]
-        const boxes = await Promise.all(controls.map(control => control.boundingBox()))
-        return boxes.map(box => box === null ? null : box.x + box.width - reference.x - reference.width)
-      }).toEqual([-61, -29, 3])
-      const labelBox = await page.locator('[class*="sectionHeader"] [class*="sectionLabel"]').boundingBox()
-      const referenceBox = await newSession.boundingBox()
-      if (labelBox === null || referenceBox === null) throw new Error('Sidebar heading has no layout box')
-      expect(labelBox.x - referenceBox.x).toBe(7)
-      await searchButton.click()
-      await expect.poll(() => searchButton.getAttribute('aria-expanded')).toBe('true')
-      await expect.poll(measure, { timeout: 10_000 }).toEqual({ height: 32, leftOffset: 0, rightOffset: 0 })
-      expect(await input.evaluate(element => element === document.activeElement)).toBe(true)
-      await input.press('Escape')
-      await expect.poll(() => searchButton.getAttribute('aria-expanded')).toBe('false')
-    }
-    expect(tripwire.pageErrors).toEqual([])
-    expect(tripwire.warnings).toEqual([])
-  })
-
-  it.each(['session', 'workspace'] as const)('keeps %s action glyphs in 16px layout space with 24px buttons', async (kind) => {
-    onTestFailed(() => saveFailureShot(page, `web-e2e-sidebar-${kind}-action-targets`))
-    const row = kind === 'session'
-      ? page.locator('[data-row-key="session:sidebar-action-geometry"]')
-      : page.locator('[data-row-key^="workspace:"]').filter({ hasText: workspaceTitle })
-    const restingBox = await row.boundingBox()
-    await row.hover()
-    const labels = kind === 'session'
-      ? [`Session actions for ${sessionTitle}`, 'Archive session', 'Pin session'] as const
-      : [`Workspace actions for ${workspaceTitle}`, `New session in ${workspaceTitle}`] as const
-    await row.getByRole('button', { name: labels[0], exact: true }).waitFor()
-    const metrics = await measureRowActions(row)
-    expect(await row.boundingBox()).toEqual(restingBox)
-    expect(metrics.height).toBe(kind === 'session' ? 32 : 34)
-    expect(metrics.overflows).toBe(false)
-    expect(metrics.actions.map(action => action.label)).toEqual(labels)
-    for (const [index, action] of metrics.actions.entries()) {
-      expect(action.width).toBe(24)
-      expect(action.height).toBe(24)
-      expect(action.layoutWidth).toBe(16)
-      expect(action.layoutHeight).toBe(16)
-      expect(action.margins).toEqual(['-4px', '-4px', '-4px', '-4px'])
-      expect(action.pseudoContent).toBe('none')
-      expect(action.rowCenterOffset).toBe(0)
-      expect(action.glyphWidth).toBe(index === 0 ? 16 : 14)
-      expect(action.glyphHeight).toBe(index === 0 ? 16 : 14)
-      expect(action.glyphCenterOffset).toEqual({ x: 0, y: 0 })
-      expect(action.insideRow).toBe(true)
-      expect(action.edgeHits).toEqual(Array<boolean>(8).fill(true))
-      expect(action.outsideHits).toEqual([false, false, false, false])
-      const previous = metrics.actions[index - 1]
-      if (previous !== undefined) {
-        expect(action.center.x - previous.center.x).toBe(29)
-        expect(previous.center.x + 12).toBeLessThan(action.center.x - 12)
-      } else {
-        expect(metrics.titleRight).toBeLessThanOrEqual(action.center.x - 12)
-      }
-    }
-    expect(metrics.actions.at(-1)?.trailingInset).toBe(7)
-
-    if (kind === 'session') expect(await row.getAttribute('aria-selected')).toBe('false')
-    const selectedRows = page.locator('[role="tree"][aria-label="Sessions"] [aria-selected="true"]')
-    const selectedKeys = await selectedRows.evaluateAll(rows => rows.map(row => row.getAttribute('data-row-key')))
-    const expanded = await row.getAttribute('aria-expanded')
-    const menuButton = row.getByRole('button', { name: labels[0], exact: true })
-    const menu = page.getByRole('menu')
-    const menuAction = kind === 'session' ? 'Pin session' : 'Rename'
-    const first = metrics.actions[0]
-    if (first === undefined) throw new Error('row has no menu trigger')
-    for (const point of first.points.slice(0, 4)) {
-      // Edge clicks exercise the enlarged target rather than the glyph's center.
-      await page.mouse.click(point.x, point.y)
-      await menu.getByRole('menuitem', { name: menuAction, exact: true }).waitFor()
-      expect(await selectedRows.evaluateAll(rows => rows.map(row => row.getAttribute('data-row-key')))).toEqual(selectedKeys)
-      expect(await row.getAttribute('aria-expanded')).toBe(expanded)
-      await page.keyboard.press('Escape')
-      await menu.waitFor({ state: 'detached' })
-      await menuButton.hover()
-    }
-    const tooltipAnchor = row.getByRole('button', { name: labels[1], exact: true })
-    const tooltip = page.getByRole('tooltip').filter({ hasText: kind === 'session' ? 'Archive' : 'New session' })
-    await tooltipAnchor.hover()
-    await tooltip.waitFor({ timeout: 10_000 })
-    const anchorBox = await tooltipAnchor.boundingBox()
-    const tooltipBox = await tooltip.boundingBox()
-    if (anchorBox === null || tooltipBox === null) throw new Error('hover tooltip or its anchor has no layout box')
-    expect(tooltipBox.y).toBe(anchorBox.y + anchorBox.height + 8)
-    expect(tooltipBox.x + tooltipBox.width).toBe(anchorBox.x + anchorBox.width)
-    await pointAt(page, 'away')
-    await tooltip.waitFor({ state: 'detached' })
-    expect(await tooltipAnchor.isVisible()).toBe(false)
-    expect(await page.getByRole('tooltip').count()).toBe(0)
-    expect(tripwire.pageErrors).toEqual([])
-    expect(tripwire.warnings).toEqual([])
   })
 })

@@ -79,7 +79,6 @@
 
 :global([data-windows-titlebar]) .root:not(.collapsed) .newSession {
   margin-top: 6px;
-  margin-left: calc(var(--dsh-sidebar-paint-inset) + 1px);
 }
 
 :global([data-windows-titlebar]) .collapsed .panelList,
@@ -195,7 +194,7 @@
   padding: 0 12px 2px;
 }
 
-:global(html[data-platform='darwin']:not([data-fullscreen])) .root:not(.collapsed):not(.fading) > .topStrip > .toggle {
+:global(html[data-platform='darwin']:not([data-fullscreen])) .root:not(.collapsed) > .topStrip > .toggle {
   transform: translateX(4px);
 }
 
@@ -212,7 +211,8 @@
   margin-top: -12px;
 }
 
-/* Logo row (figma pad (4,8,4,8)): expanded keeps the panel toggle at the
+/* Logo row: 8px vertical and leading padding, with no trailing padding or
+   bottom margin. Expanded keeps the panel toggle at the
    right edge; the rail gives every control the same base left anchor before
    the shared entry translation is applied. macOS hiddenInset titlebar: the row
    is marked `data-window-drag` in markup (SidebarRoot), so ui-web base.css's
@@ -534,8 +534,8 @@
   margin-bottom: 8px;
 }
 
-/* Panel entries share the New Session bar's 12px radius and 2px inset, the
-   session rows' hover/selected surface, and the primary ink. */
+/* Panel entries use a 3px paint inset, the New Session bar's 12px radius,
+   the session rows' hover/selected fill, and the primary ink. */
 .panelRow {
   display: flex;
   align-items: center;
