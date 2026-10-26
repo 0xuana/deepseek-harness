@@ -224,7 +224,7 @@ async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up'
   // The borrowed scenario records one model call, so index 1 appends the reply to the follow-up.
   if (scenario === 'follow-up') await writeFile(override, JSON.stringify({ patches: [{ at: 1, entry: { kind: 'chunks', chunks: textReply(FOLLOW_UP_REPLY) } }] }))
   if (scenario === 'reference') {
-    const command = `PATH=${JSON.stringify(`${root}:${process.env.PATH ?? ''}`)} gh pr view 7 --repo octo/demo --json number,title 2>&1 | head -200`
+    const command = `PATH=${JSON.stringify(`.fixture-bin:${process.env.PATH ?? ''}`)} gh pr view 7 --repo octo/demo --json number,title 2>&1 | head -200`
     const call = { type: 'tool-call', id: 'view-pr', name: 'bash', arguments: JSON.stringify({ command, description: 'View PR metadata' }) }
     await writeFile(override, JSON.stringify({ patches: [
       { at: 0, entry: { kind: 'chunks', chunks: [
@@ -257,6 +257,13 @@ async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up'
   await git(project, 'remote', 'add', 'origin', 'https://github.com/octo/demo.git')
   await git(project, 'branch', 'release')
   await git(project, 'commit', '--quiet', '--allow-empty', '-m', 'main only')
+  if (scenario === 'reference') {
+    // The model's confined command must own the CLI double's writable call log.
+    const modelBin = join(project, '.fixture-bin')
+    await mkdir(modelBin)
+    await writeFile(join(modelBin, 'gh'), GH)
+    await chmod(join(modelBin, 'gh'), 0o755)
+  }
 
   const browser = await chromium.launch()
   resources.browser = browser
@@ -319,9 +326,13 @@ function worktreeRecords(events: readonly SessionEvent[]): unknown[] {
 }
 
 it.skipIf(MODE === 'record')('automatically shows a numbered PR when gh JSON omits its URL', async () => {
-  const { scaffold, page, root, tripwire } = await launchPanel('web-e2e-forge-numbered-reference', 'reference')
+  const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-numbered-reference', 'reference')
   const { settled } = await sendPrompt(page, scaffold)
   const sessionId = await settled
+  const events = await readPersistedEvents(scaffold, sessionId)
+  const toolOutput = events.flatMap(event => event.type === 'tool/result'
+    ? event.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []) : []).join('\n')
+  expect(toolOutput).toContain('Add the pull request panel')
   const header = page.locator('[data-forge-header]')
   await expect.poll(() => header.getAttribute('aria-label'), { timeout: 20_000 }).toBe('本会话的变更请求需要处理')
   await header.click()
@@ -330,12 +341,11 @@ it.skipIf(MODE === 'record')('automatically shows a numbered PR when gh JSON omi
   await change.getByText('等待评审 · 1 条未解决讨论', { exact: true }).waitFor()
   await compareOrRefreshGolden(join(EXPECTED, 'reference.expected.md'),
     await captureStableAria(page, `[data-forge-change="${PULL}"]`, scaffold.workspaceCwd), MODE)
-  const events = await readPersistedEvents(scaffold, sessionId)
   expect(events.flatMap((event) => {
     const record = pluginRecordOf(event)
     return record?.type === 'plugin:forge-session/binding' ? [record.data] : []
   })).toEqual([{ action: 'reference', url: PULL }])
-  const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
+  const calls = (await readFile(join(project, '.fixture-bin', 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
   expect(calls).toContainEqual(['pr', 'view', '7', '--repo', 'octo/demo', '--json', 'url'])
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])
