@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import type { ChangeRequestUpdate, ForgeProvider } from '../src/types.ts'
-import { changeRequestKey } from '../src/index.ts'
+import ForgeService, { changeRequestKey } from '../src/index.ts'
 import { demo, FakeProvider, forgeContext, provide, ref, snapshot } from './fake-provider.ts'
 
 let ctx: Context | undefined
@@ -90,4 +90,32 @@ it('contains failed registry observers and still notifies other observers', asyn
   await provide(ctx, new FakeProvider())
   expect(await notified.promise).toBe('fake')
   await vi.waitFor(() => { expect(warning).toHaveBeenCalledWith(expect.stringContaining('provider change listener failed')) })
+})
+
+it('immediately polls existing watches only for the provider being registered', async () => {
+  vi.useFakeTimers()
+  ctx = await forgeContext()
+  const updates: ChangeRequestUpdate[] = []
+  ctx.forge.watch(ref(1), (update) => { updates.push(update) })
+  ctx.forge.watch(ref(2, { ...demo, forge: 'other' }), () => {})
+  await vi.advanceTimersByTimeAsync(0)
+  expect(updates.at(-1)).toMatchObject({ failure: { code: 'unavailable' } })
+  const provider = new FakeProvider()
+  provider.results.set(changeRequestKey(ref(1)), snapshot(ref(1)))
+  await provide(ctx, provider)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(provider.fetches).toEqual([[ref(1)]])
+  expect(updates.at(-1)).toMatchObject({ snapshot: snapshot(ref(1)) })
+})
+
+it('does not announce provider withdrawal after its registry has stopped', async () => {
+  ctx = new Context()
+  const service = ctx.plugin(ForgeService)
+  await service
+  const observer = vi.fn()
+  ctx.on('forge/providers-changed', observer)
+  const unregister = ctx.forge.register(new FakeProvider())
+  await service.dispose()
+  await unregister()
+  expect(observer).toHaveBeenCalledTimes(1)
 })

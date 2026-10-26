@@ -245,6 +245,12 @@ describe('forgeSession watch', () => {
     const listener = vi.fn<SessionChangeRequestsListener>()
     const stop = ctx.forgeSession.watch(session, listener)
     expect(ctx.forgeSession.changeRequests(session)[0]?.ref).toBeNull()
+    const other = ctx.sessions.create()
+    create(other, 'other', pullUrl(8))
+    const stopOther = ctx.forgeSession.watch(other, () => {})
+    listener.mockImplementation((entries) => {
+      if (entries[0]?.ref !== null) stopOther()
+    })
 
     const provider = new FakeProvider()
     const register = () => ctx.plugin({ inject: ['forge'], apply(child: Context) { child.forge.register(provider) } })

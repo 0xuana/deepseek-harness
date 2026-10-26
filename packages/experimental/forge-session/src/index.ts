@@ -145,7 +145,8 @@ export class ForgeSessionService extends Service {
       this.sessionLifetimes.delete(session)
     })
     this.home.on('forge/providers-changed', () => {
-      for (const watch of [...this.watches.values()]) {
+      for (const [session, watch] of [...this.watches]) {
+        if (this.watches.get(session) !== watch) continue
         this.sync(watch)
         this.notify(watch)
       }
