@@ -1094,7 +1094,7 @@ describe('forgePanel removed worktrees', () => {
     sendPrompt(opened.agent, 'next')
     const missing = await follower.until(state => state.worktree.waiting === 'restoration')
     expect(opened.agent.wakes).toBe(1)
-    const pruning = hold(opened.sandbox, 'prune')
+    const pruning = hold(opened.sandbox, 'list')
     const resetting = hold(opened.sandbox, 'reset')
     const restoring = opened.ctx.forgePanel.restoreWorktree(opened.session, signal)
     await pruning.reached
@@ -1281,7 +1281,7 @@ describe('forgePanel removed worktrees', () => {
     await rm(created.path, { recursive: true, force: true })
     sendPrompt(opened.agent, 'next')
     await follower.until(state => state.worktree.waiting === 'restoration')
-    const pruning = hold(opened.sandbox, 'prune')
+    const pruning = hold(opened.sandbox, 'list')
     const caller = new AbortController()
     const reason = new Error('closed')
 
@@ -1307,7 +1307,7 @@ describe('forgePanel removed worktrees', () => {
     const opened = await open(repo, {}, { worktrees: true })
     const created = await startInWorktree(opened)
     await rm(created.path, { recursive: true, force: true })
-    const pruning = hold(opened.sandbox, 'prune')
+    const pruning = hold(opened.sandbox, 'list')
     const caller = new AbortController()
     const reason = new Error('closed')
 

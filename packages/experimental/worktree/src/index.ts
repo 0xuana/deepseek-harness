@@ -130,7 +130,7 @@ export class WorktreeService extends Service {
   /**
    * Check out a removed worktree again at its recorded directory: its branch
    * when the branch still exists, otherwise a new branch of the same name at
-   * `baseCommit`. Stale worktree registrations are pruned first, and an
+   * `baseCommit`. Only the missing target's unlocked registration is removed, and an
    * existing directory fails. Changes that were never committed are not
    * recovered. Checkout disables configured clean, smudge, and process filters,
    * as creation does. The calling Session's working directory does not change.
@@ -226,7 +226,17 @@ export class WorktreeService extends Service {
     const actualRoot = await this.ctx.fs.resolve(top.stdout.replace(/\r?\n$/, ''), { cwd: repositoryRoot, signal })
     if (actualRoot.targetKey !== root.targetKey) throw new Error('worktree repositoryRoot must be the source checkout root')
     await run(repositoryRoot, ['rev-parse', '--verify', '--end-of-options', `${baseCommit}^{commit}`])
-    await run(repositoryRoot, ['worktree', 'prune'])
+    const registered = await run(repositoryRoot, ['worktree', 'list', '--porcelain', '-z'])
+    for (const entry of registered.stdout.split('\0\0')) {
+      const fields = entry.split('\0')
+      const recordedPath = fields.find(field => field.startsWith('worktree '))?.slice('worktree '.length)
+      if (recordedPath === undefined) continue
+      const recorded = await this.ctx.fs.resolve(recordedPath, { cwd: repositoryRoot, signal })
+      if (recorded.targetKey !== target.targetKey) continue
+      if (fields.some(field => field === 'locked' || field.startsWith('locked '))) throw new Error(`worktree is locked: ${path}`)
+      if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new Error(`worktree path already exists: ${path}`)
+      await run(repositoryRoot, ['worktree', 'remove', '--', path])
+    }
     const existing = await run(repositoryRoot, ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], [0, 1])
     const branchRecreated = existing.exitCode !== 0
     try {

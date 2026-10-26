@@ -107,7 +107,7 @@ async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortS
 /**
  * Check out a removed worktree again at its recorded directory: its branch
  * when the branch still exists, otherwise a new branch of the same name at
- * `baseCommit`. Stale worktree registrations are pruned first, and an
+ * `baseCommit`. Only the missing target's unlocked registration is removed, and an
  * existing directory fails. Changes that were never committed are not
  * recovered. Checkout disables configured clean, smudge, and process filters,
  * as creation does. The calling Session's working directory does not change.
