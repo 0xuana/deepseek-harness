@@ -361,6 +361,8 @@ describe('mountForgePanel Session stores', () => {
     f.ctx.locale.addLanguage({ id: 'de', label: 'Deutsch', fallback: 'en' })
     f.ctx.locale.setLocale('de')
     expect(locale.getSnapshot()).toBe('de')
+    expect(f.ctx.locale.bind(NS)('header.label')).toBe('Änderungsanfragen dieser Sitzung')
+    expect(f.ctx.locale.bind(NS)('change.mergeTitle', { name: '#7', base: 'main' })).toBe('#7 in main zusammenführen')
     expect(changed).toHaveBeenCalled()
     unsubscribe()
     f.sessions.scope.mockReturnValue(undefined)

@@ -22,7 +22,7 @@ import { ChangesTabTitle } from './ChangesTabTitle.tsx'
 import { ForgeTab, type ForgeTabInjected } from './ForgeTab.tsx'
 import { ForgeTabTitle } from './ForgeTabTitle.tsx'
 import { HeaderButton, type HeaderButtonInjected } from './HeaderButton.tsx'
-import { en, NS, zh, type ForgePanelKey } from './locales.ts'
+import { de, en, es, fr, ja, NS, pt, ru, zh, type ForgePanelKey } from './locales.ts'
 import {
   createNoticeSource, createPanelSource, createVisibilitySource, type PanelSource, type VisibilitySource,
 } from './source.ts'
@@ -55,7 +55,7 @@ interface SessionStores {
 }
 
 function registerUi(ctx: Context): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'forge-panel: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'forge-panel: dictionaries')
   const t = ctx.locale.bind(NS)
   const notices = createNoticeSource()
   const stores = new Map<SessionId, SessionStores>()
