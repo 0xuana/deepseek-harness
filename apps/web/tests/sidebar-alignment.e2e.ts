@@ -246,6 +246,87 @@ describe('web e2e: sidebar search alignment and row action targets', () => {
     }
   })
 
+  it.each([
+    { usedSearch: false, entry: 'toggle' },
+    { usedSearch: true, entry: 'toggle' },
+    { usedSearch: false, entry: 'search' },
+    { usedSearch: true, entry: 'search' },
+    { usedSearch: true, entry: 'toggle-with-query' },
+  ] as const)('lands the header at its final rail-to-wide geometry ($entry, prior search: $usedSearch)', async ({ usedSearch, entry }) => {
+    onTestFailed(() => saveFailureShot(page, `web-e2e-sidebar-rail-${entry}-${String(usedSearch)}`))
+    if (usedSearch) {
+      await page.getByRole('button', { name: 'Search sessions', exact: true }).click()
+      const input = page.getByPlaceholder('Search session names', { exact: true })
+      if (entry === 'toggle-with-query') await input.fill(sessionTitle)
+      else await input.press('Escape')
+    }
+    await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
+    await expect.poll(() => page.getByRole('button', { name: 'Account menu', exact: true }).getAttribute('data-collapsed')).toBe('true')
+    const add = page.getByRole('button', { name: 'Add workspace', exact: true })
+    const samples = await add.evaluate(async (button, entry) => {
+      const header = button.closest<HTMLElement>('[class*="sectionHeader"]')
+      const root = header?.parentElement
+      if (header === null || root === null || root === undefined) throw new Error('Workspace header is missing')
+      const railClass = root.className
+      const measure = () => {
+        const origin = root.getBoundingClientRect()
+        const bounds = header.getBoundingClientRect()
+        const addBounds = button.getBoundingClientRect()
+        const style = getComputedStyle(header)
+        return {
+          left: bounds.left - origin.left, right: bounds.right - origin.left,
+          top: bounds.top - origin.top, height: bounds.height,
+          // Search hides this cluster with its own animation; only compare the visible add control.
+          add: entry === 'toggle'
+            ? { left: addBounds.left - origin.left, right: addBounds.right - origin.left }
+            : null,
+          marginRight: Number.parseFloat(style.marginRight),
+          paddingLeft: Number.parseFloat(style.paddingLeft), paddingRight: Number.parseFloat(style.paddingRight),
+          gap: Number.parseFloat(style.columnGap),
+          transitionDuration: style.transitionDuration,
+        }
+      }
+      const first = await new Promise<ReturnType<typeof measure>>((resolve) => {
+        // Observe the first rendered wide frame after the rail gesture's React updates.
+        const observer = new MutationObserver(() => {
+          if (root.className === railClass) return
+          observer.disconnect()
+          requestAnimationFrame(() => { resolve(measure()) })
+        })
+        observer.observe(root, { attributes: true, attributeFilter: ['class'] })
+        const trigger = entry === 'search'
+          ? root.querySelector<HTMLButtonElement>('button[aria-label="Search sessions"]')
+          : document.querySelector<HTMLButtonElement>('button[aria-label="Open sidebar"]')
+        if (trigger === null) { observer.disconnect(); throw new Error('Rail expansion trigger is missing') }
+        trigger.click()
+      })
+      const headerTransitions = header.getAnimations()
+        .filter(animation => animation instanceof CSSTransition)
+        .map(animation => animation.transitionProperty)
+      await Promise.all(root.getAnimations({ subtree: true })
+        .filter(animation => animation.effect?.getTiming().iterations !== Infinity)
+        .map(animation => animation.finished.then(() => undefined, () => undefined)))
+      return {
+        first, last: measure(), headerTransitions,
+        sameHeader: root.querySelector('[class*="sectionHeader"]') === header,
+        sameAdd: root.querySelector('button[aria-label="Add workspace"]') === button,
+      }
+    }, entry)
+    expect(samples.headerTransitions).toEqual([])
+    expect(samples.first.transitionDuration).toBe('0s')
+    expect(samples.first).toEqual(samples.last)
+    expect(samples.first).toMatchObject(entry !== 'toggle'
+      ? { marginRight: 0, paddingLeft: 4, paddingRight: 4, gap: 0 }
+      : { marginRight: -4, paddingLeft: 12, paddingRight: 1, gap: 4 })
+    expect(samples.sameHeader).toBe(true)
+    expect(samples.sameAdd).toBe(true)
+    if (entry === 'search') {
+      await expect.poll(() => page.getByPlaceholder('Search session names', { exact: true })
+        .evaluate(element => element === document.activeElement)).toBe(true)
+    }
+    expect(tripwire.pageErrors).toEqual([])
+  })
+
   it('keeps a clipped search title clear of the unarchive target', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-search-title-clearance'))
     await page.getByRole('button', { name: 'View options', exact: true }).click()

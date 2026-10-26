@@ -70,6 +70,9 @@
 .root:not(.rail) .sectionHeader {
   margin-top: 2px;
   margin-right: -4px;
+}
+
+.root:not(.rail) .sectionHeader.searchSpacingMotion {
   transition:
     margin-right 180ms var(--ds-ease-in-out),
     padding-inline 180ms var(--ds-ease-in-out),
@@ -641,7 +644,7 @@
     animation: none;
   }
 
-  .root:not(.rail) .sectionHeader,
+  .root:not(.rail) .sectionHeader.searchSpacingMotion,
   .search,
   .sectionLabel,
   .searchSlot,

@@ -137,6 +137,15 @@ describe('WorkspaceBrowser.module.css list', () => {
     expect(rowDeclarations('.iconButton:focus-visible')?.get('outline-offset')).toBe('-2px')
   })
 
+  it('enables header spacing transitions only for search gestures in wide layout', () => {
+    expect(declarations('.root:not(.rail) .sectionHeader')?.get('transition')).toBeUndefined()
+    const selector = '.root:not(.rail) .sectionHeader.searchSpacingMotion'
+    const [ordinary = '', reduced = ''] = css.split('@media (prefers-reduced-motion: reduce)')
+    expect(declarationsFrom(ordinary, selector)?.get('transition'))
+      .toBe('margin-right 180ms var(--ds-ease-in-out), padding-inline 180ms var(--ds-ease-in-out), gap 180ms var(--ds-ease-in-out)')
+    expect(declarationsFrom(reduced, selector)?.get('transition')).toBe('none')
+  })
+
   it('aligns the expanded search field without changing list scroll ownership', () => {
     const header = declarations('.root:not(.rail) .sectionHeader:has(.searchExpanded)')
     expect(header?.get('margin-right')).toBe('0')

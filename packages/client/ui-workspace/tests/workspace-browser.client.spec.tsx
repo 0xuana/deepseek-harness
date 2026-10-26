@@ -1861,6 +1861,58 @@ describe('WorkspaceBrowser', () => {
     }
   })
 
+  it.each(['clear', 'escape', 'outside'] as const)('animates %s search dismissal without carrying spacing motion through the rail', (dismissal) => {
+    vi.useFakeTimers()
+    try {
+      const b = mount()
+      const add = screen.getByRole('button', { name: '添加工作区' })
+      const header = add.closest('[class*="sectionHeader"]')!
+      // jsdom observes the motion opt-in; the browser suite measures the resulting transitions.
+      const motionEnabled = () => header.className.includes('searchSpacingMotion')
+      expect(motionEnabled()).toBe(false)
+      fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
+      expect(motionEnabled()).toBe(true)
+      rerender(b, { wide: false })
+      expect(motionEnabled()).toBe(false)
+      rerender(b, { wide: true })
+      expect(motionEnabled()).toBe(false)
+      const input = screen.getByPlaceholderText<HTMLInputElement>('搜索会话名称')
+      if (dismissal === 'clear') {
+        fireEvent.change(input, { target: { value: 'query' } })
+        fireEvent.click(screen.getByRole('button', { name: '清除搜索' }))
+      } else if (dismissal === 'escape') {
+        fireEvent.change(input, { target: { value: 'query' } })
+        fireEvent.keyDown(input, { key: 'Escape' })
+      } else fireEvent.click(document.body)
+      expect(motionEnabled()).toBe(true)
+      expect(input.value).toBe('')
+      expect(screen.getByRole('button', { name: '搜索会话' }).getAttribute('aria-expanded')).toBe('false')
+      expect(screen.getByRole('button', { name: '添加工作区' })).toBe(add)
+      expect(add.closest('[class*="sectionHeader"]')).toBe(header)
+      rerender(b, { wide: false })
+      fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
+      rerender(b, { wide: true })
+      expect(motionEnabled()).toBe(false)
+      act(() => { vi.advanceTimersByTime(300) })
+      expect(document.activeElement).toBe(screen.getByPlaceholderText('搜索会话名称'))
+      expect(screen.getByRole('button', { name: '添加工作区' })).toBe(add)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves the add button and its open directory flow across rail layout changes', () => {
+    const b = mount({ wide: false })
+    const add = screen.getByRole('button', { name: '添加工作区' })
+    fireEvent.click(add)
+    const flow = screen.getByTestId('directory-flow')
+    for (const wide of [true, false, true]) {
+      rerender(b, { wide })
+      expect(screen.getByRole('button', { name: '添加工作区' })).toBe(add)
+      expect(screen.getByTestId('directory-flow')).toBe(flow)
+    }
+  })
+
   it('rail state renders icon controls that request expansion', () => {
     vi.useFakeTimers()
     try {
