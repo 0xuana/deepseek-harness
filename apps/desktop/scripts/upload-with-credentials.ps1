@@ -19,9 +19,7 @@ Publish only the installer at its fixed download URL. Requires Upload.
 .PARAMETER Upload
 Authorize the existing target upload entry. Omit to check credentials locally.
 .PARAMETER PurgeOnly
-Refresh the production fixed download without uploading. Requires Upload and Latest.
-.PARAMETER JobId
-Resume an existing EO task without submitting again. Requires PurgeOnly.
+Submit a purge for the production fixed download without uploading. Requires Upload and Latest.
 #>
 [CmdletBinding(DefaultParameterSetName = 'Check')]
 param(
@@ -42,10 +40,7 @@ param(
     [Parameter(ParameterSetName = 'Publish')]
     [switch]$Latest,
     [Parameter(ParameterSetName = 'Publish')]
-    [switch]$PurgeOnly,
-    [Parameter(ParameterSetName = 'Publish')]
-    [ValidatePattern('^[a-zA-Z0-9-]{1,128}$')]
-    [string]$JobId
+    [switch]$PurgeOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -58,8 +53,8 @@ $credentials = $null
 $startInfo = $null
 $stage = 'decrypt-file'
 
-if (($PurgeOnly -and (-not $Latest -or $Environment -ne 'production')) -or ($JobId -and -not $PurgeOnly)) {
-    Write-Output 'desktop credentials: invalid arguments; PurgeOnly requires Latest and production; JobId requires PurgeOnly.'
+if ($PurgeOnly -and (-not $Latest -or $Environment -ne 'production')) {
+    Write-Output 'desktop credentials: invalid arguments; PurgeOnly requires Latest and production.'
     exit 1
 }
 
@@ -107,9 +102,8 @@ try {
         $startInfo.Arguments = "--import tsx/esm apps/desktop/scripts/upload-target.ts $Target --credential-launcher --environment $Environment --bucket $Bucket"
         if ($Latest) { $startInfo.Arguments += " --latest" }
         if ($PurgeOnly) { $startInfo.Arguments += " --purge-only" }
-        if ($JobId) { $startInfo.Arguments += " --job-id $JobId" }
         if ($PurgeOnly) {
-            Write-Output "desktop credentials: refreshing $Target in $Environment; no installer upload."
+            Write-Output "desktop credentials: submitting a cache purge for $Target in $Environment; no installer upload."
         } else {
             Write-Output "desktop credentials: uploading $Target to $Environment; release validation runs before network writes."
         }

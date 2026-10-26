@@ -52,7 +52,7 @@ describe('desktop upload command', () => {
     expect(vi.mocked(uploadDesktopRelease).mock.calls[0]![0]).toBe(plan)
     if (environment === 'production' && latest) {
       expect(purgeDesktopInstaller).toHaveBeenCalledWith(
-        expect.objectContaining({ publicUrl: plan.publicUrl }), expect.any(String), { credentialLauncher: false },
+        expect.objectContaining({ publicUrl: plan.publicUrl }),
       )
       expect(vi.mocked(purgeDesktopInstaller).mock.invocationCallOrder[0])
         .toBeGreaterThan(vi.mocked(uploadDesktopRelease).mock.invocationCallOrder[0]!)
@@ -75,33 +75,36 @@ const productionEnvironment = {
   DOWNLOAD_PROD_COS_SECRET_ID: 'fixture-id', DOWNLOAD_PROD_COS_SECRET_KEY: 'fixture-key', DOWNLOAD_PROD_EO_ZONE_ID: 'zone-fixture',
 }
 
-describe('cache-only recovery command', () => {
+describe('cache-only submission command', () => {
   beforeEach(() => {
     vi.mocked(loadDesktopPackageEnvironment).mockReturnValue(productionEnvironment)
   })
 
-  it.each([undefined, 'job-1'])('refreshes without reading or uploading an installer, job=%s', async (jobId) => {
-    await uploadDesktopTarget(['--latest', '--purge-only', 'mac-arm64', ...jobId ? ['--job-id', jobId] : []])
+  it('submits a purge without reading or uploading an installer', async () => {
+    await uploadDesktopTarget(['--latest', '--purge-only', 'mac-arm64'])
     expect(createDesktopUploadPlan).not.toHaveBeenCalled()
     expect(uploadDesktopRelease).not.toHaveBeenCalled()
     expect(tagDesktopRelease).not.toHaveBeenCalled()
-    expect(purgeDesktopInstaller).toHaveBeenCalledWith(expect.objectContaining({ target: 'mac-arm64' }), expect.any(String), { ...jobId !== undefined ? { jobId } : {}, credentialLauncher: false })
+    expect(purgeDesktopInstaller).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      publicUrl: 'https://download.deepseek.com/desktop/dsh-latest-macos-arm64.dmg',
+    }))
   })
 
-  it.each([[], ['win-x64', '--purge-only'], ['win-x64', '--job-id', 'job-1'], ['win-x64', '--latest', '--', '--purge-only']])('rejects invalid arguments %j before uploading', async (...args) => {
+  it.each([[], ['win-x64', '--purge-only'], ['win-x64', '--latest', '--purge-only', '--job-id', 'job-1'], ['win-x64', '--latest', '--', '--purge-only']])('rejects invalid arguments %j before uploading', async (...args) => {
     await expect(uploadDesktopTarget(args)).rejects.toThrow()
     expect(uploadDesktopRelease).not.toHaveBeenCalled()
     expect(purgeDesktopInstaller).not.toHaveBeenCalled()
   })
 
   it('reports a completed upload when refresh fails, without tagging or repeating the upload', async () => {
-    vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+    const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
     vi.mocked(createDesktopUploadPlan).mockResolvedValue({
       environment: 'production', target: 'mac-arm64', version: '1.2.3', publicUrl: 'https://example.com/new-prefix/installer.dmg',
       bucket: 'fixture-bucket', secretIdEnvName: 'DOWNLOAD_PROD_COS_SECRET_ID', secretKeyEnvName: 'DOWNLOAD_PROD_COS_SECRET_KEY', artifacts: [],
     })
-    vi.mocked(purgeDesktopInstaller).mockRejectedValue(new DesktopPurgeError('desktop purge: task incomplete; resume --job-id job-1'))
-    await expect(uploadDesktopTarget(['mac-arm64', '--latest'])).rejects.toThrow(/installer uploaded; cache refresh incomplete.*job-1/u)
+    vi.mocked(purgeDesktopInstaller).mockRejectedValue(new DesktopPurgeError('desktop purge: submission not confirmed'))
+    await expect(uploadDesktopTarget(['mac-arm64', '--latest'])).rejects.toThrow('desktop purge: submission not confirmed')
+    expect(output).toHaveBeenCalledWith('desktop upload: installer uploaded; submitting cache purge.\n')
     expect(uploadDesktopRelease).toHaveBeenCalledOnce()
     expect(purgeDesktopInstaller).toHaveBeenCalledOnce()
     expect(tagDesktopRelease).not.toHaveBeenCalled()
@@ -121,7 +124,7 @@ describe('cache-only recovery command', () => {
       expect(launcher ? stdout : stderr).toHaveBeenCalledExactlyOnceWith('desktop purge: safe recovery message\n')
       expect(launcher ? stderr : stdout).not.toHaveBeenCalled()
       expect(process.exitCode).toBe(1)
-      expect(purgeDesktopInstaller).toHaveBeenCalledWith(expect.objectContaining({ secretId: launcher ? 'injected-id' : 'fixture-id' }), expect.any(String), expect.objectContaining({ credentialLauncher: launcher }))
+      expect(purgeDesktopInstaller).toHaveBeenCalledWith(expect.objectContaining({ secretId: launcher ? 'injected-id' : 'fixture-id' }))
     } finally {
       process.exitCode = previousExitCode
       vi.unstubAllEnvs()

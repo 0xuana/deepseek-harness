@@ -45,20 +45,19 @@ it('forwards the documented pnpm purge command through both package scripts to t
       import assert from 'node:assert/strict'
       export class DesktopPurgeError extends Error {}
       export const resolveDesktopPurgeConfig = (_env, target) => ({ target })
-      export const purgeDesktopInstaller = async (config, _root, options) => {
+      export const purgeDesktopInstaller = async (config) => {
         assert.equal(config.target, 'mac-arm64')
-        assert.deepEqual(options, { jobId: 'job-1', credentialLauncher: false })
-        console.log('purge-resume: mac-arm64 job-1')
+        console.log('purge-submit: mac-arm64')
       }
     `,
   }
   await Promise.all(Object.entries(stubs).map(([name, contents]) => writeFile(join(scripts, name), contents)))
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) =>
     !/KEY|SECRET|TOKEN|PASSWORD|^NODE_OPTIONS$|^DSH_|^DOWNLOAD_|^PACKAGE_/iu.test(name)))
-  const args = [join(root, 'node_modules/pnpm/bin/pnpm.mjs'), 'run', 'purge:latest', 'mac-arm64', '--job-id', 'job-1']
+  const args = [join(root, 'node_modules/pnpm/bin/pnpm.mjs'), 'run', 'purge:latest', 'mac-arm64']
   const result = await execute(process.execPath, args, { cwd: directory, env, timeout: 30_000 }).catch((error: unknown) => {
     expect(error).not.toMatchObject({ killed: true })
     throw error
   })
-  expect(result.stdout).toContain('purge-resume: mac-arm64 job-1')
+  expect(result.stdout).toContain('purge-submit: mac-arm64')
 })

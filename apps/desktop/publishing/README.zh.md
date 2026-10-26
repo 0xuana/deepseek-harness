@@ -69,17 +69,17 @@ Windows NSIS 上传要求安装包旁存在生成的非空 `.exe.blockmap`。blo
 
 ## 固定安装包下载
 
-固定安装包下载在仓库根目录使用 `pnpm run upload:latest:mac:arm64`、`pnpm run upload:latest:mac:x64` 或 `pnpm run upload:latest:win:x64`。它们把已完成目标的 DMG 或 EXE 上传到 `desktop/dsh-latest-macos-arm64.dmg`、`desktop/dsh-latest-macos-x64.dmg` 或 `desktop/dsh-latest-windows-x64.exe`。生产 URL 以 `https://download.deepseek.com/` 开头；测试 URL 使用 `DOWNLOAD_TEST_ORIGIN`。两个部署环境均复用目标 dotenv 中的部署、bucket 和凭据、全部常规发布校验以及下述上传审计。每个命令覆盖一个固定对象，不发布更新清单、blockmap 或发布标签。测试固定下载在测试 bucket 中跨发布 ID 共享；包内更新 URL 仍要求原有发布 ID。发布由操作人员显式执行，也允许预发布版本。生产命令随后提交 EdgeOne URL 缓存清除任务，并等待该任务成功。测试上传仍由部署基础设施管理缓存策略。本地回环测试覆盖上传行为；真实 COS 和 CDN 验收由发布操作人员负责。
+固定安装包下载在仓库根目录使用 `pnpm run upload:latest:mac:arm64`、`pnpm run upload:latest:mac:x64` 或 `pnpm run upload:latest:win:x64`。它们把已完成目标的 DMG 或 EXE 上传到 `desktop/dsh-latest-macos-arm64.dmg`、`desktop/dsh-latest-macos-x64.dmg` 或 `desktop/dsh-latest-windows-x64.exe`。生产 URL 以 `https://download.deepseek.com/` 开头；测试 URL 使用 `DOWNLOAD_TEST_ORIGIN`。两个部署环境均复用目标 dotenv 中的部署、bucket 和凭据、全部常规发布校验以及下述上传审计。每个命令覆盖一个固定对象，不发布更新清单、blockmap 或发布标签。测试固定下载在测试 bucket 中跨发布 ID 共享；包内更新 URL 仍要求原有发布 ID。发布由操作人员显式执行，也允许预发布版本。生产命令随后提交一次 EdgeOne URL 缓存清除任务并报告任务 ID，不查询或等待缓存清除完成。测试上传仍由部署基础设施管理缓存策略。本地回环测试覆盖上传行为；真实 COS 和 CDN 验收由发布操作人员负责。
 
-生产固定下载要求在目标 dotenv 中配置 `DOWNLOAD_PROD_EO_ZONE_ID`。上传器复用 `DOWNLOAD_PROD_COS_SECRET_ID` 和 `DOWNLOAD_PROD_COS_SECRET_KEY`；该身份需要对应站点的 `teo:CreatePurgeTask` 和 `teo:DescribePurgeTasks` 权限。本次脚本修改未验证现有密钥权限；启用生产固定上传前，发布操作人员必须确认所选身份具备这两个 EO 操作的权限。无需新增 CI Secret。可选的 `DOWNLOAD_PROD_EO_TIMEOUT_MS` 和 `DOWNLOAD_PROD_EO_POLL_INTERVAL_MS` 默认分别为 300000 和 5000 毫秒，均须为正数计时器时长，轮询间隔不能大于超时时长。上传前解析必需配置。
+生产固定下载要求在目标 dotenv 中配置 `DOWNLOAD_PROD_EO_ZONE_ID`，且既有 `DOWNLOAD_PROD_COS_SECRET_ID` / `DOWNLOAD_PROD_COS_SECRET_KEY` 身份具备对应站点的 `teo:CreatePurgeTask` 权限。发布操作人员须在使用前确认该权限；无需新增 CI Secret。上传前解析必需配置。提交请求超时为 30 秒，不自动重试。
 
-缓存清除失败或超时时，已上传的安装包仍保持发布，命令以失败状态退出并提示缓存刷新未完成。缓存清除在上传记录根目录下独立保留 `production-<target>-purge-*` 目录，包含带版本号的计划和结果、脚本指纹、URL、任务 ID 和状态事件。上传记录中成功的 `result.json` 只确认 COS 写入。使用 `pnpm run purge:latest <target> --job-id <id>` 继续等待已接受的任务；提交结果未知时，先在 EO 确认状态，再用 `pnpm run purge:latest <target>` 提交新任务。这些命令需要生产配置和凭据，无需本地安装包，不上传或回滚文件；连接中断、超时或权限拒绝不代表 EO 已取消任务。临时查询错误在截止时间内重试；权限和参数错误立即停止。截止时间前始终未找到任务时，单独报告该情况，与任务尚未完成区分。DPAPI 恢复必须复用原凭据启动器以及相同的凭据文件、部署环境、bucket 和目标，添加 `-PurgeOnly` 和已接受的 `-JobId`。按目标串行执行上传和恢复。CI 发布器不发布这些固定下载，也不执行此刷新。
+命令报告提交已接受，不代表缓存清除已完成。EO 结果输出到控制台，不另建刷新记录文件；既有上传审计仅记录 COS 写入。提交被拒绝或未确认时，命令以失败状态退出，已上传安装包保持发布。连接中断或未收到响应时，先检查 EO 任务历史再重新提交。使用 `pnpm run purge:latest <target>` 可只提交刷新，无需上传；需要生产配置和凭据，无需本地安装包。DPAPI 用户复用原凭据启动器，在 `-Upload -Latest` 命令上添加 `-PurgeOnly`。按目标串行执行上传和单独刷新。CI 发布器不发布固定下载，也不执行此刷新。
 
 <a id="credentials"></a>
 
 ## 上传凭据
 
-Windows 操作人员可以在仓库外保存 CLIXML 对象，其中 `SecretId` 和 `SecretKey` 是经 DPAPI 加密的 SecureString 字段。[凭据启动器](../scripts/upload-with-credentials.ps1)要求显式提供 `-CredentialFile` 和 `-Environment production` 或 `test`；不指定 `-Upload` 时，只验证解密以及向本地 Node 子进程注入凭据，不发起网络请求。它要求 `PATH` 中有 Node，并使用加密该文件时的 Windows 用户和机器。明文、空字段及纯空白字段都会失败。父进程环境保持不变；子进程先清除无关密钥与 Node 预加载选项，再仅接收所选 COS 凭据对。原始子进程 stderr 不会显示，stdout 中的凭据值会被遮盖。此检查不能证明 COS 授权有效。显式上传还要求 `-Upload -Target <target> -Bucket <bucket>` 及下述常规发布完成前提；真实云端上传仍需发布操作人员验收。在该上传调用中添加 `-Latest`，即可替换固定安装包，而不发布更新清单或发布标签。仅恢复缓存刷新时，在 `-Upload -Latest -Environment production` 上添加 `-PurgeOnly`；可选的 `-JobId <id>` 用于继续等待。部署环境和 bucket 仍须匹配 dotenv，但不读取安装包产物。此启动器支持长期密钥，不支持 STS 凭据。显式上传要求所选部署环境和 bucket 与目标 dotenv 文件及已完成的打包记录一致，才会发起网络写入；即使 dotenv 文件含有其他 COS 密钥，也使用 DPAPI 凭据对。
+Windows 操作人员可以在仓库外保存 CLIXML 对象，其中 `SecretId` 和 `SecretKey` 是经 DPAPI 加密的 SecureString 字段。[凭据启动器](../scripts/upload-with-credentials.ps1)要求显式提供 `-CredentialFile` 和 `-Environment production` 或 `test`；不指定 `-Upload` 时，只验证解密以及向本地 Node 子进程注入凭据，不发起网络请求。它要求 `PATH` 中有 Node，并使用加密该文件时的 Windows 用户和机器。明文、空字段及纯空白字段都会失败。父进程环境保持不变；子进程先清除无关密钥与 Node 预加载选项，再仅接收所选 COS 凭据对。原始子进程 stderr 不会显示，stdout 中的凭据值会被遮盖。此检查不能证明 COS 授权有效。显式上传还要求 `-Upload -Target <target> -Bucket <bucket>` 及下述常规发布完成前提；真实云端上传仍需发布操作人员验收。在该上传调用中添加 `-Latest`，即可替换固定安装包，而不发布更新清单或发布标签。仅提交缓存刷新时，在 `-Upload -Latest -Environment production` 上添加 `-PurgeOnly`。部署环境和 bucket 仍须匹配 dotenv，但不读取安装包产物。此启动器支持长期密钥，不支持 STS 凭据。显式上传要求所选部署环境和 bucket 与目标 dotenv 文件及已完成的打包记录一致，才会发起网络写入；即使 dotenv 文件含有其他 COS 密钥，也使用 DPAPI 凭据对。
 
 <a id="audit-and-recovery"></a>
 

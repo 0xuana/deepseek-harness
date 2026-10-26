@@ -64,15 +64,15 @@ function purgeConfig(environment: NodeJS.ProcessEnv, target: DesktopPackageTarge
 }
 
 /**
- * Upload the selected target, refresh production fixed downloads, or resume only their cache refresh.
+ * Upload the selected target, refresh production fixed downloads, or submit only their cache purge.
  * @param args Target and upload options from the command line.
- * @returns Resolves after upload, any required EO refresh, and any release-tag attempt complete.
- * @throws DesktopPurgeError when refresh is incomplete; a completed upload is not repeated or rolled back.
+ * @returns Resolves after upload, any required EO submission, and any release-tag attempt complete.
+ * @throws DesktopPurgeError when purge submission fails; a completed upload is not repeated or rolled back.
  */
 export async function uploadDesktopTarget(args: string[]): Promise<void> {
   const { positionals, values } = parseArgs({ args, allowPositionals: true, options: {
     latest: { type: 'boolean' },
-    'purge-only': { type: 'boolean' }, 'job-id': { type: 'string' },
+    'purge-only': { type: 'boolean' },
     'credential-launcher': { type: 'boolean' }, environment: { type: 'string' }, bucket: { type: 'string' },
   } })
   const target = positionals[0]
@@ -80,8 +80,8 @@ export async function uploadDesktopTarget(args: string[]): Promise<void> {
     throw new DesktopUploadUsageError('desktop upload: expected exactly one target')
   }
   const name = targetName(target)
-  if ((values['purge-only'] && !values.latest) || (values['job-id'] !== undefined && !values['purge-only'])) {
-    throw new DesktopUploadUsageError('desktop upload: --purge-only requires --latest; --job-id requires --purge-only')
+  if (values['purge-only'] && !values.latest) {
+    throw new DesktopUploadUsageError('desktop upload: --purge-only requires --latest')
   }
   let fileEnvironment: NodeJS.ProcessEnv
   try {
@@ -107,7 +107,7 @@ export async function uploadDesktopTarget(args: string[]): Promise<void> {
   }
   const recordsRoot = resolve(import.meta.dirname, '../.desktop-build/upload-records')
   if (values['purge-only']) {
-    await purgeDesktopInstaller(purgeConfig(environment, name), recordsRoot, { ...values['job-id'] !== undefined ? { jobId: values['job-id'] } : {}, credentialLauncher: launcher })
+    await purgeDesktopInstaller(purgeConfig(environment, name))
     return
   }
   const plan = await createDesktopUploadPlan(name, { environment, latest: values.latest === true })
@@ -119,11 +119,8 @@ export async function uploadDesktopTarget(args: string[]): Promise<void> {
   process.stdout.write(`desktop upload: ${plan.target} ${plan.version} -> ${plan.publicUrl}\n`)
   await uploadDesktopRelease(plan, cos, recordsRoot)
   if (purge !== undefined) {
-    try {
-      await purgeDesktopInstaller(purge, recordsRoot, { credentialLauncher: launcher })
-    } catch (error) {
-      throw new DesktopPurgeError(`desktop upload: installer uploaded; cache refresh incomplete. ${error instanceof DesktopPurgeError ? error.message : 'Inspect the purge record before recovery.'}`)
-    }
+    process.stdout.write('desktop upload: installer uploaded; submitting cache purge.\n')
+    await purgeDesktopInstaller(purge)
   }
   if (plan.environment === 'production' && !values.latest) recordProductionRelease(plan)
 }
@@ -166,7 +163,7 @@ export async function runDesktopUploadCommand(args: string[]): Promise<void> {
     const usage = error instanceof DesktopUploadUsageError
       || (error instanceof Error && 'code' in error && typeof error.code === 'string' && error.code.startsWith('ERR_PARSE_ARGS_'))
     const message = error instanceof DesktopPurgeError ? error.message
-      : usage ? `desktop upload/purge: ${error instanceof DesktopUploadUsageError ? error.message : 'invalid arguments'}. Usage: upload-target.ts <target> [--latest [--purge-only [--job-id <id>]]]; targets: mac-arm64, mac-x64, win-x64.`
+      : usage ? `desktop upload/purge: ${error instanceof DesktopUploadUsageError ? error.message : 'invalid arguments'}. Usage: upload-target.ts <target> [--latest [--purge-only]]; targets: mac-arm64, mac-x64, win-x64.`
         : 'desktop upload: failed; inspect the printed record directory if allocated. No automatic retry; reconcile remote state before another upload.'
     // The DPAPI launcher suppresses raw stderr; these diagnostics contain no SDK details.
     const output = args.includes('--credential-launcher') ? process.stdout : process.stderr
