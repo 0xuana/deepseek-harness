@@ -84,7 +84,7 @@ None. Provider output reaches only host-side watchers.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **GitHub CLI on the host** — `gh` must be installed and signed in for each configured host; tokens in environment variables are not forwarded. Hosts missing from `hosts` are never read.
+- **GitHub CLI on the host** — `gh` must be installed and signed in for each configured host; tokens in environment variables are not forwarded. Hosts missing from `hosts` are never read, including references retained across configuration changes. A status fetch returns `unavailable` for those references; a head lookup rejects before starting `gh`.
 - **First 100 checks and review threads** — `checksTruncated` marks a head commit with more checks; unresolved threads after the first 100 are not counted.
 - **No fork discovery** — head lookups exclude pull requests whose head is in another repository.
 - **Rate limits** — every poll costs one GraphQL query per host against the signed-in account's rate limit.

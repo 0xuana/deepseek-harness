@@ -45,12 +45,17 @@ export class GitHubProvider implements ForgeProvider {
     signal: AbortSignal,
   ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>> {
     const byHost = new Map<string, ChangeRequestRef[]>()
+    const results = new Map<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>()
     for (const ref of refs) {
+      const failure = this.hostFailure(ref.repository.host)
+      if (failure !== undefined) {
+        results.set(changeRequestKey(ref), failure)
+        continue
+      }
       const group = byHost.get(ref.repository.host)
       if (group === undefined) byHost.set(ref.repository.host, [ref])
       else group.push(ref)
     }
-    const results = new Map<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>()
     for (const [host, group] of byHost) {
       for (const [key, result] of await this.fetchHost(host, group, signal)) results.set(key, result)
     }
@@ -58,6 +63,8 @@ export class GitHubProvider implements ForgeProvider {
   }
 
   async findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]> {
+    const failure = this.hostFailure(repository.host)
+    if (failure !== undefined) throw new Error(failure.message)
     const output = await this.gh([
       'api', 'graphql', '--hostname', repository.host,
       '-f', `query=${HEAD_QUERY}`, '-f', `owner=${repository.owner}`, '-f', `name=${repository.name}`, '-f', `branch=${branch}`,
@@ -65,6 +72,12 @@ export class GitHubProvider implements ForgeProvider {
     const body = parseJson(output.stdout)
     if (body === undefined) throw new Error(`forge-github: head branch lookup failed: ${firstLine(output.stderr) ?? `gh exited with ${output.exitCode}`}`)
     return mapHeadResponse(body, repository, branch)
+  }
+
+  private hostFailure(host: string): ForgeFailure | undefined {
+    return this.hosts.has(host.toLowerCase()) ? undefined : {
+      code: 'unavailable', message: `forge-github: host ${JSON.stringify(host)} is not configured`,
+    }
   }
 
   private async fetchHost(

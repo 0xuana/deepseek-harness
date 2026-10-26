@@ -84,7 +84,7 @@ kind: "package-reference"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **宿主需要 GitHub CLI**——必须安装 `gh` 并为每个已配置主机登录；环境变量中的令牌不会被转发。不在 `hosts` 中的主机永远不会被读取。
+- **宿主需要 GitHub CLI**——必须安装 `gh` 并为每个已配置主机登录；环境变量中的令牌不会被转发。不在 `hosts` 中的主机永远不会被读取，包括配置变更后保留的引用。状态读取为这些引用返回 `unavailable`；head 查找会在启动 `gh` 前拒绝。
 - **前 100 个检查与评审讨论**——head 提交的检查超过上限时以 `checksTruncated` 标记；前 100 个之后的未解决讨论不计入。
 - **不发现 fork**——按 head 分支查找时，不包含 head 位于其他仓库的 pull request。
 - **速率限制**——每次轮询都会以已登录账号的速率配额为每个主机消耗一次 GraphQL 查询。

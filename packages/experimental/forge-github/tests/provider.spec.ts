@@ -45,6 +45,25 @@ describe('GitHub provider addressing', () => {
 })
 
 describe('GitHub provider fetch', () => {
+  it('rejects unconfigured hosts without querying them and still fetches allowed hosts', async () => {
+    const gh = fakeGh(() => output({ data: { r0: { p0: pullRequestNode(1) } } }))
+    const denied = pull(2, { ...enterprise, host: 'unconfigured.example' })
+    const results = await provider(gh.run).fetch([denied, pull(1)], signal)
+    expect(gh.calls.map(call => call[3])).toEqual(['github.com'])
+    expect(results.get(changeRequestKey(denied))).toEqual({ code: 'unavailable', message: 'forge-github: host "unconfigured.example" is not configured' })
+    expect(results.get(changeRequestKey(pull(1)))).toMatchObject({ title: 'Change 1' })
+  })
+
+  it('rejects references retained after their host was removed from configuration', async () => {
+    const gh = fakeGh(() => output(''))
+    const retained = provider(gh.run).changeRequestFromUrl('https://ghe.corp.example/team/svc/pull/2')!
+    const replacement = new GitHubProvider(gh.run, ['github.com'])
+    const results = await replacement.fetch([retained], signal)
+    await expect(replacement.findByHead(retained.repository, 'topic', signal)).rejects.toThrow('is not configured')
+    expect(results.get(changeRequestKey(retained))).toMatchObject({ code: 'unavailable' })
+    expect(gh.calls).toEqual([])
+  })
+
   it('runs one GraphQL request per host and merges the results', async () => {
     const gh = fakeGh((args) => {
       const host = args[3]
