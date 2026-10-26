@@ -1750,6 +1750,7 @@ describe('Policy workflows', () => {
     const run = steps[build]?.run
     if (typeof run !== 'string') throw new TypeError('the pre-merge check step must run a command')
     expect(run).toContain('node scripts/pre-merge-check.ts')
-    expect(run).toContain('"$CHECK_MODE" = block')
+    // The script annotates its own failure, so the step decides by its exit code alone.
+    expect(run).not.toContain('the merged tree fails its pre-merge check')
   })
 })

@@ -1,13 +1,13 @@
 /**
- * Validate the tree a pull request produces once merged with its base branch: the install,
- * the version synchronization of the released manifests, and the Host and Client builds.
+ * Validate the tree a pull request produces once merged with its base branch: the install, the
+ * version synchronization of the released manifests, and the Host and Client builds.
  *
  * The `Policy / Pre-Merge Check` job runs this file with `node`, and knows nothing else about the
  * merged tree, so what that tree needs changes here without touching the check. The file runs under
  * plain Node and spawns pnpm itself, so no dependency is installed before it starts.
  */
 
-import { spawn, spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
@@ -21,42 +21,52 @@ export interface PreMergeStep {
   readonly args: readonly string[]
 }
 
-/** What the check runs: the install every other step depends on, then the builds in order. */
-export interface PreMergePlan {
-  readonly install: PreMergeStep
-  readonly steps: readonly PreMergeStep[]
-}
-
-/**
- * The commands that build the merged tree, in order.
- * @returns Steps after the install.
- */
-export function buildSteps(): PreMergeStep[] {
+/** No step can run before the others without the install, so it opens the list. */
+export function preMergeSteps(): PreMergeStep[] {
   return [
+    { name: 'install', command: 'pnpm', args: ['install', '--frozen-lockfile'] },
     { name: 'host contracts', command: 'pnpm', args: ['exec', 'tsx', 'scripts/compile-referenced-projects.ts', 'host-contracts'] },
     { name: 'client', command: 'pnpm', args: ['exec', 'tsx', 'scripts/compile-referenced-projects.ts', 'client'] },
   ]
-}
-
-/** The install every other step depends on. */
-export const INSTALL_STEP: PreMergeStep = { name: 'install', command: 'pnpm', args: ['install', '--frozen-lockfile'] }
-
-/** The plan the repository uses. */
-export const DEFAULT_PLAN: PreMergePlan = { install: INSTALL_STEP, steps: buildSteps() }
-
-/** How the install ended. */
-interface InstallOutcome {
-  readonly code: number
-  /** Why the install could not even start, when it could not. */
-  readonly error?: string
 }
 
 /** Options of the check. */
 export interface PreMergeOptions {
   /** Sink for the check's own lines. */
   readonly report?: (line: string) => void
-  /** Plan to run; the repository's own plan when absent. */
-  readonly plan?: PreMergePlan
+  /** Steps to run; the repository's own steps when absent. */
+  readonly steps?: readonly PreMergeStep[]
+}
+
+/** How the job that runs this file reacts to a failure. */
+export type CheckMode = 'off' | 'report' | 'block'
+
+/** What a failure prints and the exit code it leaves. */
+export interface FailureDecision {
+  readonly line: string
+  readonly exitCode: number
+}
+
+/**
+ * Read the job's mode. The check owns its own mode handling, so the workflow only calls it.
+ * @param value - The `CHECK_MODE` value, when the environment provides one.
+ * @returns The mode; a missing or unknown value reports instead of blocking.
+ */
+export function checkMode(value: string | undefined = process.env.CHECK_MODE): CheckMode {
+  return value === 'off' || value === 'block' ? value : 'report'
+}
+
+/**
+ * Decide how a failed tree is reported, so `report` annotates and passes while `block` fails the job.
+ * @param mode - Mode of the job.
+ * @param reason - Why the tree failed.
+ * @returns The annotation and exit code for that mode.
+ */
+export function failureDecision(mode: CheckMode, reason: string): FailureDecision {
+  const summary = `the merged tree fails its pre-merge check: ${reason}`
+  if (mode === 'block') return { line: `::error title=Pre-Merge Check::${summary}`, exitCode: 1 }
+  if (mode === 'report') return { line: `::warning title=Pre-Merge Check::${summary}`, exitCode: 0 }
+  return { line: `pre-merge-check: ${summary}`, exitCode: 0 }
 }
 
 /** What the check decided. */
@@ -67,60 +77,49 @@ export interface PreMergeOutcome {
 }
 
 /**
- * Run one step to completion with the caller's terminal, so its output lands in the job log.
+ * Run one step with the caller's terminal, so its output reaches the job log as it arrives.
  * @param step - Step to run.
  * @param root - Working directory.
- * @param report - Sink for the check's own lines.
  * @returns Why the step failed, or `undefined` when it succeeded.
  */
-function run(step: PreMergeStep, root: string, report: (line: string) => void): string | undefined {
-  const result = spawnSync(step.command, [...step.args], { cwd: root, stdio: 'inherit' })
-  if (result.error !== undefined) {
-    const reason = `cannot run ${step.command}: ${result.error.message}`
-    report(`pre-merge-check: ${reason}`)
-    return reason
-  }
-  return result.status === 0 ? undefined : `the ${step.name} build failed`
+function run(step: PreMergeStep, root: string): Promise<string | undefined> {
+  return new Promise((settle) => {
+    const child = spawn(step.command, [...step.args], { cwd: root, stdio: 'inherit' })
+    child.once('error', (error: Error) => {
+      settle(`cannot run ${step.command}: ${error.message}`)
+    })
+    child.once('close', (code) => {
+      settle(code === 0 ? undefined : `the ${step.name} step failed`)
+    })
+  })
 }
 
 /**
  * Check the merged tree, reporting why it failed.
  * @param root - Repository root.
- * @param options - Sink for the check's own lines, and the plan to run.
+ * @param options - Sink for the check's own lines, and the steps to run.
  * @returns Whether the tree passed, with the reason when it did not.
  */
 export async function preMergeCheck(root: string, options: PreMergeOptions = {}): Promise<PreMergeOutcome> {
   const report = options.report ?? ((line: string): void => {
     process.stdout.write(`${line}\n`)
   })
-  const plan = options.plan ?? DEFAULT_PLAN
-  const install = spawn(plan.install.command, [...plan.install.args], { cwd: root, stdio: 'inherit' })
-  // Listen before anything else can throw: a pnpm that cannot start must not leave the check hanging.
-  const installed = await new Promise<InstallOutcome>((settle) => {
-    install.once('close', (code) => {
-      settle({ code: code ?? 1 })
-    })
-    install.once('error', (error: Error) => {
-      settle({ code: 1, error: error.message })
-    })
-  }).catch((error: unknown) => ({ code: 1, error: error instanceof Error ? error.message : String(error) }))
+  // The manifests are read before the steps, so the version check needs no installed dependency.
   let versions: VersionReport | undefined
-  let versionsError: string | undefined
+  let versionsError = 'unknown error'
   try {
     versions = readVersions(root)
+    for (const line of describeVersions(versions)) report(`verify-version-sync: ${line}`)
   } catch (error) {
     versionsError = error instanceof Error ? error.message : String(error)
+    report(`verify-version-sync: cannot read the released manifests: ${versionsError}`)
   }
-  // The install runs while the manifests are read, so the version lines appear beside its output.
-  if (versions !== undefined) for (const line of describeVersions(versions)) report(`verify-version-sync: ${line}`)
-  if (installed.error !== undefined) return { ok: false, reason: `cannot run ${plan.install.command}: ${installed.error}` }
-  if (installed.code !== 0) return { ok: false, reason: 'the install failed' }
-  for (const step of plan.steps) {
-    report(`pre-merge-check: building ${step.name}`)
-    const failure = run(step, root, report)
+  for (const step of options.steps ?? preMergeSteps()) {
+    report(`pre-merge-check: running ${step.name}`)
+    const failure = await run(step, root)
     if (failure !== undefined) return { ok: false, reason: failure }
   }
-  if (versions === undefined) return { ok: false, reason: `cannot read the released manifests: ${versionsError ?? 'unknown error'}` }
+  if (versions === undefined) return { ok: false, reason: `cannot read the released manifests: ${versionsError}` }
   if (!versionsSynchronized(versions)) return { ok: false, reason: 'the released manifests do not carry the root version' }
   return { ok: true }
 }
@@ -132,7 +131,8 @@ if (isMain) {
   if (outcome.ok) {
     process.stdout.write('pre-merge-check: passed\n')
   } else {
-    process.stderr.write(`pre-merge-check: failed: ${outcome.reason ?? 'unknown reason'}\n`)
-    process.exitCode = 1
+    const decision = failureDecision(checkMode(), outcome.reason ?? 'unknown reason')
+    ;(decision.exitCode === 0 ? process.stdout : process.stderr).write(`${decision.line}\n`)
+    process.exitCode = decision.exitCode
   }
 }
