@@ -331,8 +331,8 @@ const SERVICE_ROLES: ServiceRole[] = [
   },
   {
     key: 'sessionToolResults',
-    pkg: 'api-session-controller',
-    title: 'Live Session tool-result Remote',
+    pkg: 'client-ui-trajectory',
+    title: 'Trajectory live tool-result Remote',
     mode: 'core',
     note: 'Retains final tool values only for their live Session instance and invalidates inspectors when that instance unloads.',
   },

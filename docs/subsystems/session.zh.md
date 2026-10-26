@@ -1148,26 +1148,6 @@ Types: [CreateSessionOptions](persistence.zh.md) · [PrepareSessionOptions](pers
 
 Source: [`packages/core/session/src/index.ts`](../../packages/core/session/src/index.ts)
 
-<a id="ctxsessiontoolresults--sessiontoolresults"></a>
-
-### `ctx.sessionToolResults` — `SessionToolResults`
-
-Read-only Remote inspection of tool values produced in this Session lifetime.
-
-```ts cordis-catalog
-/**
- * Observe one committed result without loading a Session or reading its history.
- * Values disappear when the exact Session instance leaves the registry. A cold
- * read stays unavailable; opening a new stream observes the current instance.
- * @param request - Authorized Session identity and durable result event sequence.
- * @param signal - Remote consumer lifetime.
- * @returns Current availability and changes until cancellation or service disposal.
- */
-@Remote({ mode: 'stream' }) async *watch(request: SessionToolResultRequest, signal: AbortSignal): AsyncIterable<SessionToolResultValue>
-```
-
-Source: [`packages/api/session-controller/src/tool-results.ts`](../../packages/api/session-controller/src/tool-results.ts)
-
 <a id="api-session-events"></a>
 
 ### `api-session/*` events

@@ -26,7 +26,6 @@ import { SessionHistoryController } from './history.ts'
 import { SessionFileReferences } from './file-references.ts'
 import { ApiSessionList } from './list.ts'
 import { buildModelCatalog, hasProviderApiKey } from './catalog.ts'
-import { SessionToolResults } from './tool-results.ts'
 import { SessionSkillCatalog } from './skill-catalog.ts'
 import { SessionMediaReferences } from './media-references.ts'
 import { ArchivedSessionGate } from './archived-session-gate.ts'
@@ -70,7 +69,6 @@ export type * from './types.ts'
 export { ApiSessionNotFound } from './agent.ts'
 export { SessionFileReferences } from './file-references.ts'
 export { SessionSkillCatalog } from './skill-catalog.ts'
-export { SessionToolResults } from './tool-results.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -206,7 +204,6 @@ export class SessionController extends TypertRemoteService {
     ctx.plugin(SessionFileReferences)
     ctx.plugin(SessionMediaReferences)
     ctx.plugin(SessionSkillCatalog)
-    ctx.plugin(SessionToolResults)
     // An archived Session, or a subagent descendant of one, runs no model step
     // until it is restored; what it still runs is stopped by the owners that
     // answer the Workspace registry's archive-admission events.

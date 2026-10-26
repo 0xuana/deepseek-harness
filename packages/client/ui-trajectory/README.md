@@ -63,13 +63,15 @@ Tool records begin at durable tool/call events and retain complete argument text
 
 A complete appended prompt without a loaded request header appears as a standalone system row; only its known text is available, with no inferred request options or tool catalog. Prepending its request history replaces that standalone presentation without duplicating the prompt. In-history system prompt changes compare against the most recent request state, including earlier prompt updates without a new request header. Each request retains the prompt and change that applied at its own position. Surface replacements, including compaction, restore the last nonempty surviving system prompt even without a new system event; an unloaded prompt remains unavailable until its page arrives.
 
+The Trajectory Host plugin owns `ctx.sessionToolResults` and its `toolResults.watch` Remote stream, which inspects a successful tool’s final post-policy value by Session and result-event sequence. Values are held only in memory for the exact live Session instance: unloading the Session clears pending and committed values and invalidates open inspectors. Cold reads, restored sessions, forks, and exports do not recover or inherit values. A new inspector or reconnect can read retained values while that instance survives. Unloading the Trajectory plugin also clears every value; remounting starts empty even when the Session stays live. This capability never writes Session events or projection checkpoints; retained memory grows with successful result sizes during that Session lifetime. The browser subscribes only to the selected result, and ordinary failures leave rendered content usable.
+
 ### Virtual rows
 
 Long ledgers initially derive React data from 50 target Nodes ending at the mount-time tail. Later Nodes extend that anchored window without evicting its prefix, and the existing load control reveals earlier resident Nodes before requesting another Session page. Virtualization mounts only the visible row window plus a small overscan; request-only separators share the next measurable virtual item, while semantic row keys and ARIA indexes survive prepends. The virtualizer owns bottom following for structural appends; non-virtual ledgers use a direct tail-position write. Content-only stream frames preserve virtual row keys and heights, reuse measurements, and do not issue repeated tail-scroll writes. Completed replies retain assembled blocks, timing, and usage in Trajectory target State, while the shared Session window keeps the raw Events.
 
 ### Layout
 
-Trajectory asks the conversation shell to float the composer over the full-height ledger, while its responsive vertical scrollers reserve the composer's live height so final rows remain reachable. Scrollable Summary regions keep their scrollbar thumbs transparent until hovered or focused, without changing the reserved scroll geometry. The package provides no service and declares no Context merge.
+Trajectory asks the conversation shell to float the composer over the full-height ledger, while its responsive vertical scrollers reserve the composer's live height so final rows remain reachable. Scrollable Summary regions keep their scrollbar thumbs transparent until hovered or focused, without changing the reserved scroll geometry. The Host and Client compile separately; the Host service loads and unloads with the Trajectory plugin.
 
 </details>
 
@@ -90,7 +92,7 @@ These pages cover the conversation host and the session data this view projects.
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as the package is a browser-side UI plugin layer that registers nothing model-facing.
+None, as the Trajectory UI and its read-only Host inspector register nothing model-facing.
 
 #### KV Cache effect
 

@@ -1,5 +1,6 @@
 /** Live tool inspection shares the real Session's unload lifetime, never its replay data. */
 import { Context } from '@deepseek-ai/cordis'
+import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { expect, it, onTestFinished } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -7,13 +8,16 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { SessionToolResults } from '../src/tool-results.ts'
+import SessionToolResults from '../src/index.ts'
 
 async function setup(value: JsonValue = { answer: 42 }) {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await mountAgentLoopTestDependencies(ctx)
-  const results = new SessionToolResults(ctx)
+  await ctx.plugin(TypertRegistry)
+  const feature = ctx.plugin(SessionToolResults)
+  await feature
+  const results = ctx.sessionToolResults
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'value', description: 'Return a structured value.', parameters: {},
     output: { schema: { type: 'json' }, render: () => [{ type: 'text', text: 'rendered' }] },
@@ -42,7 +46,7 @@ async function setup(value: JsonValue = { answer: 42 }) {
     onTestFinished(async () => { abort.abort(); await iterator.return?.() })
     return iterator
   }
-  return { ctx, results, agent, owner, execute, watch }
+  return { ctx, results, feature, agent, owner, execute, watch }
 }
 
 it.each([null, false, 0, '', { answer: 42 }])('retains final live value %j without adding it to the journal', async (value) => {
@@ -135,4 +139,52 @@ it('ends active observers when the service owner is disposed', async () => {
   const finished = observer.next()
   await ctx.fiber.dispose()
   expect((await finished).done).toBe(true)
+})
+
+it('unloads the Trajectory service without retaining values across a remount', async () => {
+  const { ctx, feature, agent, execute, watch } = await setup()
+  const event = await execute()
+  const observer = watch(event.seq)
+  expect((await observer.next()).value).toEqual({ available: true, value: { answer: 42 } })
+  const finished = observer.next()
+  await feature.dispose()
+  expect((await finished).done).toBe(true)
+  expect(ctx.get('sessionToolResults')).toBeUndefined()
+  expect(ctx.sessions.get(agent.id)).toBe(agent.session)
+  const missed = await execute()
+  await ctx.plugin(SessionToolResults)
+  const abort = new AbortController()
+  const restored = ctx.sessionToolResults.watch({ sessionId: agent.id, seq: event.seq }, abort.signal)[Symbol.asyncIterator]()
+  const absent = ctx.sessionToolResults.watch({ sessionId: agent.id, seq: missed.seq }, abort.signal)[Symbol.asyncIterator]()
+  onTestFinished(async () => { abort.abort(); await restored.return?.(); await absent.return?.() })
+  expect((await restored.next()).value).toEqual({ available: false })
+  expect((await absent.next()).value).toEqual({ available: false })
+})
+
+it('ends a subscription whose signal was aborted before opening', async () => {
+  const { results, agent } = await setup()
+  const abort = new AbortController()
+  abort.abort()
+  const observer = results.watch({ sessionId: agent.id, seq: 0 }, abort.signal)[Symbol.asyncIterator]()
+  expect((await observer.next()).done).toBe(true)
+})
+
+it('discards pending PTC values if the Session unloads before its result is committed', async () => {
+  const { ctx, agent, owner, watch } = await setup()
+  const callId = ToolCallId('unloaded:ptc:1')
+  await ctx.tools.execute({
+    agent, signal: new AbortController().signal,
+    calls: [{ type: 'tool-call', id: callId, name: 'value', arguments: '{}' }],
+  })
+  const observer = watch(agent.session.seq)
+  expect((await observer.next()).value).toEqual({ available: false })
+  const unloaded = observer.next()
+  await owner.dispose()
+  expect((await unloaded).value).toEqual({ available: false })
+  const resumed = ctx.sessions.create(agent.id)
+  const committed = resumed.append('tool/ptc-dispatch', {
+    rootCallId: ToolCallId('unloaded'), parentCallId: ToolCallId('unloaded'), subCallId: callId,
+    name: 'value', arguments: {}, content: [{ type: 'text', text: 'rendered' }], isError: false,
+  })
+  expect((await watch(committed.seq).next()).value).toEqual({ available: false })
 })

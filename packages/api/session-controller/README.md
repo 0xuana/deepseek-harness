@@ -10,7 +10,7 @@ Desktop analytics follows the [product collection policy](../../client/product-a
 
 ## Summary
 
-`@deepseek-ai/dsh-api-session-controller` owns the Host `ctx.sessionController` service and the generated Client `session`, `skills`, `fileReferences`, and `toolResults` Remote namespaces. It serves Session lifecycle and history, the Host-generation model catalog, human background-job kill, workspace-path opening, user-invocable skill discovery, and Agent-scoped file references. Use it through API Gateway when a Client needs operations addressed by a Session.
+`@deepseek-ai/dsh-api-session-controller` owns the Host `ctx.sessionController` service and the generated Client `session`, `skills`, and `fileReferences` Remote namespaces. It serves Session lifecycle and history, the Host-generation model catalog, human background-job kill, workspace-path opening, user-invocable skill discovery, and Agent-scoped file references. Use it through API Gateway when a Client needs operations addressed by a Session.
 
 ## Table of Contents
 
@@ -30,8 +30,6 @@ Desktop analytics follows the [product collection policy](../../client/product-a
 The controller reads a Session's recorded preset through the optional `agentPresets.presetForSession(session)` service method. A null result means no preset was recorded; an absent service means preset identity is unavailable to the controller.
 
 History pages and follow opening snapshots carry one `{ type: 'event', event: SessionWireEvent }` record per durable Session event. The Client retains each accepted record as one durable `SessionEventLikeEntry`; Assistant token boundaries remain inside the compact stream on `assistant/message` or `assistant/attempt`. Tool arguments, result content, failures, and `tool/result.data.meta` pass through unchanged; the controller does not resolve a Tool definition, run a presenter, or attach UI data.
-
-`toolResults.watch` inspects a successful tool’s final post-policy value by Session and result-event sequence. Values are held only in memory for the exact live Session instance: unloading the Session clears pending and committed values and invalidates open inspectors. Cold reads, restored sessions, forks, and exports do not recover or inherit values. A new inspector or reconnect can read retained values while that instance survives. This capability never writes Session events or projection checkpoints; retained memory grows with successful result sizes during that Session lifetime. The browser subscribes only to the selected result, and ordinary failures leave rendered content usable.
 
 The Client journal validates current Session event envelopes before publishing follow snapshots, live entries, or history pages. It reuses the browser-safe Session validators for required surface markers, exact replacement endpoints, earlier unique source seqs, embedded Assistant provider metadata, request-header omissions, and tool-error consistency. Invalid records fail without field stripping or normalization; range membership and source existence remain durable-log checks on the Host.
 

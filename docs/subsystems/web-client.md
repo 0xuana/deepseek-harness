@@ -98,3 +98,32 @@ Use the four detailed references according to the extension being added:
 - [API Gateway](../api-gateway.md) for Host methods, generated Remote contributions, streams, and forwarded events.
 - [Web Client Slots](slots.md) for components, hooks, stores, injection, and placement.
 - [Conversation](conversation.md) for durable event correlation, target snapshots, and Chat or Trajectory view contributions.
+
+<!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
+
+<a id="cordis-surface"></a>
+
+## Cordis API
+
+Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+
+<a id="ctxsessiontoolresults--sessiontoolresults"></a>
+
+### `ctx.sessionToolResults` — `SessionToolResults`
+
+Read-only Remote inspection of tool values produced in this Session lifetime.
+
+```ts cordis-catalog
+/**
+ * Observe one committed result without loading a Session or reading its history.
+ * Values disappear when the exact Session instance leaves the registry. A cold
+ * read stays unavailable; opening a new stream observes the current instance.
+ * @param request - Authorized Session identity and durable result event sequence.
+ * @param signal - Remote consumer lifetime.
+ * @returns Current availability and changes until cancellation or service disposal.
+ */
+@Remote({ mode: 'stream' }) async *watch(request: SessionToolResultRequest, signal: AbortSignal): AsyncIterable<SessionToolResultValue>
+```
+
+Source: [`packages/client/ui-trajectory/src/index.ts`](../../packages/client/ui-trajectory/src/index.ts)
+<!-- END GENERATED cordis-surface -->

@@ -1,6 +1,6 @@
 /** Selected-result subscriptions retain no history-sized Client cache. */
 import type { ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
-import type { SessionToolResultValue } from '@deepseek-ai/dsh-api-session-controller/types'
+import type { SessionToolResultValue } from '../types.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
