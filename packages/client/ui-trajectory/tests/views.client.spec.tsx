@@ -161,13 +161,10 @@ function standaloneHistory(
 }
 
 function standaloneDuration(): Pick<
-  ComponentProps<typeof TrajectoryView>, 'useDuration' | 'setActualDuration' | 'useResultMode' | 'setResultMode'
+  ComponentProps<typeof TrajectoryView>, 'useDuration' | 'setActualDuration'
 > {
   const duration = createSnapshotStore(false)
-  const resultMode = createSnapshotStore(false)
   return {
-    useResultMode: bindSnapshotSelector(resultMode),
-    setResultMode: (value) => { resultMode.set(value) },
     useDuration: bindSnapshotSelector(duration),
     setActualDuration: (value) => { duration.set(value) },
   }
@@ -206,7 +203,7 @@ const useProjection: UseProjection = emptyProjection
 
 type StandaloneBaseProps = Omit<
   ComponentProps<typeof TrajectoryView>,
-  'useSession' | 'useTrajectory' | 'useDuration' | 'loadOlder' | 'setActualDuration' | 'useResultMode' | 'setResultMode'
+  'useSession' | 'useTrajectory' | 'useDuration' | 'loadOlder' | 'setActualDuration'
 >
 
 /** Standalone view props: the session-scope standard kit the outlet would bake. */
@@ -394,8 +391,6 @@ function mount(fixture: Awaited<ReturnType<typeof bench>>) {
         return {
           loadOlder: trajectory.loadOlder,
           loadImage: trajectory.loadImage,
-          setResultMode: trajectory.setResultMode,
-          useResultMode: bindSnapshotSelector(trajectory.hooks.resultMode),
           setActualDuration: trajectory.setActualDuration,
           useDuration: bindSnapshotSelector(trajectory.hooks.duration),
           t: tZh,
@@ -501,11 +496,6 @@ describe('plugin registration', () => {
     await reference.ready
     const second = injectEntry(reference.sessionId)
 
-    expect(second.hooks.resultMode).toBe(first.hooks.resultMode)
-    first.setResultMode(true)
-    expect(second.hooks.resultMode.getSnapshot()).toBe(true)
-    expect(localStorage.getItem('dsh.trajectory.rawResult')).toBe('true')
-    first.setResultMode(false)
     expect(second.hooks.duration).toBe(first.hooks.duration)
     first.setActualDuration(true)
     expect(second.hooks.duration.getSnapshot()).toBe(true)

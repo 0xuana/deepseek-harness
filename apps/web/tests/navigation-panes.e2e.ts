@@ -37,6 +37,7 @@ const COMMAND_WRAP_EXPECTED = join(CODE_CARD_DIR, 'command-wrap.expected.md')
 const CODE_CARD_EXPECTED = join(CODE_CARD_DIR, 'code-card.expected.md')
 const COPY_MARKDOWN_EXPECTED = join(CODE_CARD_DIR, 'copy-markdown.expected.md')
 const EVICTED_RESULT_EXPECTED = join(CODE_CARD_DIR, 'live-result-evicted.expected.md')
+const LIVE_RESULT_EXPECTED = join(CODE_CARD_DIR, 'live-result.expected.md')
 const MODE = webSnapshotMode()
 const SEED_ID = 'navigation-panes-web-e2e'
 const EXPORTED_LOG_FILE = `session.v${SESSION_FORMAT_VERSION}.jsonl`
@@ -310,12 +311,10 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     await page.getByRole('tab', { name: 'Result' }).click()
     await expect.poll(() => page.getByText('NAVIGATION_OK', { exact: false }).count(), { timeout: 10_000 }).toBeGreaterThanOrEqual(1)
     expect(await page.locator('[data-timeline-span="message"][data-assistant-timing="true"]').count()).toBeGreaterThan(0)
-    await details.getByRole('button', { name: 'Raw result', exact: true }).click()
     await page.getByText('Raw results are only available for live tool calls', { exact: true }).waitFor()
     const snapshot = (await captureStableAria(page, '[class*="viewArea"]', scaffold.workspaceCwd))
       .split(SEED_ID).join('{{seededId}}')
     await compareOrRefreshGolden(TRAJECTORY_EXPECTED, snapshot, MODE)
-    await details.getByRole('button', { name: 'Raw result', exact: true }).click()
     await details.getByRole('button', { name: 'Close details' }).click()
   }, 60_000)
 
@@ -631,7 +630,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
   it.skipIf(MODE === 'record')('keeps the recorded fixture inventory exact', async () => {
     await assertFixtureInventory(CODE_CARD_DIR, [
       'code-card.expected.md', 'command-wrap.expected.md', 'copy-markdown.expected.md',
-      'live-result-evicted.expected.md',
+      'live-result-evicted.expected.md', 'live-result.expected.md',
     ])
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'session.v3.jsonl', 'search-id-results.expected.md', 'search-results.expected.md', 'trajectory.expected.md',
@@ -674,10 +673,58 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     const details = page.getByRole('complementary', { name: 'Event details' })
     await details.getByRole('tab', { name: 'Result', exact: true }).click()
     await details.getByText('LIVE_RESULT_RENDERED', { exact: true }).waitFor()
-    await details.getByRole('button', { name: 'Raw result', exact: true }).click()
-    await expect.poll(() => details.getByRole('tabpanel').textContent()).toContain('answer:')
-    expect(await details.getByRole('tabpanel').textContent()).toContain('42')
-    expect(await details.getByText('Raw results are only available for live tool calls').count()).toBe(0)
+    const rawSection = details.getByRole('region', { name: 'Raw result', exact: true })
+    const renderedSection = details.getByRole('region', { name: 'Rendered result', exact: true })
+    await expect.poll(() => rawSection.textContent()).toContain('answer:')
+    expect(await renderedSection.textContent()).toContain('LIVE_RESULT_RENDERED')
+    expect(await details.getByRole('button', { name: 'Raw result', exact: true }).count()).toBe(0)
+    await compareOrRefreshGolden(
+      LIVE_RESULT_EXPECTED, await captureStableAria(page, '#trajectory-detail-panel', scaffold.workspaceCwd), MODE,
+    )
+    const unregisterJson = scaffold.ctx.tools.register(defineTool({
+      name: 'json_result_probe', description: 'JSON result inspection fixture.', parameters: {},
+      output: { schema: { type: 'json' }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }] },
+      execute: async () => Array.from({ length: 80 }, (_, index) => index),
+    }))
+    onTestFinished(unregisterJson)
+    const jsonBatch = await scaffold.ctx.tools.execute({
+      agent, signal: new AbortController().signal, log: { turn: 2, step: 1 },
+      calls: [{ type: 'tool-call', id: ToolCallId('json-result-probe'), name: 'json_result_probe', arguments: '{}' }],
+    })
+    expect(jsonBatch.results[0]?.result.isError).toBe(false)
+    await page.locator('tr[data-kind="tool"]').filter({ hasText: 'json_result_probe' }).click()
+    await rawSection.getByRole('tree').waitFor()
+    await renderedSection.getByRole('tree').waitFor()
+    const originalViewport = page.viewportSize()!
+    try {
+      for (const width of [originalViewport.width, 390]) {
+        await page.setViewportSize({ width, height: 600 })
+        const geometry = await details.getByRole('tabpanel').evaluate((panel) => {
+          const sections = [...panel.querySelectorAll('section[aria-label]')]
+          const first = sections[0]!.getBoundingClientRect()
+          const second = sections[1]!.getBoundingClientRect()
+          return {
+            gap: second.top - first.bottom,
+            headingFonts: sections.map(section => getComputedStyle(section.querySelector('h3')!).fontSize),
+            overflowingDescendants: [...panel.querySelectorAll('*')].filter(node =>
+              /auto|scroll/.test(getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight + 1).length,
+            scrolls: panel.scrollHeight > panel.clientHeight,
+            horizontalOverflow: panel.scrollWidth > panel.clientWidth + 1,
+            headingsAligned: first.left === second.left,
+          }
+        })
+        expect(geometry).toEqual({
+          gap: 2, headingFonts: ['13px', '13px'], overflowingDescendants: 0,
+          scrolls: true, horizontalOverflow: false, headingsAligned: true,
+        })
+        await details.getByRole('tabpanel').evaluate((panel) => { panel.scrollTop = panel.scrollHeight })
+        expect(await details.getByRole('tabpanel').evaluate(panel => panel.scrollTop)).toBeGreaterThan(0)
+      }
+    } finally {
+      await page.setViewportSize(originalViewport)
+    }
+    await page.locator('tr[data-kind="tool"]').filter({ hasText: 'live_result_probe' }).click()
+    await expect.poll(() => rawSection.textContent()).toContain('answer:')
     const newer = await scaffold.ctx.tools.execute({
       agent, signal: new AbortController().signal,
       calls: Array.from({ length: 1000 }, (_, index) => ({
@@ -687,14 +734,12 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     expect(newer.results).toHaveLength(1000)
     expect(newer.results.every(entry => !entry.result.isError)).toBe(true)
     await details.getByText('Raw results are only available for live tool calls', { exact: true }).waitFor()
-    expect(await details.getByRole('button', { name: 'Raw result', exact: true }).getAttribute('aria-pressed')).toBe('true')
     // Keep hover and focus tooltips out of the recorded result panel.
     await details.getByText('Raw results are only available for live tool calls', { exact: true }).click()
     await details.getByRole('tooltip').waitFor({ state: 'hidden' })
     await compareOrRefreshGolden(
       EVICTED_RESULT_EXPECTED, await captureStableAria(page, '#trajectory-detail-panel', scaffold.workspaceCwd), MODE,
     )
-    await details.getByRole('button', { name: 'Raw result', exact: true }).click()
     await details.getByText('LIVE_RESULT_RENDERED', { exact: true }).waitFor()
   })
 

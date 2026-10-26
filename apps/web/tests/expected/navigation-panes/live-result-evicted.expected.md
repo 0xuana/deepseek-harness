@@ -1,4 +1,7 @@
 - tabpanel "Result":
-  - text: Raw result
-  - button "Raw result" [pressed]
-  - paragraph: Raw results are only available for live tool calls
+  - region "Raw result":
+    - heading "Raw result" [level=3]
+    - paragraph: Raw results are only available for live tool calls
+  - region "Rendered result":
+    - heading "Rendered result" [level=3]
+    - text: LIVE_RESULT_RENDERED

@@ -80,12 +80,10 @@ export interface TrajectoryViewInjected {
   jsonStringWrapping?: Omit<NonNullable<JsonTreeProps['stringWrapping']>, 'label'>
   hooks: {
     duration: SnapshotStore<boolean>
-    resultMode: SnapshotStore<boolean>
   }
   loadOlder: () => Promise<boolean>
   loadImage: MessageImageLoader
   setActualDuration: (actualDuration: boolean) => void
-  setResultMode: (raw: boolean) => void
   watchToolResult?: WatchToolResult
 }
 
@@ -134,7 +132,7 @@ function addUsage(
 }
 
 export function TrajectoryView({
-  useSession, useTrajectory, useDuration, useResultMode, setResultMode, watchToolResult, loadOlder, loadImage, setActualDuration,
+  useSession, useTrajectory, useDuration, watchToolResult, loadOlder, loadImage, setActualDuration,
   viewRequest, completeViewRequest, renderSlot, t, jsonStringWrapping,
 }: ConvViewProps
   & Pick<PropsRenderSlots<'conversation.trajectory.images'>, 'renderSlot'>
@@ -145,7 +143,6 @@ export function TrajectoryView({
     useState<ReadonlySet<string>>(EMPTY_RECORD_IDS)
   const [timelineSelection, setTimelineSelection] = useState<TrajectoryTimeRange | null>(null)
   const actualDuration = useDuration(value => value)
-  const rawResult = useResultMode(value => value)
   const [actualTime, setActualTime] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchIndex] = useState(() => new TrajectorySearchIndex())
@@ -551,9 +548,7 @@ export function TrajectoryView({
       <div className={css.ledger}>
         <TrajectoryTable
           t={t}
-          rawResult={rawResult}
           watchToolResult={watchToolResult}
-          onResultModeChange={setResultMode}
           stringWrapping={jsonStringWrapping === undefined ? undefined : {
             ...jsonStringWrapping,
             label: t('record.wrapLines'),
