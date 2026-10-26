@@ -54,8 +54,8 @@ export function checkoutLabel(state: ForgePanelState, home: string | undefined, 
   if (created !== null && created.path === root) {
     const base = created.from ?? created.baseCommit.slice(0, 7)
     return {
-      name: created.branch,
-      detached: false,
+      name: branch ?? commit,
+      detached: branch === null,
       kind: t('checkout.worktreeFrom', { base }),
       tooltip: t('branch.worktree', { base, path }),
       missing: false,
