@@ -1,10 +1,11 @@
 /**
- * Check that every released manifest carries the root version. A release
- * synchronization bumps them together, so a mismatch means a merge combined two
- * version lines: a pull request that bumps versions merged onto a master that
- * added a package, for instance.
+ * Check that every released manifest carries the root version. A release synchronization bumps
+ * them together, so a mismatch means a merge combined two version lines: a pull request that bumps
+ * versions merged onto a master that added a package, for instance.
  *
- * The check reads manifests only, so it needs no installed dependency.
+ * The released manifests are the ones the release tooling rewrites, `packages/<group>/<package>`
+ * and `apps/<application>`. Reading them needs no installed dependency, so the check runs before an
+ * install.
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs'
@@ -19,14 +20,31 @@ export interface ManifestVersion {
   readonly version: string | undefined
 }
 
+/** Whether a tree is synchronized, with the lines describing it. */
+export interface VersionOutcome {
+  readonly ok: boolean
+  readonly lines: string[]
+}
+
 /** The root version and every released manifest's version. */
 export interface VersionReport {
   readonly rootVersion: string | undefined
   readonly manifests: ManifestVersion[]
 }
 
-/** Directories that hold released manifests below the repository root. */
-const MANIFEST_DIRECTORIES = ['packages', 'apps'] as const
+/** Where released manifests live: the package groups and the applications. */
+const PACKAGE_ROOT = 'packages'
+const APPLICATION_ROOT = 'apps'
+
+/**
+ * Report whether an error only means the path is not there.
+ * @param error - Caught value.
+ * @returns Whether the entry is absent, as a missing file or a parent that is one.
+ */
+function isMissing(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code
+  return code === 'ENOENT' || code === 'ENOTDIR'
+}
 
 /**
  * Describe an error for a reader.
@@ -38,59 +56,84 @@ function messageOf(error: unknown): string {
 }
 
 /**
+ * Test whether a path is a regular file, treating only "no such file" as a no.
+ * @param path - Absolute path.
+ * @returns Whether the file exists.
+ */
+function isFile(path: string): boolean {
+  try {
+    return statSync(path).isFile()
+  } catch (error) {
+    if (isMissing(error)) return false
+    throw new Error(`cannot read ${path}: ${messageOf(error)}`)
+  }
+}
+
+/**
+ * Test whether a path is a directory.
+ * @param path - Absolute path.
+ * @returns Whether the entry is a directory.
+ */
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory()
+  } catch (error) {
+    if (isMissing(error)) return false
+    throw new Error(`cannot read ${path}: ${messageOf(error)}`)
+  }
+}
+
+/**
+ * List the entries of a directory, naming the directory when it cannot be read.
+ * @param path - Absolute directory path.
+ * @param label - Repository-relative label for the message.
+ * @returns Entry names.
+ */
+function entries(path: string, label: string): string[] {
+  try {
+    return readdirSync(path)
+  } catch (error) {
+    throw new Error(`cannot read ${label}: ${messageOf(error)}`)
+  }
+}
+
+/**
  * Read the version one `package.json` declares.
  * @param path - Absolute path of the manifest.
  * @returns The declared version, or `undefined` when it declares none.
  */
 function versionOf(path: string): string | undefined {
-  const manifest: unknown = JSON.parse(readFileSync(path, 'utf8'))
-  if (typeof manifest !== 'object' || manifest === null) return undefined
-  const version: unknown = (manifest as { version?: unknown }).version
-  return typeof version === 'string' ? version : undefined
+  try {
+    const manifest: unknown = JSON.parse(readFileSync(path, 'utf8'))
+    if (typeof manifest !== 'object' || manifest === null) return undefined
+    const version: unknown = (manifest as { version?: unknown }).version
+    return typeof version === 'string' ? version : undefined
+  } catch (error) {
+    throw new Error(`cannot read ${path}: ${messageOf(error)}`)
+  }
 }
 
 /**
- * Collect the manifests that must carry the root version: `packages/<group>/<package>` and
- * `apps/<application>`. A directory that cannot be read, and a walk that finds nothing, are
- * errors rather than a clean tree, so a narrowed corpus cannot pass the check.
+ * Collect the manifests the release tooling rewrites: `packages/<group>/<package>/package.json`
+ * and `apps/<application>/package.json`. A directory that cannot be read, and a walk that finds
+ * nothing, are errors rather than a clean tree, so a narrowed corpus cannot pass the check.
  * @param root - Repository root.
  * @returns Manifest paths relative to the root, sorted.
  */
 export function releasedManifests(root: string): string[] {
   const paths: string[] = []
-  for (const directory of MANIFEST_DIRECTORIES) {
-    let groups: string[]
-    try {
-      groups = readdirSync(join(root, directory))
-    } catch (error) {
-      throw new Error(`cannot read ${directory}/: ${messageOf(error)}`)
-    }
-    for (const group of groups) {
-      const groupDirectory = join(root, directory, group)
-      let isDirectory: boolean
-      try {
-        isDirectory = statSync(groupDirectory).isDirectory()
-      } catch (error) {
-        throw new Error(`cannot read ${directory}/${group}: ${messageOf(error)}`)
-      }
-      if (!isDirectory) continue
-      const manifest = join(groupDirectory, 'package.json')
-      try {
-        if (statSync(manifest).isFile()) paths.push(`${directory}/${group}/package.json`)
-      } catch {
-        // A directory without a manifest is not a package.
-      }
-      for (const entry of readdirSync(groupDirectory)) {
-        const nested = `${directory}/${group}/${entry}/package.json`
-        try {
-          if (statSync(join(root, nested)).isFile()) paths.push(nested)
-        } catch {
-          // Not a package directory.
-        }
-      }
+  for (const group of entries(join(root, PACKAGE_ROOT), `${PACKAGE_ROOT}/`)) {
+    if (!isDirectory(join(root, PACKAGE_ROOT, group))) continue
+    for (const entry of entries(join(root, PACKAGE_ROOT, group), `${PACKAGE_ROOT}/${group}/`)) {
+      const path = `${PACKAGE_ROOT}/${group}/${entry}/package.json`
+      if (isFile(join(root, path))) paths.push(path)
     }
   }
-  if (paths.length === 0) throw new Error(`no released manifest was found under ${MANIFEST_DIRECTORIES.map(directory => `${directory}/`).join(' or ')}`)
+  for (const application of entries(join(root, APPLICATION_ROOT), `${APPLICATION_ROOT}/`)) {
+    const path = `${APPLICATION_ROOT}/${application}/package.json`
+    if (isFile(join(root, path))) paths.push(path)
+  }
+  if (paths.length === 0) throw new Error(`no released manifest was found under ${PACKAGE_ROOT}/ or ${APPLICATION_ROOT}/`)
   return paths.sort()
 }
 
@@ -116,9 +159,10 @@ export function readVersions(root: string): VersionReport {
 }
 
 /**
- * Report whether every released manifest carries the root version.
+ * Report whether every released manifest carries the root version. A tree without a root version,
+ * or with no released manifest at all, is not synchronized.
  * @param report - Root version and manifests.
- * @returns Whether the tree is synchronized; a tree without a root version or without manifests is not.
+ * @returns Whether the tree is synchronized.
  */
 export function versionsSynchronized(report: VersionReport): boolean {
   const { rootVersion, manifests } = report
@@ -126,7 +170,7 @@ export function versionsSynchronized(report: VersionReport): boolean {
 }
 
 /**
- * Describe a version mismatch for a reader.
+ * Describe a version report for a reader.
  * @param report - Root version and manifests.
  * @returns One line when the tree is consistent, otherwise a header and one line per mismatched manifest.
  */
@@ -141,14 +185,24 @@ export function describeVersions(report: VersionReport): string[] {
   ]
 }
 
+/**
+ * Run the check over one repository.
+ * @param root - Repository root.
+ * @returns Whether the tree is synchronized, with the lines describing it.
+ */
+export function runVersionCheck(root: string): VersionOutcome {
+  const report = readVersions(root)
+  return { ok: versionsSynchronized(report), lines: describeVersions(report) }
+}
+
 const invokedPath = process.argv[1]
 const isMain = invokedPath !== undefined && import.meta.url === pathToFileURL(resolve(invokedPath)).href
 if (isMain) {
+  const root = process.argv[2] ?? resolve(import.meta.dirname, '..')
   try {
-    const report = readVersions(resolve(import.meta.dirname, '..'))
-    const synchronized = versionsSynchronized(report)
-    for (const line of describeVersions(report)) (synchronized ? console.log : console.error)(`verify-version-sync: ${line}`)
-    if (!synchronized) process.exitCode = 1
+    const { ok, lines } = runVersionCheck(resolve(root))
+    for (const line of lines) (ok ? console.log : console.error)(`verify-version-sync: ${line}`)
+    if (!ok) process.exitCode = 1
   } catch (error) {
     console.error(`verify-version-sync: ${messageOf(error)}`)
     process.exitCode = 1

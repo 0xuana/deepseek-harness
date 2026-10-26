@@ -43,7 +43,11 @@ describe('pre-merge check', () => {
   })
 
   it('checks the versions before it installs, and installs before the builds', () => {
-    expect(preMergeSteps('/repo').map(step => step.name)).toEqual(['versions', 'install', 'host contracts', 'client'])
+    const steps = preMergeSteps('/repo')
+    expect(steps.map(step => step.name)).toEqual(['versions', 'install', 'host contracts', 'client'])
+    expect(steps[0]).toEqual({ name: 'versions', command: process.execPath, args: ['/repo/scripts/verify-version-sync.ts', '/repo'] })
+    expect(steps[1]).toEqual({ name: 'install', command: 'pnpm', args: ['install', '--frozen-lockfile'] })
+    expect(steps[3]?.args).toEqual(['exec', 'tsx', 'scripts/compile-referenced-projects.ts', 'client'])
   })
 
   it('annotates a failure as a warning and passes in report mode', () => {
@@ -52,6 +56,7 @@ describe('pre-merge check', () => {
     expect(checkMode('off')).toBe('off')
     expect(checkMode('nonsense')).toBe('report')
     expect(checkMode(undefined)).toBe('report')
+    expect(checkMode('')).toBe('report')
     expect(failureDecision('report', 'the install step failed')).toEqual({
       line: '::warning title=Pre-Merge Check::the merged tree fails its pre-merge check: the install step failed',
       exitCode: 0,

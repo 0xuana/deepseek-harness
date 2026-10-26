@@ -28,7 +28,7 @@ export interface PreMergeStep {
  */
 export function preMergeSteps(root: string): PreMergeStep[] {
   return [
-    { name: 'versions', command: process.execPath, args: [join(root, 'scripts', 'verify-version-sync.ts')] },
+    { name: 'versions', command: process.execPath, args: [join(root, 'scripts', 'verify-version-sync.ts'), root] },
     { name: 'install', command: 'pnpm', args: ['install', '--frozen-lockfile'] },
     { name: 'host contracts', command: 'pnpm', args: ['exec', 'tsx', 'scripts/compile-referenced-projects.ts', 'host-contracts'] },
     { name: 'client', command: 'pnpm', args: ['exec', 'tsx', 'scripts/compile-referenced-projects.ts', 'client'] },
@@ -49,7 +49,7 @@ export interface FailureDecision {
  * @param value - The `CHECK_MODE` value, when the environment provides one.
  * @returns The mode; a missing or unknown value reports instead of blocking.
  */
-export function checkMode(value: string | undefined = process.env.CHECK_MODE): CheckMode {
+export function checkMode(value: string | undefined): CheckMode {
   return value === 'off' || value === 'block' ? value : 'report'
 }
 
@@ -124,7 +124,7 @@ if (isMain) {
   if (outcome.ok) {
     process.stdout.write('pre-merge-check: passed\n')
   } else {
-    const decision = failureDecision(checkMode(), outcome.reason ?? 'unknown reason')
+    const decision = failureDecision(checkMode(process.env.CHECK_MODE), outcome.reason ?? 'unknown reason')
     ;(decision.exitCode === 0 ? process.stdout : process.stderr).write(`${decision.line}\n`)
     process.exitCode = decision.exitCode
   }

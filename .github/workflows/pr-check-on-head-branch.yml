@@ -107,4 +107,12 @@ jobs:
             echo "::warning title=Pre-Merge Check::this tree has no scripts/pre-merge-check.ts, so nothing was installed, compiled, or checked"
             exit 0
           fi
-          exec node scripts/pre-merge-check.ts
+          if node scripts/pre-merge-check.ts; then
+            exit 0
+          fi
+          # A check that crashes reports nothing, so the step reports its exit the way the mode asks.
+          if [ "$CHECK_MODE" = block ]; then
+            echo "::error title=Pre-Merge Check::scripts/pre-merge-check.ts exited without reporting, so the merged tree is unchecked"
+            exit 1
+          fi
+          echo "::warning title=Pre-Merge Check::scripts/pre-merge-check.ts exited without reporting, so the merged tree is unchecked"

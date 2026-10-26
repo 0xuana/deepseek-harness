@@ -1700,7 +1700,7 @@ describe('Policy workflow shells', () => {
         for (const step of job.steps) {
           if (!isRecord(step) || typeof step.run !== 'string') continue
           const parsed = spawnSync('bash', ['-n'], { input: step.run, encoding: 'utf8' })
-          expect(`${String(step.name ?? step.id)}: ${parsed.stderr}`).toBe(`${String(step.name ?? step.id)}: `)
+          expect(`${String(step.name ?? step.id)}: ${parsed.status}: ${parsed.stderr}`).toBe(`${String(step.name ?? step.id)}: 0: `)
         }
       }
     },
@@ -1750,7 +1750,8 @@ describe('Policy workflows', () => {
     const run = steps[build]?.run
     if (typeof run !== 'string') throw new TypeError('the pre-merge check step must run a command')
     expect(run).toContain('node scripts/pre-merge-check.ts')
-    // The script annotates its own failure, so the step decides by its exit code alone.
-    expect(run).not.toContain('the merged tree fails its pre-merge check')
+    // The script annotates its own failures; the step keeps a mode-aware guard for a check that crashes.
+    expect(run).toContain('exited without reporting')
+    expect(run).toContain('"$CHECK_MODE" = block')
   })
 })
