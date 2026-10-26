@@ -415,16 +415,20 @@ it('omits session-only grants from the permission page and retains their access 
   await expect(f.access.run(f.client, handle, signal, async () => 'still allowed')).resolves.toBe('still allowed')
 })
 
-it('configures persistent PTC through the existing profile editor only on explicit request', async () => {
+it.each(['function-body', 'repl', 'script'] as const)('enables retention for effective %s semantics with one profile edit', async (programFormat) => {
   const f = await setup()
   expect(f.ctx.cuaAccess.ptcConfiguration()).toEqual({ persistent: false, writable: false })
   await expect(f.ctx.cuaAccess.enablePersistentPtc()).rejects.toThrow('no editable profile entry')
   const entry = { options: { id: 'ptc-runtime' } }
-  const runtime = { programFormat: 'function-body' }
+  const runtime = { programFormat, retainsState: false }
   const edit = vi.fn(async (received: object, change: (current: Record<string, unknown>) => Record<string, unknown>) => {
     expect(received).toBe(entry)
-    expect(change({ timeoutMs: 4200 })).toEqual({ timeoutMs: 4200, executionMode: 'persistent-in-memory' })
-    runtime.programFormat = 'repl'
+    // Effective mode can come from a lower profile; a stale local flag must be replaced.
+    expect(change({ timeoutMs: 4200, scriptPersistence: true })).toEqual({
+      timeoutMs: 4200, executionMode: programFormat === 'script' ? 'vm-script' : 'persistent-in-memory',
+      scriptPersistence: programFormat === 'script',
+    })
+    runtime.retainsState = true
   })
   f.ctx.provide('ptcRuntime', runtime)
   f.ctx.provide('configEditor', { entries: () => [entry], edit })

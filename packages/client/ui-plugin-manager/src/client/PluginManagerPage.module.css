@@ -1525,7 +1525,7 @@ label.registryOption {
   gap: 16px;
   min-height: 44px;
   padding: 8px 2px;
-  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .facts dt {
@@ -1570,11 +1570,16 @@ label.registryOption {
 
 .row {
   padding: 12px 2px;
-  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .row:last-child {
   border-bottom: 0;
+}
+
+.detail[data-plugin-detail='@deepseek-ai/dsh-cua-bundle'] .facts div,
+.detail[data-plugin-detail='@deepseek-ai/dsh-cua-bundle'] .row {
+  border-bottom-color: var(--dsw-alias-border-l3);
 }
 
 .rowLine {
