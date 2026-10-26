@@ -281,6 +281,97 @@ describe('filesFace', () => {
   })
 })
 
+describe('filesFace retention across Session store instances', () => {
+  it('seeds a returning tab with its retained tree and automatic setting, and starts fresh at another root', async () => {
+    const script = scriptedList()
+    const bind = filesFace(script.list, script.watch)
+    const controller = new AbortController()
+    onTestFinished(async () => {
+      controller.abort()
+      await script.dispose()
+    })
+    const first = createFilesStore().create()
+    const firstFace = bind(SESSION, first.actions)
+    firstFace.start(TAB, ROOT, controller.signal)
+    const firstStream = await script.watches.ready(ROOT)
+    await script.settle({ ok: true, value: LEVEL })
+    firstFace.setAutoRefresh(TAB, false)
+    firstFace.retain(TAB, { ...first.getSnapshot().byTab[TAB]!, scrollTop: 40 })
+
+    const second = createFilesStore().create()
+    bind(SESSION, second.actions).start(TAB, ROOT, controller.signal)
+    expect(firstStream.signal.aborted).toBe(true)
+    // Only the current binding's cleanup forgets the tab when it closes.
+    const forgetFirst = vi.spyOn(first.actions, 'forget')
+    expect(second.getSnapshot().byTab[TAB]).toEqual({
+      root: ROOT, expanded: [ROOT], levels: { [ROOT]: { kind: 'ready', level: LEVEL } }, scrollTop: 40, autoRefresh: false,
+    })
+    const secondStream = await script.watches.ready(ROOT, 1)
+    await script.settle({ ok: true, value: LEVEL })
+    await secondStream.deliver('change')
+    expect(script.list).toHaveBeenCalledTimes(2)
+
+    const third = createFilesStore().create()
+    const thirdFace = bind(SESSION, third.actions)
+    thirdFace.retain(TAB, { ...second.getSnapshot().byTab[TAB]!, scrollTop: 40 })
+    thirdFace.start(TAB, '/work/other', controller.signal)
+    expect(third.getSnapshot().byTab[TAB]).toEqual({ root: '/work/other', expanded: ['/work/other'], levels: {}, scrollTop: 0, autoRefresh: true })
+    controller.abort()
+    expect(third.getSnapshot().byTab[TAB]).toBeUndefined()
+    expect(second.getSnapshot().byTab[TAB]).toBeDefined()
+    expect(forgetFirst).not.toHaveBeenCalled()
+  })
+
+  it('ignores a tree retained by a binding that a later binding replaced', () => {
+    const script = scriptedList()
+    const bind = filesFace(script.list, script.watch)
+    const controller = new AbortController()
+    onTestFinished(async () => {
+      controller.abort()
+      await script.dispose()
+    })
+    const first = createFilesStore().create()
+    const firstFace = bind(SESSION, first.actions)
+    firstFace.start(TAB, ROOT, controller.signal)
+    const second = createFilesStore().create()
+    const secondFace = bind(SESSION, second.actions)
+    secondFace.start(TAB, ROOT, controller.signal)
+    secondFace.retain(TAB, { ...second.getSnapshot().byTab[TAB]!, scrollTop: 30 })
+    firstFace.retain(TAB, { ...first.getSnapshot().byTab[TAB]!, scrollTop: 90 })
+    const third = createFilesStore().create()
+    bind(SESSION, third.actions).start(TAB, ROOT, controller.signal)
+    expect(third.getSnapshot().byTab[TAB]?.scrollTop).toBe(30)
+  })
+
+  it('forgets a closed tab, so a later record with its id starts fresh, and keeps the other tabs', async () => {
+    const script = scriptedList()
+    const bind = filesFace(script.list, script.watch)
+    onTestFinished(() => script.dispose())
+    const closed = new AbortController()
+    const kept = new AbortController()
+    onTestFinished(() => { kept.abort() })
+    const other = 'tab-2' as TabId
+    const first = createFilesStore().create()
+    const firstFace = bind(SESSION, first.actions)
+    firstFace.start(TAB, ROOT, closed.signal)
+    firstFace.start(other, ROOT, kept.signal)
+    firstFace.retain(other, { ...first.getSnapshot().byTab[other]!, scrollTop: 25 })
+    const tree = { ...first.getSnapshot().byTab[TAB]!, scrollTop: 40 }
+    firstFace.retain(TAB, tree)
+    closed.abort()
+    // A retain after the record ended has no tab to attach to.
+    firstFace.retain(TAB, tree)
+    const reopened = new AbortController()
+    onTestFinished(() => { reopened.abort() })
+    const second = createFilesStore().create()
+    const secondFace = bind(SESSION, second.actions)
+    secondFace.start(TAB, ROOT, reopened.signal)
+    secondFace.start(other, ROOT, kept.signal)
+    expect(second.getSnapshot().byTab[TAB]?.scrollTop).toBe(0)
+    expect(second.getSnapshot().byTab[other]?.scrollTop).toBe(25)
+  })
+})
+
 describe('createList', () => {
   it('passes the session, the absolute path, and the signal through, and keeps entries and truncation', async () => {
     const listing: WorkspaceDirectoryListing = {

@@ -17,12 +17,19 @@
  * `signal`: a request is not made for a record that already ended, and when the
  * record goes away the bucket and the tab's listing bookkeeping are forgotten,
  * so no later settlement writes to it.
+ *
+ * The store instance lives only as long as its Session binding, which ends when
+ * the reader leaves the Session while its tab records stay open. Each tab's last
+ * drawn tree is therefore retained beside the per-binding faces, keyed by Session
+ * and tab, and seeds the tab again when the reader returns. The latest binding
+ * to start a tab owns it: its start closes the earlier binding's watches, and
+ * only its body's tree is retained.
  */
 import type { ClientRemote, RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import type { BoundActions } from '@deepseek-ai/dsh-client-store'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { DirLevel, createFilesStore } from './store.ts'
+import type { DirLevel, FilesTabState, createFilesStore } from './store.ts'
 import type { WorkspaceFileWatchFrame } from '@deepseek-ai/dsh-api-workspace-files/types'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { DirectoryNode } from './directory-node.ts'
@@ -141,6 +148,21 @@ export interface FilesInjected {
    * @param signal - the tab record's lifetime.
    */
   readonly toggle: (tabId: TabId, parentPath: string, path: string, expanded: readonly string[], signal: AbortSignal) => void
+  /**
+   * Keep the tree a body last drew, for a later binding of the same Session.
+   * Does nothing once the tab record ended or a later binding started the tab.
+   * @param tabId - the tab being drawn.
+   * @param tree - the tab's tree, with the body's final scroll offset.
+   */
+  readonly retain: (tabId: TabId, tree: FilesTabState) => void
+}
+
+/** One open tab's directory watches and, once its body unmounted, its last drawn tree. */
+interface RetainedTab {
+  readonly node: DirectoryNode
+  /** Detaches the owning binding's tab-close cleanup when a later binding takes the tab over. */
+  readonly detach: AbortController
+  tree?: FilesTabState
 }
 
 /**
@@ -153,6 +175,7 @@ export function filesFace(
   list: ListWorkspaceDirectory,
   watch: WatchWorkspaceDirectory,
 ): (sessionId: SessionId, actions: BoundActions<ReturnType<typeof createFilesStore>>) => FilesInjected {
+  const retained = new Map<SessionId, Map<TabId, RetainedTab>>()
   return (
     sessionId: SessionId,
     actions: BoundActions<ReturnType<typeof createFilesStore>>,
@@ -187,20 +210,38 @@ export function filesFace(
         roots.get(tabId)?.setAutomatic(enabled)
       },
       start(tabId, root, signal) {
-        actions.start(tabId, root)
+        let tabs = retained.get(sessionId)
+        if (tabs === undefined) retained.set(sessionId, tabs = new Map<TabId, RetainedTab>())
+        const previous = tabs.get(tabId)
+        // The previous binding's watches and cleanup belong to a released store.
+        previous?.detach.abort()
+        void previous?.node.close()
+        const detach = new AbortController()
+        const tree = previous?.tree?.root === root ? previous.tree : undefined
+        if (tree === undefined) actions.start(tabId, root)
+        else actions.restore(tabId, tree)
         signal.addEventListener('abort', () => {
           void roots.get(tabId)?.close()
           roots.delete(tabId)
           generations.delete(tabId)
+          tabs.delete(tabId)
+          if (tabs.size === 0) retained.delete(sessionId)
           actions.forget(tabId)
-        }, { once: true })
-        roots.set(tabId, new DirectoryNode(root,
+        }, { once: true, signal: detach.signal })
+        const node = new DirectoryNode(root,
           (path, lifetime) => load(tabId, path, lifetime),
           (path, lifetime) => watch(sessionId, path, lifetime),
           (path, error) => {
             if (!signal.aborted) actions.failed(tabId, path, new RemoteError('gateway/internal', error instanceof Error ? error.message : String(error), {}))
-          }, signal,
-        ).open())
+          }, signal, tree?.expanded,
+        )
+        if (tree?.autoRefresh === false) node.setAutomatic(false)
+        roots.set(tabId, node.open())
+        tabs.set(tabId, { node, detach })
+      },
+      retain: (tabId, tree) => {
+        const tab = retained.get(sessionId)?.get(tabId)
+        if (tab !== undefined && roots.get(tabId) === tab.node) tab.tree = tree
       },
       load: (tabId, path, signal) => { void load(tabId, path, signal) },
       toggle(tabId, parentPath, path, expanded, signal) {

@@ -45,7 +45,7 @@ kind: "package-reference"
 
 被端点条目上限截断的层以一条标记收尾；空层如实说明；失败的层按错误码各显示一行（`workspace-file/not-found`、`outside-workspace`、`not-directory`），其他情况显示传输层自己的消息。重新读取就地刷新根与展开中的层，读取期间保留显示条目，不重置整棵树；折叠的层在下次打开时重新拉取。没有工作目录的会话只显示一行说明，而不是树。
 
-状态保存在类型自己的存储里，按 tab id 分桶：`root`、`levels`（每个绝对路径的 loading / ready / failed）、`expanded`、`autoRefresh` 与 `scrollTop`——滚动期间偏移由正文自己记录，卸载时一次性写入。存储比 body 活得久，切到其他侧栏 tab 再切回来时树带着已加载的层重新挂载，滚动位置也随之恢复。owner 的 `signal` 终结一个桶：中止时忘掉该 tab，其后才结算的列表与卸载时的偏移提交都什么也不写。
+状态保存在类型自己的存储里，按 tab id 分桶：`root`、`levels`（每个绝对路径的 loading / ready / failed）、`expanded`、`autoRefresh` 与 `scrollTop`——滚动期间偏移由正文自己记录，卸载时一次性写入。存储比 body 活得久，切到其他侧栏 tab 再切回来时树带着已加载的层重新挂载，滚动位置也随之恢复。读者离开 Session 时，存储实例随其 Session 绑定一同结束，因此 body 卸载时还会把它最后绘制的树交给 face，face 按 Session 与 tab 保留它直到 tab 关闭；回到该 Session 时，若工作区根目录未变，新存储以这棵树为初值，并替换先前绑定的目录监听。owner 的 `signal` 终结一个桶：中止时忘掉该 tab，其后才结算的列表与卸载时的偏移提交都什么也不写。
 
 每个打开的 `DirectoryNode` 在 Tab 生命周期内持有自己的目标监听；折叠关闭该节点及其不可见后代。祖先恢复期间的展开状态变化会更新存储和待恢复节点，后代恢复时遵循最新展开偏好。自动刷新默认开启；独立开关暂时隐藏，状态、文案、样式与切换逻辑保留。目录读取期间或收尾时收到的变化仍会留待下一次刷新。
 
@@ -63,6 +63,7 @@ kind: "package-reference"
 <a id="known-limitations-and-deferred-work"></a>
 - **只有列目录。**没有搜索、产物过滤、拖拽、重命名、右键菜单或当前文件高亮。
 - **只有一个根。**树以会话工作目录为根；没有办法浏览到它之上，而 Host 本来也拒绝工作区根之外的路径。
+- **监听比已释放的 Session 存活更久。**face 无法观察到 Session 绑定的结束，因此读者离开 Session 后，tab 的目录监听会持续运行，直到读者返回或 tab 关闭；保留的树及其已加载的列表也在同一期间保留。
 
 <a id="dev-note"></a>
 ### 开发备注
