@@ -1716,7 +1716,7 @@ describe('Policy workflows', () => {
   it('keeps the pre-merge build behind the merge step, which honours the mode on its failures', () => {
     const steps = stepsOf(workflowJob(loadWorkflow('.github/workflows/pr-check-on-head-branch.yml'), 'pre-merge'))
     const merge = steps.findIndex(step => step.id === 'merge')
-    const build = steps.findIndex(step => step.name === 'Run the pre-merge command')
+    const build = steps.findIndex(step => step.name === "Run the tree's pre-merge check")
     expect(merge).toBeGreaterThanOrEqual(0)
     expect(build).toBeGreaterThan(merge)
     const merging = steps[merge]
@@ -1727,7 +1727,7 @@ describe('Policy workflows', () => {
       expect(step.run).toContain('"$CHECK_MODE" = block')
     }
     for (const step of steps.slice(merge + 1)) {
-      if (step.name === 'Run the pre-merge command') continue
+      if (step.name === "Run the tree's pre-merge check") continue
       expect(step.if).toBe("steps.merge.outputs.merged == 'true'")
     }
   })
