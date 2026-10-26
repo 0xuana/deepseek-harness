@@ -21,7 +21,9 @@
  * The store instance lives only as long as its Session binding, which ends when
  * the reader leaves the Session while its tab records stay open. Each tab's last
  * drawn tree is therefore retained beside the per-binding faces, keyed by Session
- * and tab, and seeds the tab again when the reader returns.
+ * and tab, and seeds the tab again when the reader returns. The latest binding
+ * to start a tab owns it: its start closes the earlier binding's watches, and
+ * only its body's tree is retained.
  */
 import type { ClientRemote, RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import type { BoundActions } from '@deepseek-ai/dsh-client-store'
@@ -148,6 +150,7 @@ export interface FilesInjected {
   readonly toggle: (tabId: TabId, parentPath: string, path: string, expanded: readonly string[], signal: AbortSignal) => void
   /**
    * Keep the tree a body last drew, for a later binding of the same Session.
+   * Does nothing once the tab record ended or a later binding started the tab.
    * @param tabId - the tab being drawn.
    * @param tree - the tab's tree, with the body's final scroll offset.
    */
@@ -158,7 +161,7 @@ export interface FilesInjected {
 interface RetainedTab {
   readonly node: DirectoryNode
   /** Detaches the owning binding's tab-close cleanup when a later binding takes the tab over. */
-  readonly replaced: AbortController
+  readonly detach: AbortController
   tree?: FilesTabState
 }
 
@@ -207,15 +210,16 @@ export function filesFace(
         roots.get(tabId)?.setAutomatic(enabled)
       },
       start(tabId, root, signal) {
-        const tabs = retained.get(sessionId) ?? new Map<TabId, RetainedTab>()
-        retained.set(sessionId, tabs)
+        let tabs = retained.get(sessionId)
+        if (tabs === undefined) retained.set(sessionId, tabs = new Map<TabId, RetainedTab>())
         const previous = tabs.get(tabId)
         // The previous binding's watches and cleanup belong to a released store.
-        previous?.replaced.abort()
+        previous?.detach.abort()
         void previous?.node.close()
-        const replaced = new AbortController()
+        const detach = new AbortController()
         const tree = previous?.tree?.root === root ? previous.tree : undefined
-        actions.start(tabId, root, tree)
+        if (tree === undefined) actions.start(tabId, root)
+        else actions.restore(tabId, tree)
         signal.addEventListener('abort', () => {
           void roots.get(tabId)?.close()
           roots.delete(tabId)
@@ -223,7 +227,7 @@ export function filesFace(
           tabs.delete(tabId)
           if (tabs.size === 0) retained.delete(sessionId)
           actions.forget(tabId)
-        }, { once: true, signal: replaced.signal })
+        }, { once: true, signal: detach.signal })
         const node = new DirectoryNode(root,
           (path, lifetime) => load(tabId, path, lifetime),
           (path, lifetime) => watch(sessionId, path, lifetime),
@@ -233,11 +237,11 @@ export function filesFace(
         )
         if (tree?.autoRefresh === false) node.setAutomatic(false)
         roots.set(tabId, node.open())
-        tabs.set(tabId, { node, replaced })
+        tabs.set(tabId, { node, detach })
       },
       retain: (tabId, tree) => {
         const tab = retained.get(sessionId)?.get(tabId)
-        if (tab !== undefined) tab.tree = tree
+        if (tab !== undefined && roots.get(tabId) === tab.node) tab.tree = tree
       },
       load: (tabId, path, signal) => { void load(tabId, path, signal) },
       toggle(tabId, parentPath, path, expanded, signal) {

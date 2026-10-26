@@ -73,7 +73,8 @@ function bucket(state: FilesState, tabId: TabId): FilesTabState {
 /** The tree store's write set; every action names the tab it writes. */
 type FilesActions = {
   autoRefresh: (draft: FilesState, tabId: TabId, enabled: boolean) => void
-  start: (draft: FilesState, tabId: TabId, root: string, retained?: FilesTabState) => void
+  start: (draft: FilesState, tabId: TabId, root: string) => void
+  restore: (draft: FilesState, tabId: TabId, tree: FilesTabState) => void
   loading: (draft: FilesState, tabId: TabId, path: string) => void
   loaded: (draft: FilesState, tabId: TabId, path: string, level: DirLevel) => void
   failed: (draft: FilesState, tabId: TabId, path: string, failure: RemoteFailure) => void
@@ -96,15 +97,22 @@ export function createFilesStore(): EngineStoreHandle<FilesState, FilesActions> 
     actions: {
       autoRefresh: (d, tabId: TabId, enabled: boolean) => { bucket(d, tabId).autoRefresh = enabled },
       /**
-       * Seed one tab's tree at its workspace root, with the root expanded, or
-       * with the tree this tab showed before its Session's store was released.
+       * Seed one tab's tree at its workspace root, with the root expanded.
        * @param d - draft state.
        * @param tabId - the tab being drawn.
        * @param root - absolute path of the workspace root.
-       * @param retained - the tab's earlier tree at the same root, if any.
        */
-      start: (d, tabId: TabId, root: string, retained?: FilesTabState) => {
-        d.byTab[tabId] = retained ?? { root, levels: {}, expanded: [root], scrollTop: 0, autoRefresh: true }
+      start: (d, tabId: TabId, root: string) => {
+        d.byTab[tabId] = { root, levels: {}, expanded: [root], scrollTop: 0, autoRefresh: true }
+      },
+      /**
+       * Seed one tab with the tree it showed before its Session's store was released.
+       * @param d - draft state.
+       * @param tabId - the tab being drawn.
+       * @param tree - the tab's retained tree.
+       */
+      restore: (d, tabId: TabId, tree: FilesTabState) => {
+        d.byTab[tabId] = tree
       },
       /**
        * Mark one directory as being listed.

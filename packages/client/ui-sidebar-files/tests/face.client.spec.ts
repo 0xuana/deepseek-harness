@@ -322,6 +322,27 @@ describe('filesFace retention across Session store instances', () => {
     expect(forgetFirst).not.toHaveBeenCalled()
   })
 
+  it('ignores a tree retained by a binding that a later binding replaced', () => {
+    const script = scriptedList()
+    const bind = filesFace(script.list, script.watch)
+    const controller = new AbortController()
+    onTestFinished(async () => {
+      controller.abort()
+      await script.dispose()
+    })
+    const first = createFilesStore().create()
+    const firstFace = bind(SESSION, first.actions)
+    firstFace.start(TAB, ROOT, controller.signal)
+    const second = createFilesStore().create()
+    const secondFace = bind(SESSION, second.actions)
+    secondFace.start(TAB, ROOT, controller.signal)
+    secondFace.retain(TAB, { ...second.getSnapshot().byTab[TAB]!, scrollTop: 30 })
+    firstFace.retain(TAB, { ...first.getSnapshot().byTab[TAB]!, scrollTop: 90 })
+    const third = createFilesStore().create()
+    bind(SESSION, third.actions).start(TAB, ROOT, controller.signal)
+    expect(third.getSnapshot().byTab[TAB]?.scrollTop).toBe(30)
+  })
+
   it('forgets a closed tab, so a later record with its id starts fresh, and keeps the other tabs', async () => {
     const script = scriptedList()
     const bind = filesFace(script.list, script.watch)

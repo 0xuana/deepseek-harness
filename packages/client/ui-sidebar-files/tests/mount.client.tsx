@@ -112,16 +112,18 @@ function harness(cwd: string | null, refreshShortcut?: ReturnType<FilesBodyProps
  * @param refreshShortcut - effective binding advertised by the tab owner.
  */
 export function mountBody(cwd: string | null = ROOT, refreshShortcut?: ReturnType<FilesBodyProps['useTabInfo']>['tab']['refreshShortcut']): Mounted {
-  const { shared, bind, ...hands } = harness(cwd, refreshShortcut)
-  const view = render(<FilesBody {...shared as unknown as FilesBodyProps} />)
+  const { shared: base, bind, ...hands } = harness(cwd, refreshShortcut)
+  const draw = (store?: ReturnType<typeof bind>) => {
+    const shared = { ...base, ...store }
+    return render(<FilesBody {...shared as unknown as FilesBodyProps} />)
+  }
   return {
     ...hands,
-    view,
-    remount: () => render(<FilesBody {...shared as unknown as FilesBodyProps} />),
+    view: draw(),
+    remount: () => draw(),
     rebind: () => {
       const instance = createFilesStore().create()
-      const props = { ...shared, ...bind(instance) }
-      return { instance, view: render(<FilesBody {...props as unknown as FilesBodyProps} />) }
+      return { instance, view: draw(bind(instance)) }
     },
   }
 }
