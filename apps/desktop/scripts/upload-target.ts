@@ -1,4 +1,4 @@
-/** Upload validated Desktop update artifacts or a fixed installer to Tencent COS. */
+/** Upload Desktop artifacts to COS and refresh production fixed downloads through EdgeOne. */
 
 import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
@@ -9,6 +9,7 @@ import { loadDesktopPackageEnvironment } from './desktop-package-environment.mjs
 import { createDesktopUploadPlan, type DesktopUploadPlan } from './desktop-upload-plan.ts'
 import { desktopReleaseTag, tagDesktopRelease } from './desktop-release-tag.ts'
 import { uploadDesktopRelease } from './desktop-upload-run.ts'
+import { DesktopPurgeError, purgeDesktopInstaller, resolveDesktopPurgeConfig } from './desktop-edgeone.ts'
 
 const SUPPORTED_TARGETS = new Set<DesktopPackageTargetName>(['mac-arm64', 'mac-x64', 'win-x64'])
 
@@ -59,13 +60,15 @@ export function resolveCredentialUploadEnvironment(
 }
 
 /**
- * Upload the selected target and record a release tag only for production update uploads.
+ * Upload the selected target, refresh production fixed downloads, or resume only their cache refresh.
  * @param args Target and upload options from the command line.
- * @returns Resolves after upload and any release-tag attempt complete.
+ * @returns Resolves after upload, any required EO refresh, and any release-tag attempt complete.
+ * @throws DesktopPurgeError when refresh is incomplete; a completed upload is not repeated or rolled back.
  */
 export async function uploadDesktopTarget(args: string[]): Promise<void> {
-  const { positionals, values } = parseArgs({ args, allowPositionals: true, options: {
+  const { positionals, values } = parseArgs({ args: args.filter(arg => arg !== '--'), allowPositionals: true, options: {
     latest: { type: 'boolean' },
+    'purge-only': { type: 'boolean' }, 'job-id': { type: 'string' },
     'credential-launcher': { type: 'boolean' }, environment: { type: 'string' }, bucket: { type: 'string' },
   } })
   const target = positionals[0]
@@ -73,6 +76,9 @@ export async function uploadDesktopTarget(args: string[]): Promise<void> {
     throw new Error('desktop upload: expected exactly one target')
   }
   const name = targetName(target)
+  if ((values['purge-only'] && !values.latest) || (values['job-id'] !== undefined && !values['purge-only'])) {
+    throw new Error('desktop upload: --purge-only requires --latest; --job-id requires --purge-only')
+  }
   const fileEnvironment = loadDesktopPackageEnvironment(name === 'win-x64' ? 'win32' : 'darwin')
   const launcher = values['credential-launcher'] === true
   if (launcher ? values.environment === undefined || values.bucket === undefined
@@ -85,13 +91,26 @@ export async function uploadDesktopTarget(args: string[]): Promise<void> {
   const environment = launcher
     ? resolveCredentialUploadEnvironment(fileEnvironment, process.env, values.environment as 'test' | 'production', values.bucket!, name)
     : fileEnvironment
+  const recordsRoot = resolve(import.meta.dirname, '../.desktop-build/upload-records')
+  if (values['purge-only']) {
+    await purgeDesktopInstaller(resolveDesktopPurgeConfig(environment, name), recordsRoot, values['job-id'])
+    return
+  }
   const plan = await createDesktopUploadPlan(name, { environment, latest: values.latest === true })
+  const purge = plan.environment === 'production' && values.latest ? resolveDesktopPurgeConfig(environment, name) : undefined
   const cos = createDesktopCos({
     secretId: requiredEnvironmentValue(environment, plan.secretIdEnvName),
     secretKey: requiredEnvironmentValue(environment, plan.secretKeyEnvName),
   })
   process.stdout.write(`desktop upload: ${plan.target} ${plan.version} -> ${plan.publicUrl}\n`)
-  await uploadDesktopRelease(plan, cos, resolve(import.meta.dirname, '../.desktop-build/upload-records'))
+  await uploadDesktopRelease(plan, cos, recordsRoot)
+  if (purge !== undefined) {
+    try {
+      await purgeDesktopInstaller(purge, recordsRoot)
+    } catch (error) {
+      throw new DesktopPurgeError(`desktop upload: installer uploaded; cache refresh incomplete. ${error instanceof DesktopPurgeError ? error.message : 'Inspect the purge record before recovery.'}`)
+    }
+  }
   if (plan.environment === 'production' && !values.latest) recordProductionRelease(plan)
 }
 
@@ -122,8 +141,12 @@ function recordProductionRelease(plan: DesktopUploadPlan): void {
 }
 
 if (process.argv[1] !== undefined && import.meta.filename === resolve(process.argv[1])) {
-  uploadDesktopTarget(process.argv.slice(2)).catch(() => {
-    process.stderr.write('desktop upload: failed; inspect the printed record directory if allocated. No automatic retry; reconcile remote state before another upload.\n')
+  uploadDesktopTarget(process.argv.slice(2)).catch((error) => {
+    const message = error instanceof DesktopPurgeError ? error.message
+      : 'desktop upload: failed; inspect the printed record directory if allocated. No automatic retry; reconcile remote state before another upload.'
+    // The DPAPI launcher suppresses raw stderr; this error contains only public purge diagnostics.
+    const output = error instanceof DesktopPurgeError && process.argv.includes('--credential-launcher') ? process.stdout : process.stderr
+    output.write(`${message}\n`)
     process.exitCode = 1
   })
 }

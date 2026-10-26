@@ -7,6 +7,13 @@ export type DesktopAutoUpdateEnvironment = 'test' | 'production'
 /** Directory name of one supported Desktop release target. */
 export type DesktopAutoUpdateTarget = 'mac-arm64' | 'mac-x64' | 'win-x64'
 
+/**
+ * Name the fixed installer object shared by uploading and cache refresh.
+ * @param target Supported Desktop target.
+ * @returns Fixed download filename.
+ */
+export function desktopLatestInstallerFilename(target: DesktopAutoUpdateTarget): string
+
 /** Public updater URL and object prefixes for one release target. */
 export interface DesktopAutoUpdateConfig {
   readonly environment: DesktopAutoUpdateEnvironment

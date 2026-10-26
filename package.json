@@ -48,6 +48,7 @@
     "upload:latest:mac:arm64": "pnpm --filter @deepseek-ai/dsh-desktop run upload:latest:mac:arm64",
     "upload:latest:mac:x64": "pnpm --filter @deepseek-ai/dsh-desktop run upload:latest:mac:x64",
     "upload:latest:win:x64": "pnpm --filter @deepseek-ai/dsh-desktop run upload:latest:win:x64",
+    "purge:latest": "pnpm --filter @deepseek-ai/dsh-desktop run purge:latest",
     "clean": "tsx scripts/clean.ts",
     "change-scope": "tsx scripts/change-scope.ts",
     "typecheck": "tsx scripts/build.ts --scope typecheck",

@@ -18,6 +18,10 @@ COS bucket for an explicit upload. Not needed for the local credential check.
 Publish only the installer at its fixed download URL. Requires Upload.
 .PARAMETER Upload
 Authorize the existing target upload entry. Omit to check credentials locally.
+.PARAMETER PurgeOnly
+Refresh the production fixed download without uploading. Requires Upload and Latest.
+.PARAMETER JobId
+Resume an existing EO task without submitting again. Requires PurgeOnly.
 #>
 [CmdletBinding(DefaultParameterSetName = 'Check')]
 param(
@@ -36,7 +40,12 @@ param(
     [Parameter(ParameterSetName = 'Publish', Mandatory = $true)]
     [switch]$Upload,
     [Parameter(ParameterSetName = 'Publish')]
-    [switch]$Latest
+    [switch]$Latest,
+    [Parameter(ParameterSetName = 'Publish')]
+    [switch]$PurgeOnly,
+    [Parameter(ParameterSetName = 'Publish')]
+    [ValidatePattern('^[a-zA-Z0-9-]{1,128}$')]
+    [string]$JobId
 )
 
 $ErrorActionPreference = 'Stop'
@@ -50,6 +59,9 @@ $startInfo = $null
 $stage = 'decrypt-file'
 
 try {
+    if (($PurgeOnly -and (-not $Latest -or $Environment -ne 'production')) -or ($JobId -and -not $PurgeOnly)) {
+        throw 'PurgeOnly requires Latest and production; JobId requires PurgeOnly.'
+    }
     if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
         throw 'Windows DPAPI is required.'
     }
@@ -92,7 +104,13 @@ try {
         $startInfo.EnvironmentVariables["${prefix}_BUCKET"] = $Bucket
         $startInfo.Arguments = "--import tsx/esm apps/desktop/scripts/upload-target.ts $Target --credential-launcher --environment $Environment --bucket $Bucket"
         if ($Latest) { $startInfo.Arguments += " --latest" }
-        Write-Output "desktop credentials: uploading $Target to $Environment; release validation runs before network writes."
+        if ($PurgeOnly) { $startInfo.Arguments += " --purge-only" }
+        if ($JobId) { $startInfo.Arguments += " --job-id $JobId" }
+        if ($PurgeOnly) {
+            Write-Output "desktop credentials: refreshing $Target in $Environment; no installer upload."
+        } else {
+            Write-Output "desktop credentials: uploading $Target to $Environment; release validation runs before network writes."
+        }
     } else {
         $probe = "const id=process.env.${prefix}_SECRET_ID;const key=process.env.${prefix}_SECRET_KEY;process.exit(id?.trim()&&key?.trim()?0:1)"
         $startInfo.Arguments = "-e `"$probe`""
