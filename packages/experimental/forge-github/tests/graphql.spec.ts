@@ -172,8 +172,8 @@ describe('snapshot mapping', () => {
       { code: 'unavailable', message: 'unexpected pull request fields' },
     ])
     expect([...mapSnapshotResponse({}, query).values()]).toEqual([
-      { code: 'not-found', message: 'pull request not found' },
-      { code: 'not-found', message: 'pull request not found' },
+      { code: 'unavailable', message: 'unexpected GitHub response' },
+      { code: 'unavailable', message: 'unexpected GitHub response' },
     ])
     expect([...mapSnapshotResponse('not json', query).values()]).toEqual([
       { code: 'unavailable', message: 'unexpected GitHub response' },

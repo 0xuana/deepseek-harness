@@ -4,8 +4,8 @@ import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
   ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeFailure, ForgeProvider, ForgeRepository,
 } from '@deepseek-ai/dsh-experimental-forge'
-import type { GhRunner } from './gh.ts'
-import { HEAD_QUERY, mapHeadResponse, mapSnapshotResponse, snapshotQuery } from './graphql.ts'
+import type { GhOutput, GhRunner } from './gh.ts'
+import { hasGraphqlFields, HEAD_QUERY, mapHeadResponse, mapSnapshotResponse, snapshotQuery } from './graphql.ts'
 import { parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
 
 const AUTHENTICATION = /gh auth login|authentication|bad credentials|HTTP 401/i
@@ -70,7 +70,7 @@ export class GitHubProvider implements ForgeProvider {
       '-f', `query=${HEAD_QUERY}`, '-f', `owner=${repository.owner}`, '-f', `name=${repository.name}`, '-f', `branch=${branch}`,
     ], signal)
     const body = parseJson(output.stdout)
-    if (body === undefined) throw new Error(`forge-github: head branch lookup failed: ${firstLine(output.stderr) ?? `gh exited with ${output.exitCode}`}`)
+    if (!hasGraphqlFields(body)) throw new Error(`forge-github: head branch lookup failed: ${responseFailure(output, body).message}`)
     return mapHeadResponse(body, repository, branch)
   }
 
@@ -88,13 +88,18 @@ export class GitHubProvider implements ForgeProvider {
     const query = snapshotQuery(refs)
     const output = await this.gh(['api', 'graphql', '--hostname', host, '-f', `query=${query.document}`], signal)
     const body = parseJson(output.stdout)
-    if (body !== undefined) return mapSnapshotResponse(body, query)
-    const failure: ForgeFailure = {
-      code: AUTHENTICATION.test(output.stderr) ? 'unauthenticated' : 'unavailable',
-      message: firstLine(output.stderr) ?? `gh exited with ${output.exitCode}`,
-    }
+    if (hasGraphqlFields(body)) return mapSnapshotResponse(body, query)
+    const failure = responseFailure(output, body)
     return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), failure] as const))
   }
+}
+
+function responseFailure(output: GhOutput, body: unknown): ForgeFailure {
+  const detail = typeof body === 'object' && body !== null && 'message' in body && typeof body.message === 'string'
+    ? firstLine(body.message) : undefined
+  const message = firstLine(output.stderr) ?? detail
+    ?? (output.exitCode === 0 ? 'unexpected GitHub response' : `gh exited with ${output.exitCode}`)
+  return { code: AUTHENTICATION.test(message) ? 'unauthenticated' : 'unavailable', message }
 }
 
 function parseJson(text: string): unknown {

@@ -79,7 +79,16 @@ const responseSchema = z.object({
     path: z.array(z.union([z.string(), z.number()])).optional(),
     message: z.string(),
   })).optional(),
-})
+}).refine(hasGraphqlFields)
+
+/**
+ * Distinguish GraphQL response fields from HTTP error bodies.
+ * @param body - parsed JSON returned by GitHub.
+ * @returns whether the object carries GraphQL data or errors; field validation remains with the query mapper.
+ */
+export function hasGraphqlFields(body: unknown): boolean {
+  return typeof body === 'object' && body !== null && ('data' in body || 'errors' in body)
+}
 
 const headSchema = z.object({
   data: z.object({

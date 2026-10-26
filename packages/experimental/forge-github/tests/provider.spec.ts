@@ -45,6 +45,20 @@ describe('GitHub provider addressing', () => {
 })
 
 describe('GitHub provider fetch', () => {
+  it.each([
+    [{ message: 'Bad credentials' }, 1, 'gh: Bad credentials (HTTP 401)', 'unauthenticated', 'gh: Bad credentials (HTTP 401)'],
+    [{ message: 'API rate limit exceeded' }, 1, 'gh: API rate limit exceeded (HTTP 403)', 'unavailable', 'gh: API rate limit exceeded (HTTP 403)'],
+    [{ message: 'Bad credentials' }, 1, '', 'unauthenticated', 'Bad credentials'],
+    [{ message: '' }, 0, '', 'unavailable', 'unexpected GitHub response'],
+    [null, 1, '', 'unavailable', 'gh exited with 1'],
+    [[], 0, '', 'unavailable', 'unexpected GitHub response'],
+  ])('preserves HTTP failure diagnostics for %j', async (body, exitCode, stderr, code, message) => {
+    const gh = fakeGh(() => output(body, exitCode, stderr))
+    const subject = provider(gh.run)
+    expect([...(await subject.fetch([pull(1)], signal)).values()]).toEqual([{ code, message }])
+    await expect(subject.findByHead(demo, 'topic', signal)).rejects.toThrow(`head branch lookup failed: ${message}`)
+  })
+
   it('rejects unconfigured hosts without querying them and still fetches allowed hosts', async () => {
     const gh = fakeGh(() => output({ data: { r0: { p0: pullRequestNode(1) } } }))
     const denied = pull(2, { ...enterprise, host: 'unconfigured.example' })
