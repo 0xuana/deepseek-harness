@@ -37,8 +37,8 @@ it.skipIf(process.platform !== 'darwin').each([
     const scaffold = ownedScaffold = await launchWebScaffold({
       profile: { packages: script ? [{ dir: defaults, enabled: true }] : [] },
       harnessHome, extraOverlayPath: [
-      fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)), patch,
-    ] })
+        fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)), patch,
+      ] })
     const initialDefault = selectedDefault ?? 'standard'
     if (selectedDefault !== undefined) await scaffold.ctx.settings.update('agent-preset-registry', { selectedDefault })
     await scaffold.ctx.settings.update('ui-settings', { enabled: codingTools })
