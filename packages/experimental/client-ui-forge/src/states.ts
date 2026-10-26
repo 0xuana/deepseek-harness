@@ -108,7 +108,6 @@ class Reader {
 
   constructor(readonly allowed: (id: SessionId) => boolean, private readonly signal: AbortSignal) {
     signal.addEventListener('abort', this.abort, { once: true })
-    if (signal.aborted) this.end()
   }
 
   push(state: ForgeChangeRequestListState): void {
@@ -207,7 +206,6 @@ class Run {
   }
 
   private bind(id: SessionId, urls: readonly string[]): void {
-    if (this.stopped) return
     const next = new Set(urls)
     const previous = this.urlsOf.get(id) ?? new Set<string>()
     this.urlsOf.set(id, next)

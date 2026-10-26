@@ -350,4 +350,21 @@ describe('ChangeRequestStates', () => {
     expect(await reader(f.hub).next()).toEqual({ type: 'baseline', states: [] })
   })
 
+
+  it('keeps other readers live when a reader aborts between frames', async () => {
+    const f = fixture([{ id: S1, urls: [url(7)] }])
+    const aborter = new AbortController()
+    const first = f.hub.stream(() => true, aborter.signal)[Symbol.asyncIterator]()
+    const second = reader(f.hub)
+    await first.next()
+    await second.next()
+    aborter.abort()
+    f.poll(7)
+    expect((await first.next()).done).toBe(true)
+    expect(await second.next()).toEqual({ type: 'changed', states: [state(7)] })
+    expect([...f.watchers.keys()]).toEqual([7])
+    await second.close()
+    expect([...f.watchers.keys()]).toEqual([])
+  })
+
 })
