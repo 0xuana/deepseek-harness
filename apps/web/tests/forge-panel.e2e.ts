@@ -152,6 +152,7 @@ const PR9_REFUSAL = [
 /** Line `n` of `src/panel.ts` before (`old`) or after (`new`) pull request 7, which changes lines 2 and 15 of its 20. */
 function panelLine(n: number, side: 'old' | 'new'): string {
   if (n === 2) return side === 'old' ? 'export const n2 = 2' : 'export const n2 = \'two\''
+  if (n === 7) return 'export const n7 = "Long unchanged context stays wrapped while switching between Sessions and reviewing the same file"'
   if (n === 15) return side === 'old' ? 'export const n15 = 15' : 'export const n15 = \'fifteen\''
   return `export const n${n} = ${n}`
 }
@@ -612,9 +613,10 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('src/panel.ts')
   const docsFile = view.locator('[data-forge-diff-file="docs/panel.md"]')
   await docsFile.getByRole('button', { name: '收起 panel.md', exact: true }).click()
-  await page.setViewportSize({ width: 1680, height: 500 })
+  await page.setViewportSize({ width: 1280, height: 500 })
   const scrollport = panelFile.locator('..')
   await scrollport.evaluate((element) => { element.scrollTop = 100; element.dispatchEvent(new Event('scroll')) })
+  await panelFile.getByRole('button', { name: '复制路径', exact: true }).click()
   const position = await scrollport.evaluate(element => element.scrollTop)
   expect(position).toBeGreaterThan(0)
   const originalFile = await panelFile.elementHandle()

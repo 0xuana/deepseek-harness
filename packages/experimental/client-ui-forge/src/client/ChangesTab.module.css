@@ -231,6 +231,7 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
+  overflow-anchor: none;
 }
 
 /* The actions of a failed read, side by side. */
