@@ -36,7 +36,10 @@
   "dsh": {
     "bundle": {
       "listedByDefault": false,
-      "patch": "./cordis.patch.yml"
+      "patch": "./cordis.patch.yml",
+      "platforms": [
+        "darwin"
+      ]
     }
   },
   "dependencies": {
