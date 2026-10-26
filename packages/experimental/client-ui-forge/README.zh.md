@@ -51,6 +51,9 @@ kind: "package-reference"
 
 worktree 请求是一条 `plugin:client-ui-forge/worktree` 记录，由仅宿主侧的 `forgeWorktree` 投影折叠：请求与撤回在第一个 `turn/start` 或创建之前生效；在第一个 `step/start` 之前，未完成请求的第一条 `created` 记录生效。一轮开始或 worktree 已创建之后，`requestWorktree` 以 `forgePanel/session-started` 拒绝；没有 `worktrees` 服务时以 `forgePanel/worktrees-unavailable` 拒绝；分支名为空时以 `forgePanel/invalid-branch` 拒绝；`cancelWorktree` 只以第一种拒绝，也不需要 `worktrees` 服务；两者都会忘掉失败的尝试。消息进入有未完成请求的 Session 的收件箱时，一个 `agent/inbox/inserted` 监听器在这次投递唤醒 Agent 之前启动 Session 所属 Agent 的维护任务，因此 Agent 会暂存唤醒，等这次暂留结束后才开始这条消息的这一轮。暂留使用新分支名进行一次尝试，在面板状态中发布正在进行的阶段，设置 `held`，`waiting` 为 `creation`，并记录带源仓库根目录的 `created`。尝试失败（其分支、基准、失败步骤与原因以 `failure` 留在面板状态中）或经 `stopCreation` 停止后，暂留继续等待：`retryWorktree` 再做一次尝试，没有消息等待或已有尝试进行时以 `forgePanel/not-waiting` 拒绝；撤回请求则让消息在当前检出中继续。Agent 空闲且 Session 在所创建 worktree 中工作时，进入的每条消息都会启动一次暂留，检查该 worktree 是否缺失；缺失期间暂留以 `waiting` 为 `restoration` 等待，`restoreWorktree` 或 `continueInProject` 在暂留内运行，之后放行消息；检查无法给出结果时立即放行。Agent 的取消与 Remote 的停止都会结束暂留；Agent 正在运行一轮或其他维护任务时进入的消息不会被暂留。worktree 服务把工作目录通知排进队列，由第一步认领。一个 `agent/pre-step` 监听器在请求仍未完成的 Session 的第 1 步创建 worktree，覆盖没有被暂留的消息；它把通知移入本步提议的消息，失败时这一轮结束、请求保留。没有消息等待时，`restoreWorktree` 与 `continueInProject` 以各自的维护任务运行；`restoreWorktree` 以 `restoration` 发布正在进行的步骤，并在结束恢复的同一状态中清除 `missing`。套件把它的 `worktrees` 服务隔离，因此同时启用 Git Worktrees 时会有两个互不影响的服务。`track` 以 `forgePanel/unrecognized-url` 拒绝没有提供方识别的 URL。`markReady` 与 `merge` 只作用于该 Session 中由提供方服务的可见绑定，否则以 `forgePanel/not-bound` 拒绝；`merge` 带上卡片显示的 head 提交，head 已变化时以 `forgePanel/stale-head` 拒绝，其他拒绝都是带主机原因的 `forgePanel/action-failed`。
 
+
+恢复在修改前记录 `restoring`，仅在成功后记录 `restored`。投影版本 3 在重载后保留未完成的恢复。目录存在本身不能放行等待的消息：检出根目录与公共 Git 目录必须匹配记录的工作树。
+
 每次检查还会判断 worktree 是否缺失：Session 的目录位于所创建的 worktree 内，`ctx.fs.lstat` 在那里找不到目录，再由源仓库中的 `show-ref` 判断分支是否还在。
 
 Session 在所创建的 worktree 中工作时，`localDiff` 以它的 `baseCommit` 为分叉点；否则按代码托管远端的顺序，对每个远端依次运行 `symbolic-ref --quiet --short refs/remotes/<remote>/HEAD` 与 `merge-base HEAD` 找出分叉点；找不到时 `branch` 范围以 `forgePanel/no-fork-point` 拒绝。它以固定的 `a/`、`b/` 前缀和 `core.quotePath=false` 运行 `diff --no-ext-diff --no-textconv --no-color -M`，分别与分叉点、HEAD（第一次提交之前为空树）、暂存区比较，或带 `--cached` 与 HEAD 比较。未跟踪文件由 `ls-files --others --exclude-standard -z` 列出，最多 `maxUntrackedFiles` 个，其余计为未列出；它们经 `ctx.fs` 读取并作为新文件加入，前 8,000 字节含 NUL 字节或不是 UTF-8 时视为二进制。补丁、文件列表或文件超过 `maxDiffBytes` 时以 `forgePanel/diff-too-large` 拒绝，目录不在检出中时以 `forgePanel/not-a-checkout` 拒绝。宿主用 jsdiff 把补丁解析为文件与 hunk，浏览器不会收到原始补丁。`localText` 读取一个文件的新版本：“已暂存”经 `show :<path>` 从暂存区读取，其余经 `ctx.fs` 读取；离开检出的路径会被拒绝。`changeRequestDiff` 与 `changeRequestText` 只作用于该 Session 中由提供方服务的可见绑定，否则以 `forgePanel/not-bound` 拒绝；它们经提供方的 `diff` 与 `fileText` 读取绑定最新状态中的 head 提交，`too-large` 失败以 `forgePanel/diff-too-large` 拒绝，尚未读到状态或托管平台以其他原因拒绝时以 `forgePanel/diff-failed` 拒绝。Host 保留 `changeRequestDiff` 读到的补丁，每个变更请求一份，按 head 提交与目标分支区分，总量超过 `maxCachedDiffBytes` 时丢弃最久未读的；之后在同一 head 与目标分支下的读取不论来自哪个 Session 都从内存返回，读取失败的结果不保留。本地分支比 head 多出的提交数由 `symbolic-ref`、`cat-file -e` 与 `rev-list --count` 得出；当前检出分支不是源分支、本地没有 head 提交或 Git 失败时为 null。
@@ -103,10 +106,10 @@ Session 在所创建的 worktree 中工作时，`localDiff` 以它的 `baseCommi
 
 - **状态只在面板中轮询**——只有本包为该 Session 挂载了某个界面时才会轮询状态；都未挂载时检查结束不会有通知。
 - **检查触发时机**——检出只在 Session 的工具结果与目录变化之后检查；Session 之外的改动要等到刷新或下一个工具结果才会出现。
-- **只负责创建**——面板只在 Session 的第一步之前创建 worktree，从不删除或清理；失败或被取消的尝试可能留下分支或检出。分支名取自 Session id 与随机数字，而不是 Session 标题，因为那时标题还不存在。
+- **保留检出**——面板只在 Session 的第一步之前创建 worktree，不删除已有的检出目录或分支；失败或被取消的尝试可能留下分支或检出。分支名取自 Session id 与随机数字，而不是 Session 标题，因为那时标题还不存在。
 - **一轮进行中的消息**——Agent 正在运行一轮或其他维护任务时进入的消息不会被暂留：所请求的 worktree 改为在第一步创建，失败时这一轮结束且不带这条消息；已删除的 worktree 不会被检查，工作目录服务会把 Session 移回项目目录。
 - **等待中的消息**——消息等待期间，Agent 以空闲状态处于维护任务中，输入框不提供停止；只有卡片上的操作、Agent 的取消或 Remote 的停止能放行它，等待 Agent 空闲的调用方也会一并等待。
-- **恢复**——恢复会从分支重新检出；分支也已删除时，从它开始时的提交重新创建。从未提交的修改随被删除的目录一起丢失。
+- **恢复**——恢复会从分支重新检出；分支也已删除时，从它开始时的提交重新创建。从未提交的修改随被删除的目录一起丢失。[worktree 服务](../worktree/README.zh.md#use-this-package)校验记录的目标，只移除该目标缺失且未锁定的登记。已有或未恢复完成的目录仍会阻止恢复；请先保存其中的文件并移除目录再重试，或在源项目继续。
 - **链接 worktree 项目**——项目本身是链接 worktree 时该选项不可用：在 workspace-write 下它的 Git 目录位于可写根之外，新分支与之后的提交都无法写入。
 - **变更范围**——待办：单个提交与上一轮的范围。“分支”范围需要一个默认分支与 HEAD 有共同历史的远端，或 Session 创建的 worktree。
 - **大型变更**——本地补丁超过 `maxDiffBytes` 时不显示任何文件；超过托管平台或其提供方大小上限的变更请求 diff 不显示任何文件，只提供“在浏览器中查看”。不自动换行时，左右对比会在栏边截断长行。

@@ -29,7 +29,7 @@ const WORKTREE: ForgeSessionWorktree = {
 }
 
 /** The state before any worktree record, turn, or step. */
-const EMPTY: ForgeWorktreeState = { request: null, created: null, locked: false, stepped: false }
+const EMPTY: ForgeWorktreeState = { request: null, created: null, locked: false, stepped: false, restoring: false }
 
 /** A live Session whose `forgeWorktree` state a registry folds without the panel Remote. */
 async function folded(): Promise<{ session: Session; state: () => ForgeWorktreeState }> {
@@ -43,6 +43,24 @@ async function folded(): Promise<{ session: Session; state: () => ForgeWorktreeS
 }
 
 describe('forgeWorktree projection', () => {
+  it('replays incomplete restoration until an explicit successful completion', async () => {
+    const { session, state } = await folded()
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'restoring' })
+    expect(state().restoring).toBe(false)
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from: null })
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'created', worktree: WORKTREE })
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'restoring' })
+    expect(state().restoring).toBe(true)
+    const checkpoint = state()
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'restoring' })
+    expect(state()).toBe(checkpoint)
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'restored' })
+    expect(state().restoring).toBe(false)
+    const restored = state()
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'restored' })
+    expect(state()).toBe(restored)
+  })
+
   it('starts without a request, a created worktree, a started turn, or a started step', async () => {
     const { state } = await folded()
 
@@ -94,8 +112,8 @@ describe('forgeWorktree projection', () => {
     const created = state()
     startStep(session, 1)
 
-    expect(created).toEqual({ request: { from: null }, created: WORKTREE, locked: true, stepped: false })
-    expect(state()).toEqual({ request: { from: null }, created: WORKTREE, locked: true, stepped: true })
+    expect(created).toEqual({ request: { from: null }, created: WORKTREE, locked: true, stepped: false, restoring: false })
+    expect(state()).toEqual({ request: { from: null }, created: WORKTREE, locked: true, stepped: true, restoring: false })
   })
 
   it('ignores a created worktree without an open request or after the first step starts', async () => {
@@ -116,7 +134,7 @@ describe('forgeWorktree projection', () => {
     const stepped = state()
     appendPluginRecord(session, WORKTREE_RECORD, { action: 'created', worktree: WORKTREE })
 
-    expect(stepped).toEqual({ request: { from: null }, created: null, locked: true, stepped: true })
+    expect(stepped).toEqual({ request: { from: null }, created: null, locked: true, stepped: true, restoring: false })
     expect(state()).toBe(stepped)
   })
 
@@ -133,7 +151,7 @@ describe('forgeWorktree projection', () => {
     startTurn(session, 3)
 
     expect(locked).toEqual({ ...EMPTY, locked: true })
-    expect(stepped).toEqual({ ...EMPTY, locked: true, stepped: true })
+    expect(stepped).toEqual({ ...EMPTY, locked: true, stepped: true, restoring: false })
     expect(state()).toBe(stepped)
   })
 

@@ -416,8 +416,8 @@ export class ForgePanelController extends TypertRemoteService {
     if (worktrees === undefined) throw new RemoteError('forgePanel/worktrees-unavailable', 'No worktree service is mounted', {})
     await this.maintain(session, async (agent, work) => {
       const operation = AbortSignal.any([signal, work])
-      if (await this.home.fs.lstat(created.path, undefined, operation) !== undefined) return
       try {
+        if (await missingWorktree(this.home, this.config, session, this.worktreeState(session), created.path, operation) === null) return
         await this.creations.restore(agent, worktrees, created, operation, () => { this.panels.get(session)?.restored() })
       } catch (error) {
         operation.throwIfAborted()
@@ -478,7 +478,7 @@ export class ForgePanelController extends TypertRemoteService {
     const directory = this.home.workingDirectory.get(session)
     const panel = this.panels.get(session)
     const missing = panel === undefined
-      ? await missingWorktree(this.home, this.config, session, this.worktreeState(session).created, directory, signal)
+      ? await missingWorktree(this.home, this.config, session, this.worktreeState(session), directory, signal)
       : await panel.checkMissing(signal)
     return this.home.workingDirectory.get(session) === directory ? missing : null
   }

@@ -6215,7 +6215,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeMissingWorktree',
-    declaration: 'export interface ForgeMissingWorktree {\n    readonly branchExists: boolean;\n}',
+    declaration: 'export interface ForgeMissingWorktree {\n    readonly branchExists: boolean | null;\n}',
   },
   {
     name: 'ForgePanelChangeRequest',

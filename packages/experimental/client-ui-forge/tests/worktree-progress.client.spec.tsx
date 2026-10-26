@@ -223,6 +223,7 @@ describe('WorktreeProgress waiting after a failed attempt', () => {
 
 describe('WorktreeProgress removed worktree', () => {
   it.each([
+    ['cannot be inspected', null, t('missing.unknown', { branch: 'dsh/0a1b2c3d' })],
     ['still exists', true, t('missing.kept', { branch: 'dsh/0a1b2c3d' })],
     ['was removed too', false, t('missing.recreated', { branch: 'dsh/0a1b2c3d' })],
   ])('names the worktree and explains restoring it when its branch %s', (_label, branchExists, note) => {

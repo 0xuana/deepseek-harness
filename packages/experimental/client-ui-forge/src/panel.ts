@@ -10,14 +10,14 @@ import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { deadline } from '@deepseek-ai/dsh-timeout'
 import type {} from '@deepseek-ai/dsh-working-directory'
-import { hasBranch, inspectCheckout } from './git.ts'
+import { gitIn, hasBranch, inspectCheckout } from './git.ts'
 import type { GitConfig, Inspection } from './git.ts'
 import { localChanges } from './local-diff.ts'
 import type { DiffConfig } from './local-diff.ts'
 import { remoteOrder, upstreamBranch } from './parse.ts'
 import type {
   ForgeCheckoutState, ForgeLocalChanges, ForgeMissingWorktree, ForgePanelChangeRequest, ForgePanelState, ForgePanelWorktree,
-  ForgeSessionWorktree, ForgeWorktreeBlocker, ForgeWorktreeState,
+  ForgeWorktreeBlocker, ForgeWorktreeState,
 } from './types.ts'
 import { within, WORKTREE_RECORD } from './worktree.ts'
 import type { WorktreeCreations } from './worktree.ts'
@@ -167,14 +167,14 @@ export class SessionPanel {
   /**
    * Check again whether the worktree the Session works in is gone, publishing a change.
    * @param signal - cancellation of the check.
-   * @returns the missing worktree, or null while it exists or the Session works elsewhere.
+   * @returns the unavailable worktree, or null for a valid checkout or a Session working elsewhere.
    * @throws when the filesystem or Git cannot answer.
    */
   async checkMissing(signal: AbortSignal): Promise<ForgeMissingWorktree | null> {
     const directory = this.current.directory
-    const created = this.worktreeStates.stateOf(this.session).created
+    const state = this.worktreeStates.stateOf(this.session)
     const missing = await missingWorktree(
-      this.ctx, this.config, this.session, created, directory, AbortSignal.any([signal, this.lifetime.signal]),
+      this.ctx, this.config, this.session, state, directory, AbortSignal.any([signal, this.lifetime.signal]),
     )
     if (this.current.directory === directory) {
       this.missing = missing
@@ -283,8 +283,8 @@ export class SessionPanel {
     }
     let missing: ForgeMissingWorktree | null = null
     try {
-      const created = this.worktreeStates.stateOf(this.session).created
-      missing = await missingWorktree(this.ctx, this.config, this.session, created, directory, this.lifetime.signal)
+      const state = this.worktreeStates.stateOf(this.session)
+      missing = await missingWorktree(this.ctx, this.config, this.session, state, directory, this.lifetime.signal)
     } catch (_error) {
       // Without an answer from the filesystem or Git the panel offers no restoration.
     }
@@ -372,23 +372,46 @@ function sameWorktree(left: ForgePanelWorktree, right: ForgePanelWorktree): bool
  * @param ctx - context that provides `fs` and the process services.
  * @param config - Git limits.
  * @param session - Session to check.
- * @param created - the worktree the Session created, or null.
+ * @param state - recorded worktree and restoration completion.
  * @param directory - the Session's current directory.
  * @param signal - cancellation of the check.
- * @returns the missing worktree, or null while it exists or the Session works elsewhere.
+ * @returns the unavailable worktree, or null for a valid checkout or a Session working elsewhere.
  * @throws when the filesystem or Git cannot answer.
  */
 export async function missingWorktree(
   ctx: Context,
   config: GitConfig,
   session: Session,
-  created: ForgeSessionWorktree | null,
+  state: ForgeWorktreeState,
   directory: string,
   signal: AbortSignal,
 ): Promise<ForgeMissingWorktree | null> {
+  const created = state.created
   if (created === null || !within(created.path, directory)) return null
-  if (await ctx.fs.lstat(created.path, undefined, signal) !== undefined) return null
-  return { branchExists: await hasBranch(ctx, config, session, created.repositoryRoot, created.branch, signal) }
+  if (!state.restoring && await ctx.fs.lstat(created.path, undefined, signal) !== undefined) {
+    const git = gitIn(ctx, config, session, created.path, signal)
+    const top = await git('rev-parse', ['rev-parse', '--show-toplevel'], [0, 128])
+    if (top.exitCode === 0) {
+      const target = await ctx.fs.resolve(created.path, { signal })
+      const root = await ctx.fs.resolve(top.stdout.replace(/\r?\n$/, ''), { cwd: created.path, signal })
+      if (root.targetKey === target.targetKey) {
+        const common = await git('common-dir', ['rev-parse', '--path-format=absolute', '--git-common-dir'])
+        const source = await gitIn(ctx, config, session, created.repositoryRoot, signal)(
+          'common-dir', ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+        )
+        const actual = await ctx.fs.resolve(common.stdout.replace(/\r?\n$/, ''), { cwd: created.path, signal })
+        const expected = await ctx.fs.resolve(source.stdout.replace(/\r?\n$/, ''), { cwd: created.repositoryRoot, signal })
+        if (actual.targetKey === expected.targetKey) return null
+      }
+    }
+  }
+  try {
+    return { branchExists: await hasBranch(ctx, config, session, created.repositoryRoot, created.branch, signal) }
+  } catch (error) {
+    signal.throwIfAborted()
+    if (!state.restoring) throw error
+    return { branchExists: null }
+  }
 }
 
 function hostOf(repository: ForgeRepository): string {

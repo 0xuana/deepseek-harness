@@ -140,7 +140,9 @@ export function requested(from: string | null = 'main', overrides: Partial<Forge
  * @param waiting - whether a message waits for the worktree to be restored or left.
  * @param overrides - further worktree facts, such as a running restoration.
  */
-export function removed(branchExists = true, waiting = false, overrides: Partial<ForgePanelWorktree> = {}): ForgePanelState {
+export function removed(
+  branchExists: boolean | null = true, waiting = false, overrides: Partial<ForgePanelWorktree> = {},
+): ForgePanelState {
   return ready({
     directory: '/work/repo-dsh',
     checkout: { state: 'failed', message: 'fatal: cannot change to \'/work/repo-dsh\': No such file or directory' },

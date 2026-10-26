@@ -304,6 +304,10 @@ type WorktreeRecord =
   | { readonly action: 'cancel' }
   /** The requested worktree was created and became the Session's working directory. */
   | { readonly action: 'created'; readonly worktree: ForgeSessionWorktree }
+  /** Restoration started; the checkout stays unavailable until restoration completes. */
+  | { readonly action: 'restoring' }
+  /** The recorded worktree was completely restored. */
+  | { readonly action: 'restored' }
 ```
 
 ```ts type-equiv
@@ -375,10 +379,10 @@ type ForgeWorktreeWaiting = 'creation' | 'restoration'
 ```
 
 ```ts type-equiv
-/** The worktree a Session works in, whose directory no longer exists. */
+/** The recorded worktree whose directory is missing, invalid, or incompletely restored. */
 interface ForgeMissingWorktree {
-  /** Whether the worktree's branch still exists; restoring creates a missing branch again at its base commit. */
-  readonly branchExists: boolean
+  /** Whether its branch exists, or null when an incomplete restoration cannot inspect it. */
+  readonly branchExists: boolean | null
 }
 ```
 

@@ -18,7 +18,7 @@ import type {
 /** Plugin record type of worktree requests, withdrawals, and creations. */
 export const WORKTREE_RECORD = 'plugin:client-ui-forge/worktree'
 
-const EMPTY: ForgeWorktreeState = { request: null, created: null, locked: false, stepped: false }
+const EMPTY: ForgeWorktreeState = { request: null, created: null, locked: false, stepped: false, restoring: false }
 
 const worktreeSchema: z.ZodType<ForgeSessionWorktree> = z.object({
   path: z.string().min(1),
@@ -32,6 +32,8 @@ const recordSchema: z.ZodType<WorktreeRecord> = z.discriminatedUnion('action', [
   z.object({ action: z.literal('request'), from: z.string().min(1).nullable() }).strict(),
   z.object({ action: z.literal('cancel') }).strict(),
   z.object({ action: z.literal('created'), worktree: worktreeSchema }).strict(),
+  z.object({ action: z.literal('restoring') }).strict(),
+  z.object({ action: z.literal('restored') }).strict(),
 ])
 
 const stateSchema: z.ZodType<ForgeWorktreeState> = z.object({
@@ -39,17 +41,19 @@ const stateSchema: z.ZodType<ForgeWorktreeState> = z.object({
   created: worktreeSchema.nullable(),
   locked: z.boolean(),
   stepped: z.boolean(),
+  restoring: z.boolean(),
 }).strict()
 
 /**
  * The host-only `forgeWorktree` unit. `request` and `cancel` records change
  * the request until the first `turn/start` or creation; the first `created`
  * record of an open request applies until the first `step/start`. Records
- * outside those periods leave the state unchanged.
+ * outside those periods leave the state unchanged. Restoration start and completion
+ * records retain whether the created checkout is unavailable across reloads.
  */
 export const forgeWorktreeProjection = {
   key: 'forgeWorktree',
-  stateVersion: 2,
+  stateVersion: 3,
   stateSchema,
   init: () => EMPTY,
   apply,
@@ -101,6 +105,10 @@ function applyRecord(state: ForgeWorktreeState, event: SessionEvent): ForgeWorkt
       return state.locked || settled || state.request === null ? state : { ...state, request: null }
     case 'created':
       return settled || state.stepped || state.request === null ? state : { ...state, created: data.worktree }
+    case 'restoring':
+      return !settled || state.restoring ? state : { ...state, restoring: true }
+    case 'restored':
+      return !state.restoring ? state : { ...state, restoring: false }
     /* v8 ignore next -- closed WorktreeRecord action union exhaustiveness guard */
     default: return assertNever(data, 'WorktreeRecord.action')
   }
@@ -331,11 +339,14 @@ export class WorktreeCreations {
     restored: () => void,
   ): Promise<void> {
     const session = agent.session
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'restoring' })
     try {
       await worktrees.restore(agent, created, signal, (phase) => {
         this.restorations.set(session, { phase })
         this.changed(session)
       })
+      signal.throwIfAborted()
+      appendPluginRecord(session, WORKTREE_RECORD, { action: 'restored' })
       restored()
     } finally {
       this.restorations.delete(session)
