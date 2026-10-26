@@ -1089,6 +1089,17 @@ export function WorkspaceBrowser({
   const [query, setQuery] = useState('')
   const [searchExpanded, setSearchExpanded] = useState(false)
   const [searchSpacingMotionEnabled, setSearchSpacingMotionEnabled] = useState(false)
+  const [searchOnExpand, setSearchOnExpand] = useState(false)
+  const [lastSearchRequest, setLastSearchRequest] = useState(0)
+  // Search state must commit before the effect expands the shell's external store.
+  if (lastSearchRequest !== shortcutState.searchRequest) {
+    setLastSearchRequest(shortcutState.searchRequest)
+    if (shortcutState.searchRequest !== 0) {
+      setSearchExpanded(true)
+      setSearchSpacingMotionEnabled(wide)
+      if (!wide) setSearchOnExpand(true)
+    }
+  }
   // Search gestures animate spacing; entering wide layout from the rail lands at its final geometry.
   if (!wide && searchSpacingMotionEnabled) setSearchSpacingMotionEnabled(false)
   const changeSearchExpanded = (expanded: boolean): void => {
@@ -1130,7 +1141,6 @@ export function WorkspaceBrowser({
 
   // Rail search = expand + land in the search box: the flag arms before the
   // expand request; once the shell flips wide the input mounts and takes focus.
-  const [searchOnExpand, setSearchOnExpand] = useState(false)
   useEffect(() => {
     if (wide && searchOnExpand) {
       const timer = window.setTimeout(() => {
@@ -1143,11 +1153,8 @@ export function WorkspaceBrowser({
   useEffect(() => {
     if (shortcutState.searchRequest === 0) return
     closeAddWorkspace()
-    changeSearchExpanded(true)
-    if (!wide) {
-      setSearchOnExpand(true)
-      expandSidebar()
-    } else searchInput.current?.focus({ preventScroll: true })
+    if (!wide) expandSidebar()
+    else searchInput.current?.focus({ preventScroll: true })
   }, [shortcutState.searchRequest])
 
   useEffect(() => {
