@@ -26,13 +26,15 @@ export function isSegment(value: string): boolean {
  * Parse a Git remote URL. Accepts `http(s)://[user@]host[:port]/owner/name`,
  * `ssh://[user@]host[:port]/owner/name`, `git://host/owner/name`, and the
  * scp-like `[user@]host:owner/name`, each with an optional `.git` suffix or
- * trailing slash.
+ * trailing slash. HTTP(S) ports belong to the host identity; SSH and Git
+ * transport ports do not.
  * @param url - fetch or push URL as Git reports it.
  * @returns the location, or undefined for other URL shapes.
  */
 export function parseRemoteUrl(url: string): GitHubLocation | undefined {
   const trimmed = url.trim()
-  const scheme = /^(?:https?|ssh|git):\/\/(?:[^@/]+@)?([^/:]+)(?::\d+)?\/(.+)$/i.exec(trimmed)
+  const scheme = /^https?:\/\/(?:[^@/]+@)?([^/:]+(?::\d+)?)\/(.+)$/i.exec(trimmed)
+    ?? /^(?:ssh|git):\/\/(?:[^@/]+@)?([^/:]+)(?::\d+)?\/(.+)$/i.exec(trimmed)
   const scp = scheme === null ? /^(?:[^@/:]+@)?([^/:]+):(?!\/\/)(.+)$/.exec(trimmed) : null
   const match = scheme ?? scp
   if (match === null) return undefined

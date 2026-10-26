@@ -42,6 +42,16 @@ describe('GitHub provider addressing', () => {
   it('builds canonical pull request URLs', () => {
     expect(subject.changeRequestUrl(pull(4, enterprise))).toBe('https://ghe.corp.example/team/svc/pull/4')
   })
+
+  it('uses a configured HTTP port for URL mapping and GitHub queries', async () => {
+    const gh = fakeGh(() => output({ data: { r0: { p0: pullRequestNode(1) } } }))
+    const subject = new GitHubProvider(gh.run, ['ghe.example.com:8443'])
+    const repository = subject.repositoryFromRemote('https://ghe.example.com:8443/team/repo.git')!
+    const ref = { repository, number: 1 }
+    expect(subject.changeRequestFromUrl(subject.changeRequestUrl(ref))).toEqual(ref)
+    await subject.fetch([ref], signal)
+    expect(gh.calls[0]?.[3]).toBe('ghe.example.com:8443')
+  })
 })
 
 describe('GitHub provider fetch', () => {

@@ -9,6 +9,9 @@ describe('remote URLs', () => {
     ['https://user:secret@GitHub.com/octo/demo', demo],
     ['http://github.com/octo/demo/', demo],
     ['ssh://git@github.com:22/octo/demo.git', demo],
+    ['https://ghe.example.com:8443/team/repo.git', { host: 'ghe.example.com:8443', owner: 'team', name: 'repo' }],
+    ['http://ghe.example.com:8080/team/repo', { host: 'ghe.example.com:8080', owner: 'team', name: 'repo' }],
+    ['SSH://git@ghe.example.com:7999/team/repo.git', { host: 'ghe.example.com', owner: 'team', name: 'repo' }],
     ['git://github.com/octo/demo', demo],
     ['git@github.com:octo/demo.git', demo],
     ['github.com:octo/demo.git', demo],
@@ -40,6 +43,10 @@ describe('remote URLs', () => {
 })
 
 describe('pull request URLs', () => {
+  it('uses the same host identity as an HTTP remote with a custom port', () => {
+    const remote = parseRemoteUrl('https://ghe.example.com:8443/team/repo.git')
+    expect(parsePullRequestUrl('https://ghe.example.com:8443/team/repo/pull/1')).toEqual({ ...remote, number: 1 })
+  })
   it.each([
     ['https://github.com/octo/demo/pull/12', { ...demo, number: 12 }],
     ['https://GITHUB.com/octo/demo/pull/12/files?diff=split#top', { ...demo, number: 12 }],
