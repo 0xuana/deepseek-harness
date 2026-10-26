@@ -55,6 +55,8 @@ export interface ChangeRequestCardProps {
   readonly now: number
   /** Card actions. */
   readonly actions: ChangeRequestActions
+  /** Active UI language for numeric formatting. */
+  readonly locale: string
   /** Forge panel copy. */
   readonly t: Translate
 }
@@ -99,21 +101,22 @@ function checkTime(check: ChangeRequestCheck, t: Translate): string {
   return elapsed === undefined ? '' : formatDuration(elapsed, t)
 }
 
-function DiffSize({ snapshot }: { readonly snapshot: ChangeRequestSnapshot }): ReactNode {
+function DiffSize({ snapshot, locale }: { readonly snapshot: ChangeRequestSnapshot; readonly locale: string }): ReactNode {
   return (
     <span className={css.diff}>
-      <span className={css.added}>{`+${snapshot.additions.toLocaleString('en-US')}`}</span>
-      <span className={css.deleted}>{`−${snapshot.deletions.toLocaleString('en-US')}`}</span>
+      <span className={css.added}>{`+${snapshot.additions.toLocaleString(locale)}`}</span>
+      <span className={css.deleted}>{`−${snapshot.deletions.toLocaleString(locale)}`}</span>
     </span>
   )
 }
 
 /** The changed lines, as a row that opens the changes view when the provider serves the change request. */
-function ChangesRow({ entry, snapshot, name, actions, t }: {
+function ChangesRow({ entry, snapshot, name, actions, locale, t }: {
   readonly entry: ForgePanelChangeRequest
   readonly snapshot: ChangeRequestSnapshot
   readonly name: string
   readonly actions: ChangeRequestActions
+  readonly locale: string
   readonly t: Translate
 }): ReactNode {
   const { viewChanges } = actions
@@ -121,7 +124,7 @@ function ChangesRow({ entry, snapshot, name, actions, t }: {
     <>
       <span className={css.rowIcon}><IconListPenOutlineRegular size={16} /></span>
       <span className={css.rowLabel}>{t('change.row.changes')}</span>
-      <span className={css.rowValue}><DiffSize snapshot={snapshot} /></span>
+      <span className={css.rowValue}><DiffSize snapshot={snapshot} locale={locale} /></span>
     </>
   )
   if (viewChanges === undefined || entry.ref === null) return <div className={css.row}>{parts}</div>
@@ -131,8 +134,8 @@ function ChangesRow({ entry, snapshot, name, actions, t }: {
       className={clsx(css.row, css.rowButton)}
       aria-label={t('change.viewChangesAria', {
         name,
-        added: snapshot.additions.toLocaleString('en-US'),
-        deleted: snapshot.deletions.toLocaleString('en-US'),
+        added: snapshot.additions.toLocaleString(locale),
+        deleted: snapshot.deletions.toLocaleString(locale),
       })}
       onClick={() => { viewChanges(entry) }}
     >
@@ -364,15 +367,16 @@ function Primary({ entry, snapshot, name, actions, t }: {
   )
 }
 
-function Details({ entry, snapshot, name, now, actions, t }: {
+function Details({ entry, snapshot, name, now, actions, locale, t }: {
   readonly entry: ForgePanelChangeRequest
   readonly snapshot: ChangeRequestSnapshot
   readonly name: string
   readonly now: number
   readonly actions: ChangeRequestActions
+  readonly locale: string
   readonly t: Translate
 }): ReactNode {
-  const changes = <ChangesRow entry={entry} snapshot={snapshot} name={name} actions={actions} t={t} />
+  const changes = <ChangesRow entry={entry} snapshot={snapshot} name={name} actions={actions} locale={locale} t={t} />
   if (snapshot.state !== 'open') {
     return (
       <div className={css.rows}>
@@ -414,7 +418,7 @@ function Details({ entry, snapshot, name, now, actions, t }: {
  * @param props - change request, expansion, current time, actions, and copy.
  * @returns the card.
  */
-export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, t }: ChangeRequestCardProps): ReactNode {
+export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, locale, t }: ChangeRequestCardProps): ReactNode {
   const snapshot = entry.snapshot
   const number = numberOf(entry)
   const url = snapshot?.url ?? entry.url
@@ -488,7 +492,7 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, t }
         </div>
       )}
       {expanded && snapshot !== null && (
-        <Details entry={entry} snapshot={snapshot} name={name} now={now} actions={actions} t={t} />
+        <Details entry={entry} snapshot={snapshot} name={name} now={now} actions={actions} locale={locale} t={t} />
       )}
       {expanded && snapshot !== null && <Primary entry={entry} snapshot={snapshot} name={name} actions={actions} t={t} />}
     </li>

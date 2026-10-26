@@ -23,7 +23,11 @@ import css from './ForgeTab.module.css'
 /** Business face of the tab body. */
 export interface ForgeTabInjected {
   /** Panel snapshot of the Session and the Host facts; the renderer binds them as `usePanel` and `useHost`. */
-  readonly hooks: { readonly panel: HostObservable<PanelSnapshot>; readonly host: HostObservable<RemoteHostFacts> }
+  readonly hooks: {
+    readonly panel: HostObservable<PanelSnapshot>
+    readonly host: HostObservable<RemoteHostFacts>
+    readonly locale: HostObservable<string>
+  }
   /** Open the stream again after it ended. */
   readonly reconnect: () => void
   /**
@@ -151,11 +155,12 @@ function SignIn({ state, copyText, t }: {
  * @returns the tab body.
  */
 export function ForgeTab({
-  useTabInfo, sessionId, usePanel, useHost, reconnect, refresh, remove, markReady, merge, restore, openLink, copyText, copyPath,
+  useTabInfo, sessionId, usePanel, useHost, useLocale, reconnect, refresh, remove, markReady, merge, restore, openLink, copyText, copyPath,
   reportVisible, createChangeRequest, t,
 }: ForgeTabProps): ReactNode {
   const snapshot = usePanel(current => current)
   const home = useHost(facts => facts.home)
+  const locale = useLocale(value => value)
   const { tab } = useTabInfo()
   const visible = tab.visible
   const [chosen, setChosen] = useState<ReadonlySet<string> | null>(null)
@@ -234,6 +239,7 @@ export function ForgeTab({
                   onToggle={() => { toggle(entry.url) }}
                   now={now}
                   actions={actions}
+                  locale={locale}
                   t={t}
                 />
               ))}

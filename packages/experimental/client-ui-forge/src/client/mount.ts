@@ -132,10 +132,14 @@ function registerUi(ctx: Context): void {
     notices.report('toast.restored', { tone: 'success' })
     return undefined
   }
+  const locale: HostObservable<string> = {
+    getSnapshot: () => ctx.locale.getLocale().active,
+    subscribe: listener => ctx.locale.subscribe(listener),
+  }
   const tabFace = (sessionId: SessionId): ForgeTabInjected => {
     const store = storesOf(sessionId)
     return {
-      hooks: { panel: store.panel.hooks.panel, host },
+      hooks: { panel: store.panel.hooks.panel, host, locale },
       reconnect: store.panel.reconnect,
       refresh: async () => {
         settled(await ctx.remote.forgePanel.refresh(sessionId), 'toast.refreshFailed')

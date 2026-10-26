@@ -66,6 +66,7 @@ function tab(state: ForgePanelState | null, options: { disconnected?: boolean; v
     sessionId: SESSION,
     usePanel: bindSnapshotSelector(panel),
     useHost: bindSnapshotSelector(host),
+    useLocale: bindSnapshotSelector(createSnapshotStore<string>('en')),
     reconnect, refresh, remove, markReady, merge, restore, openLink, copyText, copyPath, reportVisible, createChangeRequest,
     t,
   }
