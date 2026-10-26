@@ -23,8 +23,17 @@ describe.each([parseGfm, parseGfmWithMath])('autolink literals in %o', (parse) =
     const qq = 'https://qm.qq.com/cgi-bin/qm/qr?k=Abc%2BDef%2Fghi%3D%3D&authKey=tok%252Fvalue%253D&noverify=0'
     expect(phrasing(parse(`加入群聊：${qq}，欢迎。`))).toEqual(['加入群聊：', { link: qq }, '，欢迎。'])
     // After an unbalanced `[`, the literal comes from the text transform instead of the tokenizer.
+    // Its case-insensitive Unicode regex must keep ASCII `s` and `k`, which fold with `ſ` and `K`.
     expect(phrasing(parse('[x https://example.com/docs/Kit?s=K。后'))).toEqual(
       ['[x ', { link: 'https://example.com/docs/Kit?s=K' }, '。后'])
+    for (const prefix of ['', '[x ']) {
+      expect(phrasing(parse(`${prefix}https://example.com/a😀下一句`))).toEqual(
+        [`${prefix}`, { link: 'https://example.com/a' }, '😀下一句'].filter(part => part !== ''))
+      expect(phrasing(parse(`${prefix}https://example.com/a\u3000下一句`))).toEqual(
+        [`${prefix}`, { link: 'https://example.com/a' }, '\u3000下一句'].filter(part => part !== ''))
+      expect(phrasing(parse(`${prefix}https://example.com/a𝒳b ok`))).toEqual(
+        [`${prefix}`, { link: 'https://example.com/a𝒳b' }, ' ok'].filter(part => part !== ''))
+    }
     // Unencoded non-ASCII punctuation inside a URL also ends it.
     expect(phrasing(parse('https://zh.wikipedia.org/wiki/中文（消歧义）'))).toEqual(
       [{ link: 'https://zh.wikipedia.org/wiki/中文' }, '（消歧义）'])

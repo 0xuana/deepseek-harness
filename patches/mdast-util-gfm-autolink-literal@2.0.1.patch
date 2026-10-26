@@ -1,5 +1,5 @@
 diff --git a/lib/index.js b/lib/index.js
-index c5ca771c24dd914e342f791716a822431ee32b3a..11265b3fe41bb41985f149e2bd8f2fc2b6f85e2e 100644
+index c5ca771c24dd914e342f791716a822431ee32b3a..b6fb7f576043878d53d449f8bb6036566ecf89d2 100644
 --- a/lib/index.js
 +++ b/lib/index.js
 @@ -131,7 +131,8 @@ function transformGfmAutolinkLiterals(tree) {
@@ -7,8 +7,8 @@ index c5ca771c24dd914e342f791716a822431ee32b3a..11265b3fe41bb41985f149e2bd8f2fc2
      tree,
      [
 -      [/(https?:\/\/|www(?=\.))([-.\w]+)([^ \t\r\n]*)/gi, findUrl],
-+      // Non-ASCII punctuation and symbols, such as `。` or `，`, end the path in CJK prose.
-+      [/(https?:\/\/|www(?=\.))([-.\w]+)((?:[!-~]|(?![\p{P}\p{S}])[^ \t\r\n])*)/giu, findUrl],
++      // Non-ASCII punctuation, symbols, and whitespace, such as `。`, `，`, or `　`, end the path in CJK prose.
++      [/(https?:\/\/|www(?=\.))([-.\w]+)((?:[!-~]|(?![\p{P}\p{S}\s])[^ \t\r\n])*)/giu, findUrl],
        [/(?<=^|\s|\p{P}|\p{S})([-.\w+]+)@([-\w]+(?:\.[-\w]+)+)/gu, findEmail]
      ],
      {ignore: ['link', 'linkReference']}
