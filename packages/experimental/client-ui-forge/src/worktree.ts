@@ -187,6 +187,9 @@ export class WorktreeCreations {
   private readonly failures = new Map<Session, ForgeWorktreeFailure>()
   private readonly holds = new Map<Session, Hold>()
   private readonly lifetime = new AbortController()
+  private readonly pending = new Set<Promise<unknown>>()
+  /** Stop admission, cancel operations, and wait for their final callbacks. */
+  readonly dispose: () => Promise<void>
 
   /**
    * @param ctx - context that optionally provides `worktrees`.
@@ -202,7 +205,10 @@ export class WorktreeCreations {
     private readonly changed: (session: Session) => void,
   ) {
     ctx.on('agent/pre-step', async ({ agent, step, signal }, next): Promise<PreStepDecision> => await this.preStep(agent, step, signal, next))
-    ctx.effect(() => () => { this.lifetime.abort(new Error('The forge panel stopped')) }, 'forge-panel: release waiting messages')
+    this.dispose = ctx.effect(() => async () => {
+      this.lifetime.abort(new Error('The forge panel stopped'))
+      await Promise.allSettled(this.pending)
+    }, 'forge-panel: stop worktree operations')
   }
 
   /**
@@ -329,9 +335,25 @@ export class WorktreeCreations {
    * @param created - the worktree the Session created.
    * @param signal - cancellation of the restoration.
    * @param restored - runs once the checkout is back, before the restoration ends, so both changes publish together.
+   * @param available - checks whether the recorded checkout is already usable, within this operation's lifetime.
    * @throws the worktree service's error when the restoration fails; the cancellation reason once `signal` aborts.
    */
   async restore(
+    agent: Agent,
+    worktrees: Context['worktrees'],
+    created: ForgeSessionWorktree,
+    signal: AbortSignal,
+    restored: () => void,
+    available: (signal: AbortSignal) => Promise<boolean>,
+  ): Promise<void> {
+    await this.run(signal, async (operation) => {
+      const usable = await available(operation)
+      operation.throwIfAborted()
+      if (!usable) await this.restoreCheckout(agent, worktrees, created, operation, restored)
+    })
+  }
+
+  private async restoreCheckout(
     agent: Agent,
     worktrees: Context['worktrees'],
     created: ForgeSessionWorktree,
@@ -366,6 +388,10 @@ export class WorktreeCreations {
    * @throws {@link CreationFailure} when the attempt fails; the cancellation reason once `signal` aborts.
    */
   async create(agent: Agent, from: string | null, signal: AbortSignal, held: boolean): Promise<CreatedWorktree> {
+    return await this.run(signal, operation => this.createCheckout(agent, from, operation, held))
+  }
+
+  private async createCheckout(agent: Agent, from: string | null, signal: AbortSignal, held: boolean): Promise<CreatedWorktree> {
     const worktrees = this.ctx.get('worktrees')
     if (worktrees === undefined) throw new Error('No worktree service is mounted')
     const session = agent.session
@@ -385,6 +411,7 @@ export class WorktreeCreations {
         signal.throwIfAborted()
         throw new CreationFailure(status.branch, status.phase, messageOf(error), error)
       }
+      signal.throwIfAborted()
       const worktree: ForgeSessionWorktree = {
         path: created.path, branch: created.branch, from, baseCommit: created.baseCommit, repositoryRoot: created.repositoryRoot,
       }
@@ -404,6 +431,7 @@ export class WorktreeCreations {
    * @param body - waits for the worktree; settles once the message may go on.
    */
   private hold<H extends Hold>(agent: Agent, hold: H, body: (hold: H, signal: AbortSignal) => Promise<void>): void {
+    if (this.lifetime.signal.aborted) return
     const session = agent.session
     if (this.holds.has(session)) return
     let task: Promise<void>
@@ -426,7 +454,22 @@ export class WorktreeCreations {
       return
     }
     this.holds.set(session, hold)
-    void task
+    void this.join(task)
+  }
+
+  private async run<T>(signal: AbortSignal, body: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const operation = AbortSignal.any([signal, this.lifetime.signal])
+    operation.throwIfAborted()
+    return await this.join(body(operation))
+  }
+
+  private async join<T>(task: Promise<T>): Promise<T> {
+    this.pending.add(task)
+    try {
+      return await task
+    } finally {
+      this.pending.delete(task)
+    }
   }
 
   /**

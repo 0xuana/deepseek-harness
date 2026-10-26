@@ -1674,7 +1674,51 @@ describe('worktree recovery and unload', () => {
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
   })
 
-
+  it.each(['creation', 'restoration', 'validation'] as const)('waits for cancelled %s before completing panel unload', async (kind) => {
+    const { repo } = await project()
+    const opened = await open(repo, {}, { worktrees: true })
+    const created = kind !== 'creation' ? await startInWorktree(opened) : undefined
+    if (created !== undefined) await rm(created.path, { recursive: true, force: true })
+    else await opened.ctx.forgePanel.requestWorktree(opened.session, null, signal)
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const released: PromiseWithResolvers<void> = Promise.withResolvers()
+    let cancellation: AbortSignal | undefined
+    const confine = opened.ctx.sandbox.confine.bind(opened.ctx.sandbox)
+    const inspection = vi.spyOn(opened.ctx.sandbox, 'confine').mockImplementation(async (argv, policy, signal) => {
+      if (kind === 'validation' && argv.includes('show-ref')) {
+        cancellation = signal; entered.resolve(); await released.promise
+      }
+      return confine(argv, policy, signal)
+    })
+    const create = vi.spyOn(opened.ctx.worktrees, 'create').mockImplementation(async (_agent, _request, signal) => {
+      cancellation = signal; entered.resolve(); await released.promise
+      return { path: join(repo, '.agents/worktrees/pending'), branch: 'pending', repositoryRoot: repo, baseCommit: 'a'.repeat(40) }
+    })
+    const restore = vi.spyOn(opened.ctx.worktrees, 'restore').mockImplementation(async (_agent, request, signal) => {
+      cancellation = signal; entered.resolve(); await released.promise
+      return { path: request.path, branchRecreated: false }
+    })
+    const operation = rejectionOf(kind === 'creation'
+      ? proposeStep(opened.ctx, opened.agent, { turn: 1, step: 1, messages: [prompt('go')] })
+      : opened.ctx.forgePanel.restoreWorktree(opened.session, signal))
+    let disposed = false
+    let unloading: Promise<void> | undefined
+    try {
+      await entered.promise
+      unloading = opened.panel.dispose().then(() => { disposed = true })
+      await vi.waitFor(() => { expect(cancellation?.aborted).toBe(true) })
+      expect(disposed).toBe(false)
+      released.resolve()
+      expect(await operation).toBeInstanceOf(Error)
+      await unloading
+      expect(opened.records.filter(record => typeof record === 'object' && record !== null && 'action' in record
+        && record.action === (kind === 'creation' ? 'created' : 'restored'))).toEqual([])
+    } finally {
+      released.resolve()
+      await Promise.allSettled([operation, ...unloading === undefined ? [] : [unloading]])
+      create.mockRestore(); restore.mockRestore(); inspection.mockRestore()
+    }
+  })
 })
 
 

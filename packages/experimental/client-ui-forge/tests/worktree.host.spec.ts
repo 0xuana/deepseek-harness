@@ -517,3 +517,13 @@ describe('worktree creation at the first step proposal', () => {
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
   })
 })
+
+
+it('does not admit a new message hold after worktree operations stop', async () => {
+  const opened = await creating(await project())
+  request(opened, null)
+  await opened.creations.dispose()
+  opened.creations.holdCreation(opened.agent)
+  expect(opened.creations.waitingOf(opened.session)).toBeNull()
+  expect(opened.changes).toEqual([])
+})
