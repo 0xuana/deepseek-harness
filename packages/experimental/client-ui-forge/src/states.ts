@@ -3,8 +3,8 @@
  * for the Session list. One run starts with the first stream and stops with
  * the last: it reads the stored states, lists the Sessions with their
  * bindings, follows binding changes of loaded Sessions, and polls each bound
- * change request that is not merged or closed, once however many Sessions
- * bind it. Every state change is stored, so a restart shows it before the
+ * change request, once however many Sessions bind it. The forge service
+ * owns polling cadence and terminal-state refresh. Every state change is stored, so a restart shows it before the
  * first poll.
  */
 
@@ -78,11 +78,6 @@ export interface ChangeRequestStateSources {
   readonly report: (error: unknown) => void
 }
 
-/** Whether a change request has ended, so its state no longer changes. */
-function finished(state: ForgeChangeRequestListState | undefined): boolean {
-  return state !== undefined && state.state !== 'open'
-}
-
 function listStateOf(snapshot: ChangeRequestSnapshot, url: string): ForgeChangeRequestListState {
   return {
     url,
@@ -107,35 +102,43 @@ class Reader {
   private pending = new Map<string, ForgeChangeRequestListState>()
   private wake: (() => void) | undefined
   private ended = false
+  private readonly completion = Promise.withResolvers<undefined>()
+  readonly closed = this.completion.promise
+  private readonly abort = (): void => { this.end() }
 
-  constructor(readonly allowed: (id: SessionId) => boolean) {}
+  constructor(readonly allowed: (id: SessionId) => boolean, private readonly signal: AbortSignal) {
+    signal.addEventListener('abort', this.abort, { once: true })
+    if (signal.aborted) this.end()
+  }
 
   push(state: ForgeChangeRequestListState): void {
+    if (this.ended) return
     this.pending.set(state.url, state)
     this.wake?.()
   }
 
   end(): void {
     this.ended = true
+    this.pending.clear()
+    this.completion.resolve(undefined)
     this.wake?.()
   }
 
-  async *frames(signal: AbortSignal): AsyncIterable<ForgeChangeRequestStatesFrame> {
-    const abort = (): void => { this.end() }
-    signal.addEventListener('abort', abort, { once: true })
-    try {
-      while (!this.ended) {
-        if (this.pending.size === 0) {
-          await new Promise<void>((resolve) => { this.wake = resolve })
-          this.wake = undefined
-          continue
-        }
-        const states = [...this.pending.values()]
-        this.pending = new Map()
-        yield { type: 'changed', states }
+  dispose(): void {
+    this.signal.removeEventListener('abort', this.abort)
+    this.end()
+  }
+
+  async *frames(): AsyncIterable<ForgeChangeRequestStatesFrame> {
+    while (!this.ended) {
+      if (this.pending.size === 0) {
+        await new Promise<void>((resolve) => { this.wake = resolve })
+        this.wake = undefined
+        continue
       }
-    } finally {
-      signal.removeEventListener('abort', abort)
+      const states = [...this.pending.values()]
+      this.pending = new Map()
+      yield { type: 'changed', states }
     }
   }
 }
@@ -147,24 +150,41 @@ class Run {
   private readonly urlsOf = new Map<SessionId, ReadonlySet<string>>()
   private readonly polls = new Map<string, () => void>()
   private readonly stopBindings: () => void
+  private readonly startupBindings = new Map<SessionId, readonly string[]>()
+  private starting = true
+  private readonly writes = new Set<Promise<void>>()
+  private stopped = false
 
-  /**
-   * Load the stored states, bind the listed Sessions, follow later bindings,
-   * and forget stored states that no listed Session binds.
-   */
   constructor(
     private readonly sources: ChangeRequestStateSources,
     private readonly readers: ReadonlySet<Reader>,
     private readonly table: StoredStates,
-    listed: readonly ListedSession[],
   ) {
     for (const [, state] of table.entries()) this.states.set(state.url, state)
-    this.stopBindings = sources.onBindings((id, urls) => { this.bind(id, urls) })
-    for (const session of listed) if (session.urls !== undefined) this.bind(session.id, session.urls)
+    // Subscribe before listing; updates received during the read supersede its snapshot.
+    this.stopBindings = sources.onBindings((id, urls) => {
+      if (this.starting) this.startupBindings.set(id, urls)
+      else this.bind(id, urls)
+    })
+  }
+
+  async start(signal: AbortSignal): Promise<void> {
+    const listed = await this.sources.sessions(signal)
+    signal.throwIfAborted()
+    const updates = this.startupBindings
+    for (const session of listed) {
+      const urls = updates.get(session.id) ?? session.urls
+      if (urls !== undefined) this.bind(session.id, urls)
+    }
+    this.starting = false
+    for (const [id, urls] of updates) this.bind(id, urls)
+    updates.clear()
+    // An uncached Session may still bind a stored request; absence is not established yet.
+    if (listed.some(session => session.urls === undefined)) return
     for (const [url] of this.states) {
       if (this.sessionsOf.has(url)) continue
       this.states.delete(url)
-      void table.delete(storedKey(url)).catch((error: unknown) => { sources.report(error) })
+      this.write(() => this.table.delete(storedKey(url)))
     }
   }
 
@@ -178,13 +198,16 @@ class Run {
     return states
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
+    this.stopped = true
     this.stopBindings()
     for (const stop of this.polls.values()) stop()
     this.polls.clear()
+    await Promise.all(this.writes)
   }
 
   private bind(id: SessionId, urls: readonly string[]): void {
+    if (this.stopped) return
     const next = new Set(urls)
     const previous = this.urlsOf.get(id) ?? new Set<string>()
     this.urlsOf.set(id, next)
@@ -211,7 +234,7 @@ class Run {
 
   /** Poll a bound change request; `ids` is the live set of Sessions binding it, which outlives the poll. */
   private poll(url: string, ids: ReadonlySet<SessionId>): void {
-    if (this.polls.has(url) || finished(this.states.get(url))) return
+    if (this.polls.has(url)) return
     const ref = this.sources.refOf(url)
     if (ref === undefined) return
     this.polls.set(url, this.sources.watch(ref, (update) => {
@@ -221,20 +244,25 @@ class Run {
   }
 
   private settle(url: string, ids: ReadonlySet<SessionId>, state: ForgeChangeRequestListState): void {
-    if (sameState(this.states.get(url), state)) return
+    if (this.stopped || sameState(this.states.get(url), state)) return
     this.states.set(url, state)
-    void this.table.put(storedKey(url), state).catch((error: unknown) => { this.sources.report(error) })
+    this.write(() => this.table.put(storedKey(url), state))
     for (const reader of this.readers) if ([...ids].some(reader.allowed)) reader.push(state)
-    if (finished(state)) {
-      this.polls.get(url)?.()
-      this.polls.delete(url)
-    }
   }
+
+  private write(operation: () => Promise<unknown>): void {
+    const task = operation().then(() => undefined, (error: unknown) => { this.sources.report(error) })
+    this.writes.add(task)
+    void task.then(() => { this.writes.delete(task) })
+  }
+
 }
 
 /** Streams the states of the change requests that listed Sessions bind. */
 export class ChangeRequestStates {
   private readonly readers = new Set<Reader>()
+  private stopping: Promise<void> = Promise.resolve()
+  private disposed = false
   private run: { readonly started: Promise<Run | undefined>; readonly aborter: AbortController } | undefined
 
   /** @param sources - what runs read, follow, and poll. */
@@ -250,47 +278,62 @@ export class ChangeRequestStates {
    */
   async *stream(allowed: (id: SessionId) => boolean, signal: AbortSignal): AsyncIterable<ForgeChangeRequestStatesFrame> {
     signal.throwIfAborted()
-    const reader = new Reader(allowed)
+    if (this.disposed) return
+    const reader = new Reader(allowed, signal)
     this.readers.add(reader)
     try {
-      const run = await this.ensureRun()
-      signal.throwIfAborted()
+      const run = await Promise.race([this.ensureRun(), reader.closed.then(() => undefined)])
       // A run that the hub stopped while it started leaves nothing to read.
       if (run === undefined) return
       yield { type: 'baseline', states: run.visible(allowed) }
-      yield* reader.frames(signal)
+      yield* reader.frames()
     } finally {
+      reader.dispose()
       this.readers.delete(reader)
-      if (this.readers.size === 0) this.stopRun()
+      if (this.readers.size === 0) await this.stopRun()
     }
   }
 
-  /** End every stream and stop the current run. */
-  dispose(): void {
+  /**
+   * End every stream, stop polling, and wait for initialization and accepted storage writes.
+   * @returns settles after all owned work stops; subsequent streams end without starting work.
+   */
+  async dispose(): Promise<void> {
+    this.disposed = true
     for (const reader of this.readers) reader.end()
-    this.readers.clear()
-    this.stopRun()
+    await this.stopRun()
   }
 
   private ensureRun(): Promise<Run | undefined> {
     if (this.run !== undefined) return this.run.started
     const aborter = new AbortController()
+    const preceding = this.stopping
     const started = (async () => {
+      await preceding
+      aborter.signal.throwIfAborted()
       const table = await this.sources.open()
-      const listed = await this.sources.sessions(aborter.signal)
-      return aborter.signal.aborted ? undefined : new Run(this.sources, this.readers, table, listed)
+      aborter.signal.throwIfAborted()
+      const run = new Run(this.sources, this.readers, table)
+      try {
+        await run.start(aborter.signal)
+        return run
+      } catch (error) {
+        await run.stop()
+        throw error
+      }
     })()
     this.run = { started, aborter }
     return started
   }
 
-  private stopRun(): void {
+  private stopRun(): Promise<void> {
     const current = this.run
-    if (current === undefined) return
+    if (current === undefined) return this.stopping
     this.run = undefined
     current.aborter.abort()
-    void current.started.then(run => run?.stop(), (error: unknown) => {
-      void error // Every stream that awaited this start already ended with its failure.
+    this.stopping = current.started.then(run => run?.stop(), (error: unknown) => {
+      void error // Initialization failure is reported to the stream that awaited it.
     })
+    return this.stopping
   }
 }

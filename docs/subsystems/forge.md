@@ -506,7 +506,7 @@ interface ForgeBranches {
 }
 ```
 
-The Session list reads through the same Remote. `changeRequestStates` streams `ForgeChangeRequestStatesFrame` values: a `baseline` with the last known `ForgeChangeRequestListState` of every change request that a listed Session the caller may read binds, then the states that change. One Host run serves every stream; it takes the bindings of loaded Sessions from `ctx.forgeSession` and those of other Sessions from their cached Session summary without loading them, polls each bound change request until it is merged or closed, and stores every change, so a restart shows the last known states before the next poll. The Session summary also carries the `forgeWorktree` projection's client view: the created worktree while the Session's directory is that worktree or lies below it, else null.
+The Session list reads through the same Remote. `changeRequestStates` streams `ForgeChangeRequestStatesFrame` values: a `baseline` with the last known `ForgeChangeRequestListState` of every change request that a listed Session the caller may read binds, then the states that change. One Host run serves every stream; it takes the bindings of loaded Sessions from `ctx.forgeSession` and those of other Sessions from their cached Session summary without loading them, keeps each bound change request subscribed, including closed requests polled at the idle cadence to detect reopening, and stores every change, so a restart shows the last known states before the next poll. The Session summary also carries the `forgeWorktree` projection's client view: the created worktree while the Session's directory is that worktree or lies below it, else null.
 
 ```ts type-equiv
 /**
@@ -817,7 +817,7 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * state a poll changes or a new binding reveals. Listing reads no Session
  * log: loaded Sessions report their bindings, others the cached Session
  * summary, and a Session without one shows nothing until it is opened.
- * Change requests that are merged or closed are not polled again. The
+ * Closed requests are polled at the idle cadence so reopening is observed. The
  * stream ends when `signal` aborts or the Remote stops.
  * @param signal - ends the stream.
  * @returns frames in publication order.

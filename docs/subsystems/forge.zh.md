@@ -506,7 +506,7 @@ interface ForgeBranches {
 }
 ```
 
-会话列表经同一个 Remote 读取。`changeRequestStates` 以流的形式推送 `ForgeChangeRequestStatesFrame`：先是一个 `baseline`，包含调用方可读的已列出 Session 所绑定的每个变更请求最近一次已知的 `ForgeChangeRequestListState`，之后是发生变化的状态。宿主用一次运行服务所有流：已加载 Session 的绑定取自 `ctx.forgeSession`，其他 Session 的绑定取自缓存的 Session 摘要而不加载它们；每个已绑定的变更请求一直轮询到合并或关闭，每次变化都会存储，因此重启后在下次轮询之前就能显示最近已知的状态。Session 摘要还带有 `forgeWorktree` 投影的客户端视图：Session 的目录就是所创建的 worktree 或位于其下时为该 worktree，否则为 null。
+会话列表经同一个 Remote 读取。`changeRequestStates` 以流的形式推送 `ForgeChangeRequestStatesFrame`：先是一个 `baseline`，包含调用方可读的已列出 Session 所绑定的每个变更请求最近一次已知的 `ForgeChangeRequestListState`，之后是发生变化的状态。宿主用一次运行服务所有流：已加载 Session 的绑定取自 `ctx.forgeSession`，其他 Session 的绑定取自缓存的 Session 摘要而不加载它们；每个已绑定的变更请求保持订阅，已关闭的按空闲间隔轮询以检测重新打开，每次变化都会存储，因此重启后在下次轮询之前就能显示最近已知的状态。Session 摘要还带有 `forgeWorktree` 投影的客户端视图：Session 的目录就是所创建的 worktree 或位于其下时为该 worktree，否则为 null。
 
 ```ts type-equiv
 /**
@@ -817,7 +817,7 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * state a poll changes or a new binding reveals. Listing reads no Session
  * log: loaded Sessions report their bindings, others the cached Session
  * summary, and a Session without one shows nothing until it is opened.
- * Change requests that are merged or closed are not polled again. The
+ * Closed requests are polled at the idle cadence so reopening is observed. The
  * stream ends when `signal` aborts or the Remote stops.
  * @param signal - ends the stream.
  * @returns frames in publication order.

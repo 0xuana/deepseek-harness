@@ -83,6 +83,7 @@ export class ForgePanelController extends TypertRemoteService {
   private readonly patches: PatchCache
   private states: ChangeRequestStates | undefined
   private readonly stopPanels: () => Promise<void>
+  private readonly stopStates: () => Promise<void>
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'forgePanel')
@@ -106,9 +107,8 @@ export class ForgePanelController extends TypertRemoteService {
       this.panels.clear()
       await Promise.allSettled(panels.map(panel => panel.dispose()))
     }, 'forge-panel: stop panels')
-    ctx.effect(() => () => {
-      this.states?.dispose()
-      this.states = undefined
+    this.stopStates = ctx.effect(() => async () => {
+      await this.states?.dispose()
     }, 'forge-panel: stop change request states')
   }
 
@@ -134,13 +134,14 @@ export class ForgePanelController extends TypertRemoteService {
       if (name !== 'worktrees') return
       for (const panel of this.panels.values()) panel.updateWorktree()
     })
-    const { creations, stopPanels } = this
+    const { creations, stopPanels, stopStates } = this
     ctx.effect(function* () {
       yield stateOwner.dispose
       yield inbox
       yield events
       yield services
       yield stopPanels
+      yield stopStates
       yield creations.dispose
     }, 'forge-panel: drain before releasing state')
   }
@@ -164,7 +165,7 @@ export class ForgePanelController extends TypertRemoteService {
    * state a poll changes or a new binding reveals. Listing reads no Session
    * log: loaded Sessions report their bindings, others the cached Session
    * summary, and a Session without one shows nothing until it is opened.
-   * Change requests that are merged or closed are not polled again. The
+   * Closed requests are polled at the idle cadence so reopening is observed. The
    * stream ends when `signal` aborts or the Remote stops.
    * @param signal - ends the stream.
    * @returns frames in publication order.

@@ -1118,7 +1118,7 @@ export type Config = CuaConfig
 export interface Config {
   /** Poll interval in milliseconds while checks run or mergeability is unknown. */
   activeIntervalMs?: number
-  /** Poll interval in milliseconds for an open change request whose checks have settled. */
+  /** Poll interval in milliseconds for a closed request or an open request whose checks have settled. */
   idleIntervalMs?: number
   /** Largest delay in milliseconds between polls after consecutive failures. */
   maxBackoffMs?: number

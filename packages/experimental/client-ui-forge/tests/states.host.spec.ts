@@ -10,10 +10,10 @@ import { demo, pullUrl, snapshot as openSnapshot } from './harness.ts'
 const S1 = SessionId('s1')
 const S2 = SessionId('s2')
 
-const cleanups: (() => void)[] = []
+const cleanups: (() => void | Promise<void>)[] = []
 
-afterEach(() => {
-  for (const cleanup of cleanups.splice(0)) cleanup()
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
 })
 
 const url = pullUrl
@@ -67,7 +67,7 @@ function fixture(sessions: readonly ListedSession[], stored: readonly ForgeChang
     report: vi.fn<ChangeRequestStateSources['report']>(),
   }
   const hub = new ChangeRequestStates(sources)
-  cleanups.push(() => { hub.dispose() })
+  cleanups.push(() => hub.dispose())
   return {
     hub,
     sources,
@@ -116,7 +116,7 @@ describe('ChangeRequestStates', () => {
     expect(f.records.get(storedKey(url(7)))).toEqual(state(7))
   })
 
-  it('polls a change request once however many Sessions bind it, and stops polling it once merged or closed', async () => {
+  it('shares one watch per request and retains it for explicit refresh after merging or closing', async () => {
     const f = fixture([{ id: S1, urls: [url(7)] }, { id: S2, urls: [url(7), url(8)] }])
     const r = reader(f.hub)
 
@@ -126,15 +126,15 @@ describe('ChangeRequestStates', () => {
     expect(await r.next()).toEqual({ type: 'changed', states: [state(7, { state: 'merged' })] })
     f.poll(8, { state: 'closed', closedAt: '2026-10-20T00:00:00Z' })
     expect(await r.next()).toEqual({ type: 'changed', states: [state(8, { state: 'closed' })] })
-    expect([...f.watchers.keys()]).toEqual([])
+    expect([...f.watchers.keys()]).toEqual([7, 8])
   })
 
-  it('never polls a change request stored as merged or closed', async () => {
+  it('watches stored merged and closed requests for fresh results', async () => {
     const f = fixture([{ id: S1, urls: [url(7), url(8)] }], [state(7, { state: 'merged' }), state(8, { state: 'closed' })])
     const r = reader(f.hub)
 
     expect(await r.next()).toEqual({ type: 'baseline', states: [state(7, { state: 'merged' }), state(8, { state: 'closed' })] })
-    expect(f.sources.watch).not.toHaveBeenCalled()
+    expect(f.sources.watch.mock.calls.map(([target]) => target.number)).toEqual([7, 8])
   })
 
   it('starts polling a change request when a Session binds it and stops once no Session binds it', async () => {
@@ -248,9 +248,10 @@ describe('ChangeRequestStates', () => {
     const first = r.next()
     await vi.waitFor(() => { expect(f.sources.sessions).toHaveBeenCalledOnce() })
 
-    f.hub.dispose()
+    const disposing = f.hub.dispose()
     list([{ id: S1, urls: [url(7)] }])
     expect(await first).toBeUndefined()
+    await disposing
     expect(f.listeners.size).toBe(0)
     expect([...f.watchers.keys()]).toEqual([])
   })
@@ -260,9 +261,93 @@ describe('ChangeRequestStates', () => {
     const r = reader(f.hub)
     await r.next()
 
-    f.hub.dispose()
+    await f.hub.dispose()
     expect(await r.next()).toBeUndefined()
     expect([...f.watchers.keys()]).toEqual([])
     expect(f.listeners.size).toBe(0)
   })
+
+  it('ends a stream cancelled after its baseline and releases its watches', async () => {
+    const f = fixture([{ id: S1, urls: [url(7)] }])
+    const aborter = new AbortController()
+    const stream = f.hub.stream(() => true, aborter.signal)[Symbol.asyncIterator]()
+    await stream.next()
+    aborter.abort()
+    try {
+      expect((await stream.next()).done).toBe(true)
+      expect([...f.watchers.keys()]).toEqual([])
+    } finally {
+      await f.hub.dispose()
+      await stream.return?.(undefined)
+    }
+  })
+
+  it('drains an accepted write before disposal and refuses streams after disposal', async () => {
+    const f = fixture([{ id: S1, urls: [url(7)] }])
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const order: string[] = []
+    f.put.mockImplementationOnce(async (key, value) => {
+      entered.resolve(undefined)
+      await release.promise
+      f.records.set(key, value)
+      order.push('written')
+    })
+    const r = reader(f.hub)
+    await r.next()
+    f.poll(7)
+    await entered.promise
+    const disposing = f.hub.dispose().then(() => { order.push('disposed') })
+    release.resolve(undefined)
+    await disposing
+    expect(order).toEqual(['written', 'disposed'])
+    expect(f.records.get(storedKey(url(7)))).toEqual(state(7))
+    expect(await reader(f.hub).next()).toBeUndefined()
+    expect(f.sources.open).toHaveBeenCalledTimes(1)
+  })
+
+  it('replaces a cached closed state when its shared watch observes reopening', async () => {
+    const f = fixture([{ id: S1, urls: [url(7)] }], [state(7, { state: 'closed' })])
+    const r = reader(f.hub)
+    expect(await r.next()).toEqual({ type: 'baseline', states: [state(7, { state: 'closed' })] })
+    f.poll(7, { state: 'open', checksRollup: 'pending' })
+    expect(await r.next()).toEqual({ type: 'changed', states: [state(7, { checksRollup: 'pending' })] })
+    expect(f.records.get(storedKey(url(7)))?.state).toBe('open')
+  })
+
+  it('keeps binding updates during listing ahead of the initial snapshot', async () => {
+    const f = fixture([{ id: S1, urls: [url(8)] }])
+    const captured = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    f.sources.sessions.mockImplementationOnce(async () => {
+      captured.resolve(undefined)
+      await release.promise
+      return [{ id: S1, urls: [url(8)] }]
+    })
+    const r = reader(f.hub)
+    const first = r.next()
+    await captured.promise
+    f.bind(S1, [url(7)])
+    f.bind(S2, [url(9)])
+    release.resolve(undefined)
+    await first
+    expect([...f.watchers.keys()]).toEqual([7, 9])
+  })
+
+  it('retains stored states while an uncached Session may still bind them', async () => {
+    const f = fixture([{ id: S1, urls: undefined }], [state(7)])
+    await reader(f.hub).next()
+    expect(f.remove).not.toHaveBeenCalled()
+    f.bind(S1, [url(7)])
+    expect([...f.watchers.keys()]).toEqual([7])
+  })
+
+  it('releases the binding listener after listing fails', async () => {
+    const f = fixture([])
+    f.sources.sessions.mockRejectedValueOnce(new Error('list unavailable'))
+    await expect(reader(f.hub).next()).rejects.toThrow('list unavailable')
+    expect(f.listeners.size).toBe(0)
+    expect(await reader(f.hub).next()).toEqual({ type: 'baseline', states: [] })
+  })
+
 })

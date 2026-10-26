@@ -147,4 +147,36 @@ describe('forgePanel.changeRequestStates', () => {
       'forge-panel: change request states need the sessionQuery, sessionProjectionCache, storageDomain, and sessions services',
     )
   })
+
+  it('replaces the closed cache with a reopened provider result', async () => {
+    const { b, records } = await composed()
+    records.set(storedKey(pullUrl(7)), { ...state(7), state: 'closed' })
+    b.ctx.forgeSession.track(b.session, pullUrl(7))
+    const r = reader(b)
+    await r.until(states => states.get(pullUrl(7))?.state === 'open')
+    expect(r.frames[0]?.states).toContainEqual({ ...state(7), state: 'closed' })
+    expect(records.get(storedKey(pullUrl(7)))?.state).toBe('open')
+  })
+
+  it('finishes accepted state storage before the controller owner unloads', async () => {
+    const { b, put, records } = await composed()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const order: string[] = []
+    put.mockImplementationOnce(async (key, value) => {
+      entered.resolve(undefined)
+      await release.promise
+      records.set(key, value)
+      order.push('written')
+    })
+    b.ctx.forgeSession.track(b.session, pullUrl(7))
+    const reading = reader(b).until(states => states.has(pullUrl(7)))
+    await entered.promise
+    const disposing = b.ctx.fiber.dispose().then(() => { order.push('disposed') })
+    release.resolve(undefined)
+    await Promise.all([reading, disposing])
+    expect(order).toEqual(['written', 'disposed'])
+    expect(records.has(storedKey(pullUrl(7)))).toBe(true)
+  })
+
 })
