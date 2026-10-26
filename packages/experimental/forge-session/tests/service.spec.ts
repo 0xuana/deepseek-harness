@@ -7,7 +7,7 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import ForgeSessionService from '../src/index.ts'
 import type { Config, SessionChangeRequest, SessionChangeRequestsListener } from '../src/index.ts'
-import { bench, demo, pull, pullUrl, pushOutput, shellTurn, snapshot } from './fixtures.ts'
+import { bench, demo, FakeProvider, pull, pullUrl, pushOutput, shellTurn, snapshot } from './fixtures.ts'
 import type { Bench } from './fixtures.ts'
 
 const contexts: Context[] = []
@@ -233,6 +233,38 @@ describe('forgeSession track and dismiss', () => {
 })
 
 describe('forgeSession watch', () => {
+  it('resynchronizes existing watches when providers arrive, leave, and return', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(ForgeService)
+    await ctx.plugin(ForgeSessionService)
+    const session = ctx.sessions.create()
+    create(session, 'create', pullUrl(7))
+    const listener = vi.fn<SessionChangeRequestsListener>()
+    const stop = ctx.forgeSession.watch(session, listener)
+    expect(ctx.forgeSession.changeRequests(session)[0]?.ref).toBeNull()
+
+    const provider = new FakeProvider()
+    const register = () => ctx.plugin({ inject: ['forge'], apply(child: Context) { child.forge.register(provider) } })
+    const first = register()
+    await first
+    await vi.waitFor(() => { expect(lastList(listener)[0]?.update).toMatchObject({ snapshot: { ref: pull(7) } }) })
+    expect(provider.fetches).toEqual([[7]])
+    await first.dispose()
+    expect(lastList(listener)[0]).toMatchObject({ ref: null, update: null })
+
+    await register()
+    await vi.waitFor(() => { expect(provider.fetches).toEqual([[7], [7]]) })
+    expect(lastList(listener)[0]?.ref).toEqual(pull(7))
+    stop()
+    const calls = listener.mock.calls.length
+    ctx.emit('forge/providers-changed', 'fake')
+    expect(listener).toHaveBeenCalledTimes(calls)
+    expect(ctx.forge.latest(pull(7))).toBeUndefined()
+  })
+
   function lastList(listener: Mock<SessionChangeRequestsListener>): readonly SessionChangeRequest[] {
     return listener.mock.lastCall?.[0] ?? []
   }

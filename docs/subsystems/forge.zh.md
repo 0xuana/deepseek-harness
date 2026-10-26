@@ -216,7 +216,7 @@ interface SessionChangeRequest {
 
 ```ts type-equiv
 /**
- * Receives the complete visible list after a binding change or a polling result.
+ * Receives the complete visible list after a binding or provider change, or a polling result.
  * @param changeRequests - every visible binding of the watched Session, in first-recorded order.
  */
 type SessionChangeRequestsListener = (changeRequests: readonly SessionChangeRequest[]) => void
@@ -338,7 +338,7 @@ dismiss(session: Session, url: string): void
  * Watch a Session's visible change requests as an effect on the calling
  * fiber. Every visible change request that a provider recognizes is polled
  * through `ctx.forge` while the Session has a watcher. Listeners receive the
- * complete list after each later binding change or polling result; read the
+ * complete list after each later binding or provider change, or polling result; read the
  * current list with {@link changeRequests}. Listeners must not throw; a
  * thrown error is logged and skipped.
  * @param session - Session to watch.
@@ -351,4 +351,26 @@ watch(session: Session, listener: SessionChangeRequestsListener): () => void
 Types: [Session](session.zh.md)
 
 Source: [`packages/experimental/forge-session/src/index.ts`](../../packages/experimental/forge-session/src/index.ts)
+
+<a id="forge-events"></a>
+
+### `forge/*` events
+
+<a id="forgeproviders-changed--parallel"></a>
+
+#### `forge/providers-changed` — parallel
+
+Announces a provider registration or withdrawal after the registry changes. Listener failures are logged without preventing other listeners from running.
+
+```ts cordis-catalog
+/**
+ * Announces a provider registration or withdrawal after the registry changes.
+ * Listener failures are logged without preventing other listeners from running.
+ * @param forge - family whose provider changed.
+ * @mode parallel
+ */
+'forge/providers-changed'(forge: string): void | Promise<void>
+```
+
+Source: [`packages/experimental/forge/src/index.ts`](../../packages/experimental/forge/src/index.ts)
 <!-- END GENERATED cordis-surface -->

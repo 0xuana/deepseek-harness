@@ -80,3 +80,14 @@ it('does not invoke a provider for an already cancelled lookup', async () => {
   await expect(ctx.forge.findByHead(demo, 'topic', AbortSignal.abort(new Error('caller stopped')))).rejects.toThrow('caller stopped')
   expect(lookup).not.toHaveBeenCalled()
 })
+
+it('contains failed registry observers and still notifies other observers', async () => {
+  ctx = await forgeContext()
+  const warning = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
+  const notified = Promise.withResolvers<string>()
+  ctx.on('forge/providers-changed', () => { throw new Error('observer failed') })
+  ctx.on('forge/providers-changed', (forge) => { notified.resolve(forge) })
+  await provide(ctx, new FakeProvider())
+  expect(await notified.promise).toBe('fake')
+  await vi.waitFor(() => { expect(warning).toHaveBeenCalledWith(expect.stringContaining('provider change listener failed')) })
+})

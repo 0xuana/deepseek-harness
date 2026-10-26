@@ -73,7 +73,7 @@ export interface SessionChangeRequest {
 }
 
 /**
- * Receives the complete visible list after a binding change or a polling result.
+ * Receives the complete visible list after a binding or provider change, or a polling result.
  * @param changeRequests - every visible binding of the watched Session, in first-recorded order.
  */
 export type SessionChangeRequestsListener = (changeRequests: readonly SessionChangeRequest[]) => void

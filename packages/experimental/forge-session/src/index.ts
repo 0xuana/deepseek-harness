@@ -45,7 +45,7 @@ export class ForgeSessionService extends Service {
 
   private readonly home: Context
   private readonly discoveryTimeoutMs: number
-  private readonly watches = new WeakMap<Session, SessionWatch>()
+  private readonly watches = new Map<Session, SessionWatch>()
   private readonly discoveries = new Set<Promise<void>>()
   private readonly sessionLifetimes = new WeakMap<Session, AbortController>()
   private readonly lifetime = new AbortController()
@@ -106,7 +106,7 @@ export class ForgeSessionService extends Service {
    * Watch a Session's visible change requests as an effect on the calling
    * fiber. Every visible change request that a provider recognizes is polled
    * through `ctx.forge` while the Session has a watcher. Listeners receive the
-   * complete list after each later binding change or polling result; read the
+   * complete list after each later binding or provider change, or polling result; read the
    * current list with {@link changeRequests}. Listeners must not throw; a
    * thrown error is logged and skipped.
    * @param session - Session to watch.
@@ -143,6 +143,12 @@ export class ForgeSessionService extends Service {
     this.home.on('session/disposed', (session: Session) => {
       this.sessionLifetimes.get(session)?.abort(new Error('forge-session: Session was disposed'))
       this.sessionLifetimes.delete(session)
+    })
+    this.home.on('forge/providers-changed', () => {
+      for (const watch of [...this.watches.values()]) {
+        this.sync(watch)
+        this.notify(watch)
+      }
     })
   }
 

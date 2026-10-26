@@ -17,6 +17,15 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     forge: ForgeService
   }
+  interface Events {
+    /**
+     * Announces a provider registration or withdrawal after the registry changes.
+     * Listener failures are logged without preventing other listeners from running.
+     * @param forge - family whose provider changed.
+     * @mode parallel
+     */
+    'forge/providers-changed'(forge: string): void | Promise<void>
+  }
 }
 
 type FetchResults = ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>
@@ -99,12 +108,18 @@ export class ForgeService extends Service {
       if (this.providers.has(provider.forge)) throw new Error(`forge: a provider for "${provider.forge}" is already registered`)
       const registration: Registration = { provider, lifetime: new AbortController(), pending: new Set() }
       this.providers.set(provider.forge, registration)
+      for (const watch of this.watches.values()) {
+        if (watch.ref.repository.forge === provider.forge) watch.dueAt = Date.now()
+      }
+      this.providersChanged(provider.forge)
+      this.schedule()
       return async () => {
         this.providers.delete(provider.forge)
         registration.lifetime.abort(new Error(`forge: provider "${provider.forge}" was unregistered`))
         for (const watch of [...this.watches.values()]) {
           if (watch.ref.repository.forge === provider.forge) this.settle(watch, this.missing(provider.forge))
         }
+        this.providersChanged(provider.forge)
         this.schedule()
         await Promise.allSettled(registration.pending)
       }
@@ -203,6 +218,15 @@ export class ForgeService extends Service {
 
   private provider(forge: string): ForgeProvider {
     return this.registration(forge).provider
+  }
+
+  private providersChanged(forge: string): void {
+    if (this.lifetime.signal.aborted) return
+    const task = this.ctx.parallel('forge/providers-changed', forge).catch((error: unknown) => {
+      this.ctx.logger.warn(`forge: provider change listener failed: ${String(error)}`)
+    })
+    this.pending.add(task)
+    void task.then(() => this.pending.delete(task))
   }
 
   private registration(forge: string): Registration {
