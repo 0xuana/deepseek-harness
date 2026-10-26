@@ -10,7 +10,7 @@ import { WebError } from '@deepseek-ai/dsh-web'
 import type { WebFetchBody, WebFetchProvider, WebFetchRequest, WebFetchResult } from '@deepseek-ai/dsh-web'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import type { Response } from 'undici'
-import { classifyContentType, decoderForCharset, isSameOrigin, parseCharset, validateFetchUrl } from './policy.ts'
+import { charsetCandidates, classifyContentType, decodeBody, isSameOrigin, parseCharset, validateFetchUrl } from './policy.ts'
 
 /** Resolved provider limits (the plugin's schemastery Config supplies defaults). */
 export interface HttpFetchLimits {
@@ -121,18 +121,19 @@ export class HttpFetchProvider implements WebFetchProvider {
       throw new WebError(`unsupported content type "${contentType ?? 'unknown'}"`, 'WEB_UNSUPPORTED_CONTENT_TYPE')
     }
 
-    // Resolve the decoder BEFORE reading the body so an unsupported charset
-    // fails without consuming the stream — but cancel the body on that failure
-    // so the socket does not leak (matching the unsupported-content-type path).
-    let decoder: TextDecoder
+    // Resolve the charset candidates BEFORE reading the body so an unsupported
+    // declaration fails without consuming the stream — but cancel the body on
+    // that failure so the socket does not leak (matching the
+    // unsupported-content-type path).
+    let candidates: string[]
     try {
-      decoder = decoderForCharset(parseCharset(contentType))
+      candidates = charsetCandidates(parseCharset(contentType))
     } catch (error: unknown) {
       await response.body?.cancel()
       throw error
     }
     const { bytes, truncatedByBytes } = await this.readCapped(response, signal)
-    const decoded = decoder.decode(bytes)
+    const decoded = decodeBody(bytes, candidates)
     const truncatedByChars = decoded.length > this.limits.maxBodyChars
     const content = truncatedByChars ? decoded.slice(0, this.limits.maxBodyChars) : decoded
     const body: WebFetchBody = kind === 'html' ? { kind: 'html', content } : { kind: 'text', content }

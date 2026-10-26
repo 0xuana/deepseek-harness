@@ -1,7 +1,8 @@
 /**
- * URL validation and content-type classification for the local HTTP(S) fetch
- * provider — the pure, network-free half. The provider's `fetch()` composes
- * these with transport (redirect following, byte caps, decoding).
+ * URL validation, content-type classification, and charset resolution for the
+ * local HTTP(S) fetch provider — the pure, network-free half. The provider's
+ * `fetch()` composes these with transport (redirect following, byte caps,
+ * decoding).
  *
  * @module @deepseek-ai/dsh-web-fetch-http/policy
  */
@@ -84,34 +85,103 @@ export function classifyContentType(contentType: string | null): FetchableKind |
 
 /**
  * Extract the `charset` parameter from a response `Content-Type`, lower-cased,
- * or `undefined` when absent. The provider feeds this label to `TextDecoder`
- * so a non-UTF-8 response is decoded with its declared encoding rather than
- * silently mangled into replacement characters.
+ * or `undefined` when absent. {@link charsetCandidates} resolves the declared
+ * label into decoders; keeping the parameter unprocessed lets a malformed
+ * declaration be reported exactly as the server sent it.
  *
  * @param contentType - the raw `Content-Type` header, or `null` when the
  *   response carries none.
- * @returns the lower-cased charset label, or `undefined` when none is declared.
+ * @returns the lower-cased charset parameter, or `undefined` when none is
+ *   declared.
  */
 export function parseCharset(contentType: string | null): string | undefined {
   const match = /;\s*charset\s*=\s*"?([^";]+)"?/i.exec(contentType ?? '')
   return match?.[1]?.trim().toLowerCase()
 }
 
+/** Canonical `TextDecoder` name of UTF-8, and the default when no charset is declared. */
+const UTF8_ENCODING = 'utf-8'
+
 /**
- * Build a `TextDecoder` for the declared charset, falling back to UTF-8 when
- * none is declared. Throws {@link WebError} `WEB_UNSUPPORTED_CONTENT_TYPE` when
- * the label is present but not a charset `TextDecoder` recognizes — better to
- * fail loudly than return mojibake.
+ * Resolve a declared charset parameter into the encoding labels that can decode
+ * the body, in declaration order. An absent parameter yields the UTF-8 default.
+ * A parameter is split on the comma and whitespace separators that a malformed
+ * header uses to join several labels (`charset=utf-8,gbk`); each label is
+ * replaced by its canonical `TextDecoder` name, so `gb2312` and `gbk` collapse
+ * into one candidate, and labels no encoding has are dropped. Throws
+ * {@link WebError} `WEB_UNSUPPORTED_CONTENT_TYPE` when a declaration is present
+ * but names no recognizable encoding.
  *
- * @param charset - the declared charset label (from {@link parseCharset}), or
- *   `undefined` to default to UTF-8.
- * @returns a decoder for the declared (or defaulted) encoding.
+ * @param charset - the declared charset parameter (from {@link parseCharset}),
+ *   or `undefined` when the response declares none.
+ * @returns the candidate encoding labels; never empty.
  */
-export function decoderForCharset(charset: string | undefined): TextDecoder {
-  if (charset === undefined) return new TextDecoder('utf-8')
-  try {
-    return new TextDecoder(charset)
-  } catch (error: unknown) {
-    throw new WebError(`unsupported charset "${charset}"`, 'WEB_UNSUPPORTED_CONTENT_TYPE', { cause: error })
+export function charsetCandidates(charset: string | undefined): string[] {
+  if (charset === undefined) return [UTF8_ENCODING]
+  const candidates: string[] = []
+  for (const label of charset.split(/[\s,]+/)) {
+    if (label.length === 0) continue
+    const encoding = canonicalEncoding(label)
+    if (encoding !== undefined && !candidates.includes(encoding)) candidates.push(encoding)
   }
+  if (candidates.length === 0) {
+    throw new WebError(`unsupported charset "${charset}"`, 'WEB_UNSUPPORTED_CONTENT_TYPE')
+  }
+  return candidates
+}
+
+/**
+ * Decode a response body with its candidate encodings. One candidate is used as
+ * declared. Several candidates mean the header joined labels a server cannot
+ * mean simultaneously, so the bytes decide: a UTF-8 candidate wins when the body
+ * is valid UTF-8 (a strict decode of legacy multi-byte text as UTF-8 fails,
+ * while those legacy decoders accept UTF-8 sequences too readily to count as
+ * evidence), otherwise the first candidate whose strict decode succeeds. When
+ * no candidate decodes the body the fetch fails rather than returning
+ * replacement characters.
+ *
+ * @param bytes - the complete response body, possibly cut at the byte cap.
+ * @param candidates - the encoding labels from {@link charsetCandidates}.
+ * @returns the decoded text.
+ */
+export function decodeBody(bytes: Uint8Array, candidates: readonly string[]): string {
+  const declared = candidates.length === 1 ? candidates[0] : undefined
+  if (declared !== undefined) return new TextDecoder(declared).decode(bytes)
+  const chosen = chooseEncoding(bytes, candidates)
+  return new TextDecoder(chosen).decode(bytes)
+}
+
+/** Canonical `TextDecoder` name of a label, or `undefined` when no encoding has it. */
+function canonicalEncoding(label: string): string | undefined {
+  try {
+    return new TextDecoder(label).encoding
+  } catch {
+    // A RangeError here means this label names no encoding; a malformed
+    // declaration may still name a usable encoding beside it.
+    return undefined
+  }
+}
+
+/** Whether an encoding decodes the body, tolerating a final sequence cut at the byte cap. */
+function decodesStrictly(encoding: string, bytes: Uint8Array): boolean {
+  try {
+    new TextDecoder(encoding, { fatal: true }).decode(bytes, { stream: true })
+    return true
+  } catch {
+    // A RangeError here means the body holds a sequence this encoding cannot
+    // decode, so the next candidate gets the bytes.
+    return false
+  }
+}
+
+/** Pick the candidate encoding for a multi-label declaration, or throw when none decodes the body. */
+function chooseEncoding(bytes: Uint8Array, candidates: readonly string[]): string {
+  if (candidates.includes(UTF8_ENCODING) && decodesStrictly(UTF8_ENCODING, bytes)) return UTF8_ENCODING
+  for (const encoding of candidates) {
+    if (decodesStrictly(encoding, bytes)) return encoding
+  }
+  throw new WebError(
+    `cannot decode the response body with any declared charset (${candidates.join(', ')})`,
+    'WEB_UNSUPPORTED_CONTENT_TYPE',
+  )
 }

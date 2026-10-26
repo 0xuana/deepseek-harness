@@ -61,7 +61,7 @@ const page = await ctx.web.fetch({ url: 'https://example.com' })
 
 ### Transport behavior
 
-The provider keeps requests anonymous and bounded: it accepts only `http:` and `https:` URLs without embedded credentials and rejects URLs over 2,048 characters. Requests go through the process-wide dispatcher, so the installed proxy policy applies and the system resolver chooses the address; any destination address is allowed. Same-origin redirects are followed; cross-origin redirects fail and require a fresh call. The provider also enforces byte, character, hop, and time caps, rejects unsupported content types, and sends an explicit product `User-Agent`.
+The provider keeps requests anonymous and bounded: it accepts only `http:` and `https:` URLs without embedded credentials and rejects URLs over 2,048 characters. Requests go through the process-wide dispatcher, so the installed proxy policy applies and the system resolver chooses the address; any destination address is allowed. Same-origin redirects are followed; cross-origin redirects fail and require a fresh call. The provider also enforces byte, character, hop, and time caps, rejects unsupported content types, and sends an explicit product `User-Agent`. It also decodes a malformed charset declaration that comma-joins several labels (`charset=utf-8,gbk`): a UTF-8 candidate is used when the body is valid UTF-8, otherwise the first candidate that strictly decodes the body, and a body no candidate decodes fails with `WEB_UNSUPPORTED_CONTENT_TYPE`.
 
 ### Failures and recovery
 
@@ -94,7 +94,7 @@ The package is built on one separation and one layered timeout:
 
 ### Read path
 
-A fetch validates the URL and sends the request. It repeats URL validation for each same-origin redirect; a cross-origin redirect fails before response bytes are accepted. The final response is classified by `Content-Type`, decoded from its declared charset, and read under the byte cap; the decoded text is then truncated to the character cap.
+A fetch validates the URL and sends the request. It repeats URL validation for each same-origin redirect; a cross-origin redirect fails before response bytes are accepted. The final response is classified by `Content-Type`, decoded from its declared charset (a malformed multi-label declaration is resolved against the body), and read under the byte cap; the decoded text is then truncated to the character cap.
 
 </details>
 
@@ -132,7 +132,7 @@ These limits define when the provider is unsafe or a poor fit. They are current 
 
 - **Private destinations are reachable** — loopback, private-network, and cloud metadata addresses are fetched like any other host. A deployment that must keep the model away from them needs a `tools/pre-execute` policy, network confinement, or no fetch tool.
 - **Only textual content decodes** — html/xhtml and `text/*` plus JSON/XML families; a missing `Content-Type` or any binary type throws `WEB_UNSUPPORTED_CONTENT_TYPE`, and text-extractable PDF decoding is named deferred work.
-- **Charset comes only from the `Content-Type` header** (UTF-8 default) — an HTML `<meta charset>` declaration is ignored, and a declared-but-unrecognized charset label throws rather than falling back.
+- **Charset comes only from the `Content-Type` header** (UTF-8 default) — an HTML `<meta charset>` declaration is ignored, and a declared label that names no encoding throws rather than falling back.
 
 <a id="dev-note"></a>
 ### Dev Note
