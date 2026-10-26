@@ -10,7 +10,7 @@
 
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
+import { defineDomain } from '@deepseek-ai/dsh-storage-domain'
 import type { ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame } from './types.ts'
@@ -32,7 +32,7 @@ export const changeRequestStatesDomain = defineDomain({
   version: 1,
   layout: 'per-record',
   invalidRecords: 'backup-and-skip',
-  tables: { states: domainTable<string, ForgeChangeRequestListState>(stateSchema) },
+  tables: { states: { valueSchema: stateSchema } },
 })
 
 /**
