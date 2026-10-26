@@ -13,7 +13,7 @@ import type { Browser, Page, Response } from 'playwright'
 import { chromium } from 'playwright'
 import { strFromU8, unzipSync } from 'fflate'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTestFailed, onTestFinished } from 'vitest'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, createToolResultMessage } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-client-ui-trajectory'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
@@ -38,6 +38,7 @@ const CODE_CARD_EXPECTED = join(CODE_CARD_DIR, 'code-card.expected.md')
 const COPY_MARKDOWN_EXPECTED = join(CODE_CARD_DIR, 'copy-markdown.expected.md')
 const EVICTED_RESULT_EXPECTED = join(CODE_CARD_DIR, 'live-result-evicted.expected.md')
 const LIVE_RESULT_EXPECTED = join(CODE_CARD_DIR, 'live-result.expected.md')
+const RUNNING_RESULT_EXPECTED = join(CODE_CARD_DIR, 'live-result-running.expected.md')
 const MODE = webSnapshotMode()
 const SEED_ID = 'navigation-panes-web-e2e'
 const EXPORTED_LOG_FILE = `session.v${SESSION_FORMAT_VERSION}.jsonl`
@@ -630,7 +631,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
   it.skipIf(MODE === 'record')('keeps the recorded fixture inventory exact', async () => {
     await assertFixtureInventory(CODE_CARD_DIR, [
       'code-card.expected.md', 'command-wrap.expected.md', 'copy-markdown.expected.md',
-      'live-result-evicted.expected.md', 'live-result.expected.md',
+      'live-result-evicted.expected.md', 'live-result.expected.md', 'live-result-running.expected.md',
     ])
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'session.v3.jsonl', 'search-id-results.expected.md', 'search-results.expected.md', 'trajectory.expected.md',
@@ -743,4 +744,105 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     await details.getByText('LIVE_RESULT_RENDERED', { exact: true }).waitFor()
   })
 
+  it.skipIf(MODE === 'record')('keeps long raw strings and PTC output readable in one result scroller', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-long-tool-results'))
+    await ensureSeedOpen(page)
+    await expect.poll(() => scaffold.ctx.agents.get(SessionId(SEED_ID)) !== undefined).toBe(true)
+    const agent = scaffold.ctx.agents.get(SessionId(SEED_ID))!
+    agent.session.append('turn/start', { turn: 3 })
+    onTestFinished(() => {
+      agent.session.append('step/end', { turn: 3, step: 1 })
+      agent.session.append('turn/end', { turn: 3, reason: { kind: 'completed' } })
+    })
+    agent.session.append('step/start', { turn: 3, step: 1 })
+    const callId = ToolCallId('long-ptc-result')
+    const call = agent.session.append('tool/call', {
+      turn: 3, step: 1, callId, name: 'run_code',
+      arguments: JSON.stringify({ code: 'console.log("PTC output")', description: 'Long program output' }),
+    })
+    await page.getByRole('tab', { name: 'Trajectory' }).click()
+    await page.locator('tr[data-kind="tool"]').filter({ hasText: 'Long program output' }).click()
+    const details = page.getByRole('complementary', { name: 'Event details' })
+    await details.getByRole('tab', { name: 'Result', exact: true }).click()
+    const raw = details.getByRole('region', { name: 'Raw result', exact: true })
+    const rendered = details.getByRole('region', { name: 'Rendered result', exact: true })
+    await raw.getByText('Running…', { exact: true }).waitFor()
+    await compareOrRefreshGolden(
+      RUNNING_RESULT_EXPECTED, await captureStableAria(page, '#trajectory-detail-panel', scaffold.workspaceCwd), MODE,
+    )
+    const ptcOutput = [...Array.from({ length: 100 }, (_, i) => `PTC_LINE_${i}`), 'PTC_END'].join('\n')
+    agent.session.append('tool/result', {
+      turn: 3, step: 1,
+      message: createToolResultMessage({ callId, content: [{ type: 'text', text: ptcOutput }], isError: false }),
+    }, { surfaceOp: 'append', sourceEventSeqs: [call.seq] })
+    await rendered.getByText(ptcOutput, { exact: true }).waitFor()
+    const stringValue = 'raw_output_'.repeat(300) + 'RAW_END'
+    const probes = [
+      { name: 'long_string_probe', value: stringValue },
+      { name: 'long_json_probe', value: { detail: 'json_output_'.repeat(120) } },
+    ]
+    for (const probe of probes) {
+      const unregister = scaffold.ctx.tools.register(defineTool({
+        name: probe.name, description: 'Long result layout fixture.', parameters: {},
+        output: {
+          schema: { type: 'json' },
+          render: (_args, value) => [{ type: 'text', text: typeof value === 'string' ? 'STRING_RENDERED' : JSON.stringify(value) }],
+        },
+        execute: async () => probe.value,
+      }))
+      onTestFinished(unregister)
+      const batch = await scaffold.ctx.tools.execute({
+        agent, signal: new AbortController().signal, log: { turn: 3, step: 1 },
+        calls: [{ type: 'tool-call', id: ToolCallId(probe.name), name: probe.name, arguments: '{}' }],
+      })
+      expect(batch.results[0]?.result.isError).toBe(false)
+    }
+    const viewport = page.viewportSize()!
+    try {
+      for (const width of [viewport.width, 390]) {
+        await page.setViewportSize({ width, height: 600 })
+        for (const name of ['Long program output', ...probes.map(probe => probe.name)]) {
+          await details.getByRole('button', { name: 'Close details' }).click()
+          await page.locator('tr[data-kind="tool"]').filter({ hasText: name }).click()
+          await details.getByRole('tab', { name: 'Result', exact: true }).click()
+          if (name === 'long_json_probe') {
+            await raw.getByRole('treeitem').waitFor()
+            const heights = await Promise.all([raw, rendered].map(section =>
+              section.getByRole('treeitem').evaluate(row => row.getBoundingClientRect().height)))
+            expect(heights[0]).toBeGreaterThan(3 * 16)
+            expect(heights[0]).toBe(heights[1])
+          } else {
+            const body = name === 'Long program output' ? rendered : raw
+            await expect.poll(() => body.locator('pre').textContent()).toBe(
+              name === 'Long program output' ? ptcOutput : JSON.stringify(stringValue),
+            )
+          }
+          const panel = details.getByRole('tabpanel')
+          const geometry = await panel.evaluate((element) => {
+            element.scrollTop = element.scrollHeight
+            const bounds = element.getBoundingClientRect()
+            const pre = element.querySelector('pre')
+            let tailVisible = true
+            if (pre?.lastChild !== null && pre?.lastChild !== undefined) {
+              const range = document.createRange()
+              range.selectNodeContents(pre)
+              range.setStart(pre.lastChild, (pre.lastChild.textContent?.length ?? 1) - 1)
+              const tail = range.getBoundingClientRect()
+              tailVisible = tail.top >= bounds.top && tail.bottom <= bounds.bottom
+            }
+            return {
+              scrolls: element.scrollTop > 0 && getComputedStyle(element).overflowY === 'auto',
+              tailVisible,
+              overflowingDescendants: [...element.querySelectorAll('*')].filter(node =>
+                /auto|scroll/.test(getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight + 1).length,
+              horizontalOverflow: element.scrollWidth > element.clientWidth + 1,
+            }
+          })
+          expect(geometry).toEqual({ scrolls: true, tailVisible: true, overflowingDescendants: 0, horizontalOverflow: false })
+        }
+      }
+    } finally {
+      await page.setViewportSize(viewport)
+    }
+  })
 })

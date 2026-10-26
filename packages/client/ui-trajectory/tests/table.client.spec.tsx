@@ -14,7 +14,7 @@ import type { MessageImageLoader, MessageImagesOwnerProps } from '@deepseek-ai/d
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { TrajectoryTable as LocalizedTrajectoryTable } from '../src/client/TrajectoryTable.tsx'
 import { deriveTrajectoryLayout, type TrajectoryTurnModel } from '../src/client/layout.ts'
-import { trajectoryRecordId } from '../src/client/trajectory-record.ts'
+import { trajectoryRecordId, type TrajectoryCellProps } from '../src/client/trajectory-record.ts'
 import { t, tZh } from './locale.client.ts'
 
 const loadImage: MessageImageLoader = async () => 'blob:trajectory'
@@ -1163,6 +1163,27 @@ describe('TrajectoryTable', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Summary' }))
     expect(dispose).toHaveBeenCalledTimes(2)
     view.unmount()
+  })
+
+  it.each(['tool', 'subtool'] as const)('shows an in-flight PTC %s as running before retaining its failure output', (kind) => {
+    const cell: TrajectoryCellProps = {
+      index: 1, kind, text: 'pending-call', timeSeconds: null, toolName: 'run_code',
+      inputDetail: JSON.stringify({ code: 'return 42', description: 'pending-call' }),
+    }
+    const turns = (current: TrajectoryCellProps): readonly TrajectoryTurnModel[] => [
+      { turn: 1, groups: [{ title: 'Step 1', cells: [current] }] },
+    ]
+    const view = render(<TrajectoryTable turns={turns(cell)} {...FOLD_PROPS} />)
+    fireEvent.click(screen.getByRole('row', { name: /pending-call/ }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Result' }))
+    const raw = screen.getByRole('region', { name: 'Raw result' })
+    expect(within(raw).getByText('Running…')).toBeTruthy()
+    expect(within(raw).queryByText('Raw results are only available for live tool calls')).toBeNull()
+    view.rerender(<TrajectoryTable turns={turns({
+      ...cell, isError: true, outputDetail: 'Error: execution failed', timeSeconds: 0.1,
+    })} {...FOLD_PROPS} />)
+    expect(within(raw).getByText('Raw results are only available for live tool calls')).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Rendered result' }).textContent).toContain('Error: execution failed')
   })
 
   it('keeps rendered output visible when the raw value unloads and ignores stale callbacks', () => {

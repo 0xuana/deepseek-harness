@@ -3536,10 +3536,11 @@ export function TrajectoryTable({
                       <h3 className={css.resultTitle}>{t('record.rawResult')}</h3>
                     </header>
                     {resultValue === undefined
-                      ? <p className={css.noPayload}>{t('record.rawResultUnavailable')}</p>
+                      ? <p className={css.noPayload}>{t(stateOf(selected) === 'running' ? 'code.running' : 'record.rawResultUnavailable')}</p>
                       : resultValue !== null && typeof resultValue === 'object'
                         ? <JsonTree data={resultValue} label={t('record.resultJson')}
-                          labels={jsonTreeLabels(t)} stringWrapping={stringWrapping} className={css.jsonPayload} />
+                          labels={jsonTreeLabels(t)} stringWrapping={stringWrapping}
+                          collapsedStringLines={12} className={css.jsonPayload} />
                         : <pre className={css.programOutput}>{JSON.stringify(resultValue)}</pre>}
                   </section>
                   <section className={css.resultSection} aria-label={t('record.renderedResult')}>
