@@ -844,4 +844,15 @@ describe('plain-text reference catalogs', () => {
       { start: 0, end: 14, trigger: '@' },
     ])
   })
+
+  it('matches whole file and folder path tokens, never a directory prefix', () => {
+    const slices = (text: string) => scanTextRefs(text, new Map()).map(range => text.slice(range.start, range.end))
+    expect(slices('@src/deep/file.txt， @"/a/nv/SM100 ISA.html" 看 @"a/ b.md"。 @src/.env @C:\\src\\a.ts @src/de'))
+      .toEqual(['@src/deep/file.txt', '@"/a/nv/SM100 ISA.html"', '@"a/ b.md"', '@src/.env', '@C:\\src\\a.ts', '@src/de'])
+    expect(slices('@"dir a/" @src/deep/。 @dir/ 请看 @"src/"，然后 @"open dir/ x'))
+      .toEqual(['@"dir a/"', '@src/deep/', '@dir/', '@"src/"', '@"open dir/'])
+    expect(slices('@person @"" @"a/b')).toEqual([])
+    expect(slices('@"open @')).toEqual([])
+    expect(slices('drill @"open dir/。')).toEqual(['@"open dir/'])
+  })
 })

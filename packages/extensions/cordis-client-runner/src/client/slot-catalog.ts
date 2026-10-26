@@ -2104,6 +2104,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [
       'client-ui-chat ChatView id \'chat\'',
       'client-ui-trajectory TrajectoryView id \'trajectory\'',
+      'experimental-client-ui-stats StatsView id \'stats\'',
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.view\', () => ctx.slots.register(\n      { name: \'conversation.view\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
@@ -2137,9 +2138,11 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     ownerProps: [
       '/** Native file action selected by an explicit user gesture. */\nexport type PresentedAction = \'open\' | \'reveal\'',
-      '/** Failure feedback for the shared native opening control. */\nexport type PresentedOpenFailure = \'openError\' | \'revealError\' | null',
+      '/**\n * Settled result of one native file gesture, for the contributed control to\n * announce: the Host acknowledged an application open or a file-manager\n * reveal, the gesture failed, or the request was deliberately dropped because\n * the same file was already opening or this controller was disposed. Only an\n * acknowledged operation may be announced as a success.\n */\nexport type PresentedOpenOutcome =\n  | { readonly kind: \'opened\' }\n  | { readonly kind: \'revealed\' }\n  | { readonly kind: \'failed\'; readonly failure: PresentedOpenFailure }\n  | { readonly kind: \'skipped\' }',
     ],
-    ownerPropsReferences: [],
+    ownerPropsReferences: [
+      'PresentedOpenFailure',
+    ],
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
@@ -3504,6 +3507,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [
       'client-ui-chat QuotaNoticeHost id \'chat.quota-notice\'',
       'client-ui-file-drag FileDragFeedback id \'file-drag.feedback\'',
+      'client-ui-open-in-app OpenInAppToast id \'open-in-app.toast\'',
       'client-ui-plugin-manager PluginRefreshToast id \'plugin-manager.refresh-toast\'',
       'client-ui-schedule ScheduleDeleteToast id \'schedule.delete-toast\'',
       'client-ui-settings-account DesktopOnboardingEntry id \'desktop-onboarding\'',

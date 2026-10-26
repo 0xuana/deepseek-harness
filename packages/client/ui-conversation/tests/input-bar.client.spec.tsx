@@ -1938,6 +1938,15 @@ describe('decorations', () => {
     expect(shell.snapshot.draft).toBe('see @src/components/')
   })
 
+  it('a pasted path decorates as one whole file or folder token', async () => {
+    const { view, shell, textarea } = bench()
+    const marks = () => [...view.container.querySelectorAll('[data-composer-text-ref]')].map(el => el.textContent)
+    const text = 'read @"/a/nv/SM100 ISA.html" and @src/deep/file.txt then @src/deep/ first'
+    fireEvent.paste(textarea, { clipboardData: { items: [], getData: () => text } })
+    await vi.waitFor(() => { expect(shell.snapshot.draft).toBe(text) })
+    expect(marks()).toEqual(['@"/a/nv/SM100 ISA.html"', '@src/deep/file.txt', '@src/deep/'])
+  })
+
   it('a plain-text reference keeps its DOM node while typing ahead of it (bug #2793 regression)', () => {
     const { view, shell } = bench()
     act(() => { shell.setDraft('see @src/components/ here') })
