@@ -107,7 +107,9 @@ export class ProgramWorker {
   }
 
   private abortMessage(signal: AbortSignal | undefined): string {
-    return this.retainsState ? 'execution canceled; retained variables were cleared' : messageOf(signal?.reason)
+    if (this.retainsState) return 'execution canceled; retained variables were cleared'
+    const reason: unknown = signal?.reason
+    return typeof reason === 'string' || reason instanceof Error ? messageOf(reason) : 'execution canceled'
   }
 
   private async evaluate(spec: PtcRunSpec, bindings: Map<string, PtcBindingNamespace>): Promise<PtcRunResult> {

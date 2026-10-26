@@ -129,6 +129,21 @@ describe('Node runtime host failures', () => {
     expect(h.resolveExecutable).not.toHaveBeenCalled()
   })
 
+  it.each<[unknown, string]>([
+    [{ kind: 'user' }, 'execution canceled'],
+    [{ kind: 'parent' }, 'execution canceled'],
+    [{ kind: 'hook', reason: 'policy stopped the turn' }, 'execution canceled'],
+    [{ kind: 'disposed' }, 'execution canceled'],
+    [null, 'execution canceled'],
+    [new Error('stop requested'), 'stop requested'],
+    ['stop requested', 'stop requested'],
+  ])('renders pre-start cancellation %j as %s', async (reason, message) => {
+    const h = await setup()
+    const result = await h.start({ ...request, signal: AbortSignal.abort(reason) }, NO_INITIAL_FRAME)
+    expect(result.error).toEqual({ kind: 'abort', message })
+    expect(h.resolveExecutable).not.toHaveBeenCalled()
+  })
+
   it('keeps a null-deadline run active past the numeric ceiling until cancellation', async () => {
     const h = await setup({ timeoutMs: 20, maxTimeoutMs: 40 })
     const booted = Promise.withResolvers<undefined>()
