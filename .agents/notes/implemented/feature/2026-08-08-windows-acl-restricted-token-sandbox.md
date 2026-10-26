@@ -51,3 +51,7 @@ The product-visible Windows roster flip is win32-only, so keyless snapshots that
 The [pwsh executor decision](../../archived/feature/2026-08-01-pwsh-tool-and-executor.md) owns the pwsh-sandbox/tool-pwsh dialect split this rung consumes.
 
 The [delete-confinement decision](2026-09-19-windows-acl-mandatory-integrity-confinement.md) extends this rung with the Low integrity layer and the ambient-delete deny; it supersedes only the delete route documented here.
+
+## Follow-up (2026-10-26): `LUA_TOKEN` is dropped
+
+`CreateRestrictedToken` keeps `DISABLE_MAX_PRIVILEGE | WRITE_RESTRICTED` and no longer passes `LUA_TOKEN`: with that flag, the built-in Administrator user cannot start any process, so every confined launch failed. The write restriction still comes from the restricting SIDs and the Low label.

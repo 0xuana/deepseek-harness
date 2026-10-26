@@ -52,3 +52,7 @@ landstrip 评估在实现前已被否决（未经实战检验；自建 launcher 
 [pwsh 执行器决策](../../archived/feature/2026-08-01-pwsh-tool-and-executor.md)拥有本档所消费的 pwsh-sandbox/tool-pwsh 方言划分。
 
 [删除约束决策](2026-09-19-windows-acl-mandatory-integrity-confinement.zh.md)以 Low 完整性层与环境性删除拒绝扩展本档；它只取代本文档所述的删除路径。
+
+## 后续追记（2026-10-26）：去掉 `LUA_TOKEN`
+
+`CreateRestrictedToken` 仍传 `DISABLE_MAX_PRIVILEGE | WRITE_RESTRICTED`，不再传 `LUA_TOKEN`：带上该标志时，内置 Administrator 用户无法启动任何进程，受限启动全部失败。写限制仍来自 restricting SIDs 与 Low 标签。
