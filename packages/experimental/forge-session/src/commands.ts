@@ -62,8 +62,9 @@ export function changeRequestUrls(text: string): string[] {
 /**
  * Find branches that `git push` output reports as created, updated, forced,
  * or already up to date. Each ref line belongs to the nearest preceding
- * `To <remote>` line. Rejected and deleted refs, tags, and refs outside
- * `refs/heads/` are excluded.
+ * `To <remote>` line. Rejected and deleted refs, new tags, and explicit refs
+ * outside `refs/heads/` are excluded. Unqualified tag updates cannot be
+ * distinguished from branch updates and are included.
  * @param text - rendered shell result, stdout and stderr.
  * @returns distinct pushed branches in order of first appearance.
  */

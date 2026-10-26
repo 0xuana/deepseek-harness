@@ -33,6 +33,11 @@ interface ChangeRequestRef {
 ```
 
 ```ts type-equiv
+/** Canonical identity of a change request across providers; built by `changeRequestKey`. */
+type ChangeRequestKey = Branded<'ChangeRequestKey'>
+```
+
+```ts type-equiv
 /**
  * Host-specific access registered with `ctx.forge`. One provider serves one
  * forge family; methods that take a signal must stop work when it aborts.
@@ -59,6 +64,55 @@ interface ForgeProvider {
 ## Status polling
 
 `ctx.forge.watch` shares one polling loop among the watchers of a change request and delivers every result as an update. Each forge has at most one fetch in flight. The [registry README](../../packages/experimental/forge/README.md#use-this-package) owns the poll cadence, backoff, and timeout rules.
+
+```ts type-equiv
+/** Lifecycle state of a change request. */
+type ChangeRequestState = 'open' | 'closed' | 'merged'
+```
+
+```ts type-equiv
+/** Normalized outcome of one status check. */
+type CheckState = 'pending' | 'success' | 'failure' | 'neutral' | 'skipped' | 'cancelled'
+```
+
+```ts type-equiv
+/** One status check reported for the head commit of a change request. */
+interface ChangeRequestCheck {
+  /** Check name as the host displays it. */
+  readonly name: string
+  /** Normalized check outcome. */
+  readonly state: CheckState
+  /** Web page for the check, or null when the host reports none. */
+  readonly url: string | null
+  /** Workflow that produced the check, or null when the host reports none. */
+  readonly workflow: string | null
+}
+```
+
+```ts type-equiv
+/** Combined outcome of all checks on the head commit. */
+type ChecksRollup = 'none' | 'pending' | 'success' | 'failure'
+```
+
+```ts type-equiv
+/** Whether the change request can merge into its base without conflicts. */
+type Mergeability = 'mergeable' | 'conflicting' | 'unknown'
+```
+
+```ts type-equiv
+/** Aggregate review outcome required by the host's merge rules. */
+type ReviewDecision = 'approved' | 'changes-requested' | 'review-required' | 'none'
+```
+
+```ts type-equiv
+/** Why a provider could not read a change request. */
+interface ForgeFailure {
+  /** `not-found`: the host does not expose it; `unauthenticated`: credentials are missing or rejected; `unavailable`: any other failure. */
+  readonly code: 'not-found' | 'unauthenticated' | 'unavailable'
+  /** Human-readable cause. */
+  readonly message: string
+}
+```
 
 ```ts type-equiv
 /** Status of one change request at the time its provider read it. */
