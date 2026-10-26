@@ -1219,6 +1219,88 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'forge',
+    summary: 'Registry of forge providers.',
+    description: 'Registry of forge providers. Watchers of one change request share a single polling loop; each forge has at most one fetch in flight, which batches every due change request of that forge.',
+    methods: [
+      {
+        signature: 'register(provider: ForgeProvider): () => Promise<void>',
+        description: 'Register the provider of one forge family as an effect on the calling fiber. Watches of that forge receive an `unavailable` failure when the registration ends. Unregistering cancels and awaits its in-flight calls; results from the withdrawn registration are discarded.',
+        parameters: [{ name: 'provider', description: 'provider to serve `provider.forge`.' }],
+        returns: 'the disposer that unregisters the provider and waits for its calls to finish.',
+        throws: ['when another provider already serves the same forge.'],
+      },
+      {
+        signature: 'repositoryFromRemote(url: string): ForgeRepository | undefined',
+        description: 'Map a Git remote URL to a repository through the first provider that serves it.',
+        parameters: [{ name: 'url', description: 'fetch or push URL as Git reports it.' }],
+        returns: 'the repository, or undefined when no provider serves the URL.',
+      },
+      {
+        signature: 'changeRequestFromUrl(url: string): ChangeRequestRef | undefined',
+        description: 'Map a change request web URL through the first provider that serves it.',
+        parameters: [{ name: 'url', description: 'web URL of a pull or merge request.' }],
+        returns: 'the change request, or undefined when no provider serves the URL.',
+      },
+      {
+        signature: 'changeRequestUrl(ref: ChangeRequestRef): string',
+        description: 'Build the canonical web URL of a change request.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }],
+        returns: 'the provider\'s canonical URL.',
+        throws: ['when no provider serves the change request\'s forge.'],
+      },
+      {
+        signature: 'async findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>',
+        description: 'Find open change requests whose head is `branch`, excluding the default branch and forks.',
+        parameters: [{ name: 'repository', description: 'repository served by a registered provider.' }, { name: 'branch', description: 'head branch name on the host.' }, { name: 'signal', description: 'cancellation for the lookup.' }],
+        returns: 'matching change requests, newest first as the provider reports them.',
+        throws: ['when no provider serves the repository\'s forge or the lookup fails.'],
+      },
+      {
+        signature: 'watch(ref: ChangeRequestRef, listener: ChangeRequestListener): () => void',
+        description: 'Watch one change request as an effect on the calling fiber. The first watcher starts polling at once; listeners receive every later result, and `latest` returns the current one. Polling stops when the last watcher leaves. Listeners must not throw; a thrown error is logged and skipped.',
+        parameters: [{ name: 'ref', description: 'change request to poll.' }, { name: 'listener', description: 'receives each polling result.' }],
+        returns: 'the disposer that stops this watch.',
+      },
+      {
+        signature: 'latest(ref: ChangeRequestRef): ChangeRequestUpdate | undefined',
+        description: 'Read the latest polling result of a watched change request.',
+        parameters: [{ name: 'ref', description: 'change request to read.' }],
+        returns: 'the latest result, or undefined before the first result or without a watch.',
+      },
+    ],
+  },
+  {
+    key: 'forgeSession',
+    summary: 'Session-scoped change request bindings.',
+    description: 'Session-scoped change request bindings. The `forgeChangeRequests` projection derives them from `gh pr create` and `git push` results and from `plugin:forge-session/binding` records. After each push result the service looks up open change requests whose head is a pushed branch and records the unbound ones as discovered. Watching a Session polls its visible change requests through `ctx.forge`.',
+    methods: [
+      {
+        signature: 'changeRequests(session: Session): SessionChangeRequest[]',
+        description: 'List the change requests bound to a Session and not dismissed.',
+        parameters: [{ name: 'session', description: 'Session whose bindings are read.' }],
+        returns: 'visible bindings in first-recorded order, each with its latest polling result.',
+      },
+      {
+        signature: 'track(session: Session, url: string): void',
+        description: 'Bind a change request to a Session by URL, or restore a dismissed binding. Appends a `track` record with the provider\'s canonical URL unless the change request is already visible.',
+        parameters: [{ name: 'session', description: 'Session that receives the binding.' }, { name: 'url', description: 'web URL of the change request.' }],
+        throws: ['when no registered provider recognizes the URL.'],
+      },
+      {
+        signature: 'dismiss(session: Session, url: string): void',
+        description: 'Hide a visible binding. Appends a `dismiss` record; a URL that is not visibly bound leaves the log unchanged. Discovery never restores a dismissed binding; `track` does.',
+        parameters: [{ name: 'session', description: 'Session that owns the binding.' }, { name: 'url', description: 'web URL of the change request.' }],
+      },
+      {
+        signature: 'watch(session: Session, listener: SessionChangeRequestsListener): () => void',
+        description: 'Watch a Session\'s visible change requests as an effect on the calling fiber. Every visible change request that a provider recognizes is polled through `ctx.forge` while the Session has a watcher. Listeners receive the complete list after each later binding or provider change, or polling result; read the current list with changeRequests. Listeners must not throw; a thrown error is logged and skipped.',
+        parameters: [{ name: 'session', description: 'Session to watch.' }, { name: 'listener', description: 'receives the complete visible list.' }],
+        returns: 'the disposer that stops this watch.',
+      },
+    ],
+  },
+  {
     key: 'fs',
     summary: 'Abstract filesystem provider.',
     description: 'Abstract filesystem provider. Targets must preserve identity across aliases; reads expose regular UTF-8 text or typed errors, listings are stable and content-free, and mutations are atomic. Optional guards add stale protection without changing the unguarded provider contract.',
@@ -4557,6 +4639,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'inspection', description: 'committed canonical prefix, including the feedback as its last event.' }],
   },
   {
+    name: 'forge/providers-changed',
+    mode: 'parallel',
+    signature: '\'forge/providers-changed\'(forge: string): void | Promise<void>',
+    summary: 'Announces a provider registration or withdrawal after the registry changes.',
+    description: 'Announces a provider registration or withdrawal after the registry changes. Listener failures are logged without preventing other listeners from running.',
+    parameters: [{ name: 'forge', description: 'family whose provider changed.' }],
+  },
+  {
     name: 'fs/edit-intent',
     mode: 'waterfall',
     signature: '\'fs/edit-intent\'(target: FsTarget, actor: object | undefined, next: () => { version: FsVersion } | undefined | Promise<{ version: FsVersion } | undefined>): Promise<{ version: FsVersion } | undefined>',
@@ -5277,6 +5367,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface BashEnvVariableInfo extends BashEnvVariable {\n    contributor: string;\n    key: DshEnvironmentKey;\n}',
   },
   {
+    name: 'BindingOrigin',
+    declaration: 'export type BindingOrigin = \'created\' | \'discovered\' | \'tracked\';',
+  },
+  {
     name: 'BoxProps',
     declaration: 'export interface BoxProps {\n    readonly flexDirection?: \'row\' | \'column\' | undefined;\n    readonly paddingX?: number | undefined;\n    readonly paddingY?: number | undefined;\n    readonly padding?: number | undefined;\n    readonly gap?: number | undefined;\n    readonly border?: boolean | string | undefined;\n    readonly borderColor?: string | undefined;\n    readonly children?: UiNode | undefined;\n}',
   },
@@ -5309,8 +5403,44 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ButtonProps {\n    readonly label: string;\n    readonly hotkey?: string | undefined;\n    readonly disabled?: boolean | undefined;\n    readonly onPress?: (() => unknown) | undefined;\n}',
   },
   {
+    name: 'ChangeRequestCheck',
+    declaration: 'export interface ChangeRequestCheck {\n    readonly name: string;\n    readonly state: CheckState;\n    readonly url: string | null;\n    readonly workflow: string | null;\n}',
+  },
+  {
+    name: 'ChangeRequestKey',
+    declaration: 'export type ChangeRequestKey = Branded<\'ChangeRequestKey\'>;',
+  },
+  {
+    name: 'ChangeRequestListener',
+    declaration: 'export type ChangeRequestListener = (update: ChangeRequestUpdate) => void;',
+  },
+  {
+    name: 'ChangeRequestRef',
+    declaration: 'export interface ChangeRequestRef {\n    readonly repository: ForgeRepository;\n    readonly number: number;\n}',
+  },
+  {
+    name: 'ChangeRequestSnapshot',
+    declaration: 'export interface ChangeRequestSnapshot {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly state: ChangeRequestState;\n    readonly draft: boolean;\n    readonly author: string | null;\n    readonly headBranch: string;\n    readonly headSha: string;\n    readonly baseBranch: string;\n    readonly mergeability: Mergeability;\n    readonly reviewDecision: ReviewDecision;\n    readonly checks: readonly ChangeRequestCheck[];\n    readonly checksRollup: ChecksRollup;\n    readonly checksTruncated: boolean;\n    readonly unresolvedThreads: number;\n    readonly updatedAt: string;\n}',
+  },
+  {
+    name: 'ChangeRequestState',
+    declaration: 'export type ChangeRequestState = \'open\' | \'closed\' | \'merged\';',
+  },
+  {
+    name: 'ChangeRequestUpdate',
+    declaration: 'export type ChangeRequestUpdate = {\n    readonly key: ChangeRequestKey;\n    readonly fetchedAt: number;\n} & ({\n    readonly snapshot: ChangeRequestSnapshot;\n} | {\n    readonly failure: ForgeFailure;\n});',
+  },
+  {
     name: 'ChangeResult',
     declaration: 'export interface ChangeResult {\n    changed: boolean;\n    application: \'applied\' | \'restart-required\' | \'overridden\' | \'failed\' | \'cancelled\';\n    restartReason?: RestartReason;\n    stage: \'install\' | \'enable\' | \'remove\';\n    target: string;\n    enabled?: boolean;\n    error?: ManagementError;\n    warnings?: string[];\n    packageResult?: PackageResult;\n    bundle?: string;\n    version?: string;\n    pendingBuilds?: string[];\n    approvedBuilds?: string[];\n    registries?: Registry[];\n    failedAt?: \'registry\' | \'spec-host\';\n}',
+  },
+  {
+    name: 'ChecksRollup',
+    declaration: 'export type ChecksRollup = \'none\' | \'pending\' | \'success\' | \'failure\';',
+  },
+  {
+    name: 'CheckState',
+    declaration: 'export type CheckState = \'pending\' | \'success\' | \'failure\' | \'neutral\' | \'skipped\' | \'cancelled\';',
   },
   {
     name: 'ClientArtifactBaseline',
@@ -5863,6 +5993,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'FinishReasonMap',
     declaration: 'export interface FinishReasonMap {\n    \'stop\': {\n        kind: \'stop\';\n    };\n    \'tool-calls\': {\n        kind: \'tool-calls\';\n    };\n    \'max-tokens\': {\n        kind: \'max-tokens\';\n    };\n    \'aborted\': {\n        kind: \'aborted\';\n        failure: LlmFailure;\n    };\n    \'error\': {\n        kind: \'error\';\n        failure: LlmFailure;\n    };\n}',
+  },
+  {
+    name: 'ForgeFailure',
+    declaration: 'export interface ForgeFailure {\n    readonly code: \'not-found\' | \'unauthenticated\' | \'unavailable\';\n    readonly message: string;\n}',
+  },
+  {
+    name: 'ForgeProvider',
+    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>;\n}',
+  },
+  {
+    name: 'ForgeRepository',
+    declaration: 'export interface ForgeRepository {\n    readonly forge: string;\n    readonly host: string;\n    readonly owner: string;\n    readonly name: string;\n}',
   },
   {
     name: 'FrequencyTooHighError',
@@ -6475,6 +6617,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'McpResourceRequest',
     declaration: 'export type McpResourceRequest = {\n    method: \'resources/list\' | \'resources/templates/list\';\n    cursor?: string;\n} | {\n    method: \'resources/read\';\n    uri: string;\n};',
+  },
+  {
+    name: 'Mergeability',
+    declaration: 'export type Mergeability = \'mergeable\' | \'conflicting\' | \'unknown\';',
   },
   {
     name: 'Message',
@@ -7257,6 +7403,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ResumeAgentOptions {\n    readonly resumeSessionId: SessionId;\n    readonly parentAgent?: Agent;\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
   },
   {
+    name: 'ReviewDecision',
+    declaration: 'export type ReviewDecision = \'approved\' | \'changes-requested\' | \'review-required\' | \'none\';',
+  },
+  {
     name: 'RpcId',
     declaration: 'export type RpcId = Branded<\'rpc-id\'>;',
   },
@@ -7483,6 +7633,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionCancelValue',
     declaration: 'export interface SessionCancelValue {\n    readonly accepted: true;\n}',
+  },
+  {
+    name: 'SessionChangeRequest',
+    declaration: 'export interface SessionChangeRequest {\n    readonly url: string;\n    readonly origin: BindingOrigin;\n    readonly ref: ChangeRequestRef | null;\n    readonly update: ChangeRequestUpdate | null;\n}',
+  },
+  {
+    name: 'SessionChangeRequestsListener',
+    declaration: 'export type SessionChangeRequestsListener = (changeRequests: readonly SessionChangeRequest[]) => void;',
   },
   {
     name: 'SessionControlBaseline',

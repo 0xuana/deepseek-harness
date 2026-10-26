@@ -108,6 +108,10 @@ const windowsRunnerCoverageExclusions = process.platform === 'win32'
       'packages/session/session-persistence-jsonl/src/lease.ts',
       // The macOS provider transport uses Unix sockets; POSIX lanes cover its real socket lifecycle.
       'packages/experimental/cua-macos/src/shared-native.ts',
+      // The GitHub CLI runner's suite stands in for `gh` with POSIX shell
+      // scripts and skips on Windows: the Linux and macOS lanes hold its
+      // per-file 100%, while the provider suite pins its callers everywhere.
+      'packages/experimental/forge-github/src/gh.ts',
     ]
   : []
 
