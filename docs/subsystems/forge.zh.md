@@ -699,8 +699,8 @@ watch(ref: ChangeRequestRef, listener: ChangeRequestListener): () => void
 
 /**
  * Poll a watched change request at once, including after a terminal state.
- * A fetch already in flight for its forge serves the request; an unwatched
- * change request is unchanged.
+ * A fetch already in flight is followed immediately by another fetch; an
+ * unwatched change request is unchanged.
  * @param ref - change request to poll.
  */
 refresh(ref: ChangeRequestRef): void

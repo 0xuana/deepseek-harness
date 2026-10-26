@@ -94,7 +94,7 @@ export class ForgeService extends Service {
       return () => {
         this.providers.delete(provider.forge)
         for (const watch of this.watches.values()) {
-          if (watch.ref.repository.forge === provider.forge) this.settle(watch, this.missing(provider.forge))
+          if (watch.ref.repository.forge === provider.forge) this.settle(watch, this.missing(provider.forge), undefined)
         }
         this.schedule()
       }
@@ -258,8 +258,8 @@ export class ForgeService extends Service {
 
   /**
    * Poll a watched change request at once, including after a terminal state.
-   * A fetch already in flight for its forge serves the request; an unwatched
-   * change request is unchanged.
+   * A fetch already in flight is followed immediately by another fetch; an
+   * unwatched change request is unchanged.
    * @param ref - change request to poll.
    */
   refresh(ref: ChangeRequestRef): void {
@@ -342,12 +342,12 @@ export class ForgeService extends Service {
     for (const watch of batch) {
       if (this.watches.get(watch.key) !== watch) continue
       const result = failure ?? results?.get(watch.key) ?? { code: 'unavailable', message: `provider returned no result for ${watch.key}` }
-      this.settle(watch, result)
+      this.settle(watch, result, watch.dueAt)
     }
     this.schedule()
   }
 
-  private settle(watch: Watch, result: ChangeRequestSnapshot | ForgeFailure): void {
+  private settle(watch: Watch, result: ChangeRequestSnapshot | ForgeFailure, refreshAt: number | undefined): void {
     const fetchedAt = Date.now()
     let update: ChangeRequestUpdate
     if ('code' in result) {
@@ -359,7 +359,8 @@ export class ForgeService extends Service {
     }
     watch.latest = update
     const delay = nextPollDelay(result, watch.failures, this.config)
-    watch.dueAt = delay === undefined ? undefined : fetchedAt + delay
+    // A refresh requested after this fetch started needs a subsequent fetch, even for a terminal result.
+    watch.dueAt = refreshAt ?? (delay === undefined ? undefined : fetchedAt + delay)
     for (const listener of [...watch.listeners]) {
       try {
         listener(update)

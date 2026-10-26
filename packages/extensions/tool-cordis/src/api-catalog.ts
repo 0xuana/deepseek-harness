@@ -1306,7 +1306,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'refresh(ref: ChangeRequestRef): void',
-        description: 'Poll a watched change request at once, including after a terminal state. A fetch already in flight for its forge serves the request; an unwatched change request is unchanged.',
+        description: 'Poll a watched change request at once, including after a terminal state. A fetch already in flight is followed immediately by another fetch; an unwatched change request is unchanged.',
         parameters: [{ name: 'ref', description: 'change request to poll.' }],
       },
       {
