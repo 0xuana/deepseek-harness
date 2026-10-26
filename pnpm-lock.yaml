@@ -19,6 +19,8 @@ patchedDependencies:
   app-builder-lib@26.17.0: b70dc2a2a78ffabb80a4f14fafc7c103237f2b0a207e1f296fa1c1387ea29348
   exceljs@4.4.0: c1bf8ac8f319dab382f08e3a669b715e691d46c703ac5a4163eb383fbedd1d48
   lexical@0.49.0: 54c4413db208cf234cb68c6a837f2523d3b319aa17911f1da385af08362e1356
+  mdast-util-gfm-autolink-literal@2.0.1: 52891f84fbc268311cc9229fc2447d0a5557010eb3faace21c5e72a086031e46
+  micromark-extension-gfm-autolink-literal@2.1.0: d9ea8de22e086b2711ec954c5b76eaf93e7b8503854de02ca557632fa7ccb4d2
   node-pty@1.2.0-beta.15: 9d30053266d0f39d3debe894c675867f6782da6bcadbc94a693b3cfb9eff8ed0
 
 importers:
@@ -31118,7 +31120,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  mdast-util-gfm-autolink-literal@2.0.1:
+  mdast-util-gfm-autolink-literal@2.0.1(patch_hash=52891f84fbc268311cc9229fc2447d0a5557010eb3faace21c5e72a086031e46):
     dependencies:
       '@types/mdast': 4.0.4
       ccount: 2.0.1
@@ -31166,7 +31168,7 @@ snapshots:
   mdast-util-gfm@3.1.0(supports-color@9.4.0):
     dependencies:
       mdast-util-from-markdown: 2.0.3(supports-color@9.4.0)
-      mdast-util-gfm-autolink-literal: 2.0.1
+      mdast-util-gfm-autolink-literal: 2.0.1(patch_hash=52891f84fbc268311cc9229fc2447d0a5557010eb3faace21c5e72a086031e46)
       mdast-util-gfm-footnote: 2.1.0(supports-color@9.4.0)
       mdast-util-gfm-strikethrough: 2.0.0(supports-color@9.4.0)
       mdast-util-gfm-table: 2.0.0(supports-color@9.4.0)
@@ -31270,7 +31272,7 @@ snapshots:
       micromark-util-symbol: 2.0.1
       micromark-util-types: 2.0.2
 
-  micromark-extension-gfm-autolink-literal@2.1.0:
+  micromark-extension-gfm-autolink-literal@2.1.0(patch_hash=d9ea8de22e086b2711ec954c5b76eaf93e7b8503854de02ca557632fa7ccb4d2):
     dependencies:
       micromark-util-character: 2.1.1
       micromark-util-sanitize-uri: 2.0.1
@@ -31319,7 +31321,7 @@ snapshots:
 
   micromark-extension-gfm@3.0.0:
     dependencies:
-      micromark-extension-gfm-autolink-literal: 2.1.0
+      micromark-extension-gfm-autolink-literal: 2.1.0(patch_hash=d9ea8de22e086b2711ec954c5b76eaf93e7b8503854de02ca557632fa7ccb4d2)
       micromark-extension-gfm-footnote: 2.1.0
       micromark-extension-gfm-strikethrough: 2.1.0
       micromark-extension-gfm-table: 2.1.1
