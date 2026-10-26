@@ -303,8 +303,16 @@
 }
 
 .filePath {
+  display: flex;
   flex: 1;
   min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
 }
 
 .chevron {
@@ -602,6 +610,7 @@
 .localView:focus-visible,
 .localToggle:focus-visible,
 .fileToggle:focus-visible,
+.filePath:focus-visible,
 .localFile:focus-visible,
 .select:focus-visible,
 .gap:focus-visible {

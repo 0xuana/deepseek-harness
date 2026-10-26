@@ -484,6 +484,7 @@ export function ChangesTab({
               badge={badgeOf(file, data, t)}
               tooltip={pathTooltipOf(file, t)}
               actions={fileActions(data, file)}
+              onCopyPath={() => { copyPath(path) }}
               sectionRef={(element) => {
                 if (element === null) sections.current.delete(path)
                 else sections.current.set(path, element)
