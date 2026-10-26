@@ -307,6 +307,14 @@ type WorktreeRecord =
 ```
 
 ```ts type-equiv
+/** One open worktree request. */
+interface ForgeWorktreeRequest {
+  /** Base branch, or null for HEAD of the source checkout. */
+  readonly from: string | null
+}
+```
+
+```ts type-equiv
 /** Why the Session's checkout cannot host a new worktree. */
 type ForgeWorktreeBlocker =
   /** The current directory is not inside a Git checkout. */
