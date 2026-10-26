@@ -250,14 +250,18 @@ describe('HttpFetchProvider charset recovery', () => {
     expect((await provider().fetch({ url: base })).body.content).toBe('\uFFFD')
   })
 
-  it('omits an incomplete UTF-8 suffix only when the byte cap cuts the response', async () => {
+  it.each([
+    ['中文', 5, true],
+    ['中文', 3, true],
+    ['中', 3, false],
+  ] as const)('returns complete UTF-8 characters for %j with byte cap %i (truncated: %s)', async (body, maxResponseBytes, truncated) => {
     handler = (_req, res) => {
       res.writeHead(200, { 'content-type': 'text/plain; charset=gbk,utf-8' })
-      res.end('中文')
+      res.end(body)
     }
-    const result = await provider({ maxResponseBytes: 5 }).fetch({ url: base })
+    const result = await provider({ maxResponseBytes }).fetch({ url: base })
     expect(result.body.content).toBe('中')
-    expect(result.truncated).toBe(true)
+    expect(result.truncated).toBe(truncated)
   })
 
   it('validates EOF when the response exactly fills the byte cap', async () => {
@@ -265,8 +269,10 @@ describe('HttpFetchProvider charset recovery', () => {
       res.writeHead(200, { 'content-type': 'text/plain; charset=gbk,utf-8' })
       res.end(Buffer.from([0xE4, 0xB8]))
     }
-    await expect(provider({ maxResponseBytes: 2 }).fetch({ url: base }))
-      .rejects.toThrow(expect.objectContaining({ code: 'WEB_UNSUPPORTED_CONTENT_TYPE' }))
+    await expect(provider({ maxResponseBytes: 2 }).fetch({ url: base })).rejects.toThrow(expect.objectContaining({
+      code: 'WEB_UNSUPPORTED_CONTENT_TYPE',
+      message: 'response body is not valid UTF-8 for the malformed charset declaration',
+    }))
   })
 
   it('rejects invalid UTF-8 before the truncated suffix', async () => {
@@ -274,8 +280,10 @@ describe('HttpFetchProvider charset recovery', () => {
       res.writeHead(200, { 'content-type': 'text/plain; charset=gbk,utf-8' })
       res.end(Buffer.from([0x81, 0x20, 0x61]))
     }
-    await expect(provider({ maxResponseBytes: 2 }).fetch({ url: base }))
-      .rejects.toThrow(expect.objectContaining({ code: 'WEB_UNSUPPORTED_CONTENT_TYPE' }))
+    await expect(provider({ maxResponseBytes: 2 }).fetch({ url: base })).rejects.toThrow(expect.objectContaining({
+      code: 'WEB_UNSUPPORTED_CONTENT_TYPE',
+      message: 'response body is not valid UTF-8 for the malformed charset declaration',
+    }))
   })
 
   it('uses UTF-8 even when a long body also forms valid GBK', async () => {
