@@ -1,6 +1,7 @@
 /** Recognition of shell commands and output that bind change requests to a Session. */
 
 import type { CommandEvidence } from './types.ts'
+import { ghReferences } from './references.ts'
 
 /** One branch a `git push` output reported as updated. */
 export interface PushedRef {
@@ -12,7 +13,6 @@ export interface PushedRef {
 
 const CREATE_COMMAND = /\bgh\s+pr\s+(?:create|new)\b/
 const REFERENCE_COMMAND = /\bgh\s+pr\s+(?:view|edit|checkout)\b/
-const NAMED_CHANGE_REQUEST = /\bgh\s+pr\s+(?:view|edit|checkout)\s+['"]?(https?:\/\/[^\s"'<>]+?\/pull\/\d+)(?![\w-])/g
 const OWN_URL_LINE = /^(?:url:\s+)?(https?:\/\/[^\s"'<>]+?\/pull\/\d+)\/?$/
 const OWN_URL_MEMBER = /"url"\s*:\s*"(https?:\/\/[^\s"'<>]+?\/pull\/\d+)\/?"/g
 const PUSH_COMMAND = /\bgit(?:\s+(?:-[Cc]\s+\S+|--[\w-]+(?:=\S+)?))*\s+push\b/
@@ -42,7 +42,8 @@ export function commandOf(argumentsJson: string): string | undefined {
  * Classify the binding evidence a command and its output can carry.
  * `gh pr create` (or its alias `gh pr new`) prints the change request URL;
  * `gh pr view`, `gh pr edit`, and `gh pr checkout` act on one change request,
- * which their first argument can name and their output can print; `git push`,
+ * which a URL or a number with an explicit repository and host can name;
+ * their output can also print its URL. `git push`,
  * with or without leading `-C`, `-c`, and long options, prints the updated
  * refs. When a command does both, the URLs a result prints bind as created.
  * The match is textual, so quoted mentions also classify; the result parsers
@@ -52,10 +53,11 @@ export function commandOf(argumentsJson: string): string | undefined {
  */
 export function commandEvidence(command: string): CommandEvidence | undefined {
   const create = CREATE_COMMAND.test(command)
-  const reference = REFERENCE_COMMAND.test(command)
+  const references = ghReferences(command)
+  const reference = REFERENCE_COMMAND.test(command) || references.length > 0
   const pushes = PUSH_COMMAND.test(command)
   if (!create && !reference && !pushes) return undefined
-  const named = reference ? [...new Set(Array.from(command.matchAll(NAMED_CHANGE_REQUEST), ([, url = '']) => url))] : []
+  const named = [...new Set(references.flatMap(reference => reference.url === null ? [] : [reference.url]))]
   return { urls: create ? 'created' : reference ? 'referenced' : null, pushes, named }
 }
 
@@ -90,8 +92,9 @@ export function ownChangeRequestUrls(text: string): string[] {
 /**
  * Find branches that `git push` output reports as created, updated, forced,
  * or already up to date. Each ref line belongs to the nearest preceding
- * `To <remote>` line. Rejected and deleted refs, tags, and refs outside
- * `refs/heads/` are excluded.
+ * `To <remote>` line. Rejected and deleted refs, new tags, and explicit refs
+ * outside `refs/heads/` are excluded. Unqualified tag updates cannot be
+ * distinguished from branch updates and are included.
  * @param text - rendered shell result, stdout and stderr.
  * @returns distinct pushed branches in order of first appearance.
  */

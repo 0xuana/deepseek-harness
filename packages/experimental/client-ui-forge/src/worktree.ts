@@ -19,7 +19,7 @@ import type {
 /** Plugin record type of worktree requests, withdrawals, and creations. */
 export const WORKTREE_RECORD = 'plugin:client-ui-forge/worktree'
 
-const EMPTY: Omit<ForgeWorktreeState, 'cwd'> = { request: null, created: null, locked: false, stepped: false }
+const EMPTY: Omit<ForgeWorktreeState, 'cwd'> = { request: null, created: null, locked: false, stepped: false, restoring: false }
 
 const worktreeSchema: z.ZodType<ForgeSessionWorktree> = z.object({
   path: z.string().min(1),
@@ -33,6 +33,8 @@ const recordSchema: z.ZodType<WorktreeRecord> = z.discriminatedUnion('action', [
   z.object({ action: z.literal('request'), from: z.string().min(1).nullable() }).strict(),
   z.object({ action: z.literal('cancel') }).strict(),
   z.object({ action: z.literal('created'), worktree: worktreeSchema }).strict(),
+  z.object({ action: z.literal('restoring') }).strict(),
+  z.object({ action: z.literal('restored') }).strict(),
 ])
 
 const stateSchema: z.ZodType<ForgeWorktreeState> = z.object({
@@ -40,6 +42,7 @@ const stateSchema: z.ZodType<ForgeWorktreeState> = z.object({
   created: worktreeSchema.nullable(),
   locked: z.boolean(),
   stepped: z.boolean(),
+  restoring: z.boolean(),
   cwd: z.string().min(1).nullable(),
 }).strict()
 
@@ -50,10 +53,11 @@ const stateSchema: z.ZodType<ForgeWorktreeState> = z.object({
  * periods leave the state unchanged. The unit also follows the Session's
  * working directory, so clients, including the Session summary, see the
  * created worktree only while that directory is the worktree or lies below it.
+ * Restoration records retain incomplete checkout recovery across reloads.
  */
 export const forgeWorktreeProjection = {
   key: 'forgeWorktree',
-  stateVersion: 3,
+  stateVersion: 4,
   stateSchema,
   init: header => ({ ...EMPTY, cwd: header.cwd ?? null }),
   apply,
@@ -111,6 +115,10 @@ function applyRecord(state: ForgeWorktreeState, event: SessionEvent): ForgeWorkt
       return state.locked || settled || state.request === null ? state : { ...state, request: null }
     case 'created':
       return settled || state.stepped || state.request === null ? state : { ...state, created: data.worktree }
+    case 'restoring':
+      return !settled || state.restoring ? state : { ...state, restoring: true }
+    case 'restored':
+      return !state.restoring ? state : { ...state, restoring: false }
     /* v8 ignore next -- closed WorktreeRecord action union exhaustiveness guard */
     default: return assertNever(data, 'WorktreeRecord.action')
   }
@@ -189,6 +197,9 @@ export class WorktreeCreations {
   private readonly failures = new Map<Session, ForgeWorktreeFailure>()
   private readonly holds = new Map<Session, Hold>()
   private readonly lifetime = new AbortController()
+  private readonly pending = new Set<Promise<unknown>>()
+  /** Stop admission, cancel operations, and wait for their final callbacks. */
+  readonly dispose: () => Promise<void>
 
   /**
    * @param ctx - context that optionally provides `worktrees`.
@@ -204,7 +215,10 @@ export class WorktreeCreations {
     private readonly changed: (session: Session) => void,
   ) {
     ctx.on('agent/pre-step', async ({ agent, step, signal }, next): Promise<PreStepDecision> => await this.preStep(agent, step, signal, next))
-    ctx.effect(() => () => { this.lifetime.abort(new Error('The forge panel stopped')) }, 'forge-panel: release waiting messages')
+    this.dispose = ctx.effect(() => async () => {
+      this.lifetime.abort(new Error('The forge panel stopped'))
+      await Promise.allSettled(this.pending)
+    }, 'forge-panel: stop worktree operations')
   }
 
   /**
@@ -331,6 +345,7 @@ export class WorktreeCreations {
    * @param created - the worktree the Session created.
    * @param signal - cancellation of the restoration.
    * @param restored - runs once the checkout is back, before the restoration ends, so both changes publish together.
+   * @param available - checks whether the recorded checkout is already usable, within this operation's lifetime.
    * @throws the worktree service's error when the restoration fails; the cancellation reason once `signal` aborts.
    */
   async restore(
@@ -339,13 +354,31 @@ export class WorktreeCreations {
     created: ForgeSessionWorktree,
     signal: AbortSignal,
     restored: () => void,
+    available: (signal: AbortSignal) => Promise<boolean>,
+  ): Promise<void> {
+    await this.run(signal, async (operation) => {
+      const usable = await available(operation)
+      operation.throwIfAborted()
+      if (!usable) await this.restoreCheckout(agent, worktrees, created, operation, restored)
+    })
+  }
+
+  private async restoreCheckout(
+    agent: Agent,
+    worktrees: Context['worktrees'],
+    created: ForgeSessionWorktree,
+    signal: AbortSignal,
+    restored: () => void,
   ): Promise<void> {
     const session = agent.session
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'restoring' })
     try {
       await worktrees.restore(agent, created, signal, (phase) => {
         this.restorations.set(session, { phase })
         this.changed(session)
       })
+      signal.throwIfAborted()
+      appendPluginRecord(session, WORKTREE_RECORD, { action: 'restored' })
       restored()
     } finally {
       this.restorations.delete(session)
@@ -365,6 +398,10 @@ export class WorktreeCreations {
    * @throws {@link CreationFailure} when the attempt fails; the cancellation reason once `signal` aborts.
    */
   async create(agent: Agent, from: string | null, signal: AbortSignal, held: boolean): Promise<CreatedWorktree> {
+    return await this.run(signal, operation => this.createCheckout(agent, from, operation, held))
+  }
+
+  private async createCheckout(agent: Agent, from: string | null, signal: AbortSignal, held: boolean): Promise<CreatedWorktree> {
     const worktrees = this.ctx.get('worktrees')
     if (worktrees === undefined) throw new Error('No worktree service is mounted')
     const session = agent.session
@@ -384,6 +421,7 @@ export class WorktreeCreations {
         signal.throwIfAborted()
         throw new CreationFailure(status.branch, status.phase, messageOf(error), error)
       }
+      signal.throwIfAborted()
       const worktree: ForgeSessionWorktree = {
         path: created.path, branch: created.branch, from, baseCommit: created.baseCommit, repositoryRoot: created.repositoryRoot,
       }
@@ -403,6 +441,7 @@ export class WorktreeCreations {
    * @param body - waits for the worktree; settles once the message may go on.
    */
   private hold<H extends Hold>(agent: Agent, hold: H, body: (hold: H, signal: AbortSignal) => Promise<void>): void {
+    if (this.lifetime.signal.aborted) return
     const session = agent.session
     if (this.holds.has(session)) return
     let task: Promise<void>
@@ -425,7 +464,22 @@ export class WorktreeCreations {
       return
     }
     this.holds.set(session, hold)
-    void task
+    void this.join(task)
+  }
+
+  private async run<T>(signal: AbortSignal, body: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const operation = AbortSignal.any([signal, this.lifetime.signal])
+    operation.throwIfAborted()
+    return await this.join(body(operation))
+  }
+
+  private async join<T>(task: Promise<T>): Promise<T> {
+    this.pending.add(task)
+    try {
+      return await task
+    } finally {
+      this.pending.delete(task)
+    }
   }
 
   /**

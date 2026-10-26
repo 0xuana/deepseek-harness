@@ -66,6 +66,7 @@ function tab(state: ForgePanelState | null, options: { disconnected?: boolean; v
     sessionId: SESSION,
     usePanel: bindSnapshotSelector(panel),
     useHost: bindSnapshotSelector(host),
+    useLocale: bindSnapshotSelector(createSnapshotStore<string>('en')),
     reconnect, refresh, remove, markReady, merge, restore, openLink, copyText, copyPath, reportVisible, createChangeRequest,
     t,
   }
@@ -182,9 +183,15 @@ describe('ForgeTab checkout', () => {
     const b = tab(ready({ directory: '/work/repo-dsh', worktree: worktree({ created: made }) }, { root: '/work/repo-dsh', branch: 'other', linked: true }))
     const row = checkoutRow(b.view)
     if (row === null) throw new Error('no checkout row')
-    expect(row.textContent).toBe(`dsh/0a1b2c3d${kind}`)
+    expect(row.textContent).toBe(`other${kind}`)
     fireEvent.click(within(row).getByRole('button', { name: en['checkout.copyWorktreePath'] }))
     expect(b.copyPath).toHaveBeenCalledWith('/work/repo-dsh')
+  })
+
+  it('shows detached HEAD in the worktree the Session created', () => {
+    const b = tab(ready({ directory: '/work/repo-dsh', worktree: worktree({ created: created({ path: '/work/repo-dsh' }) }) },
+      { root: '/work/repo-dsh', branch: null, commit: 'abc1234', linked: true }))
+    expect(checkoutRow(b.view)?.textContent).toBe(`${en['checkout.detached']}·abc1234Worktree · from main`)
   })
 
   it('names a removed worktree and restores it on request', () => {

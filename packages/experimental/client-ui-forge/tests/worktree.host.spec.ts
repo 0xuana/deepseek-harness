@@ -29,7 +29,7 @@ const WORKTREE: ForgeSessionWorktree = {
 }
 
 /** The state before any worktree record, turn, step, or directory change of a Session without a recorded directory. */
-const EMPTY: ForgeWorktreeState = { request: null, created: null, locked: false, stepped: false, cwd: null }
+const EMPTY: ForgeWorktreeState = { request: null, created: null, locked: false, stepped: false, cwd: null, restoring: false }
 
 /** A live Session whose `forgeWorktree` state a registry folds without the panel Remote. */
 async function folded(): Promise<{ ctx: Context; session: Session; state: () => ForgeWorktreeState }> {
@@ -73,6 +73,24 @@ describe('forgeWorktree projection', () => {
 
   it('starts from the directory the Session header records', () => {
     expect(forgeWorktreeProjection.init(plainSession('/work/repo').header)).toEqual({ ...EMPTY, cwd: '/work/repo' })
+  })
+
+  it('replays incomplete restoration until an explicit successful completion', async () => {
+    const { session, state } = await folded()
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'restoring' })
+    expect(state().restoring).toBe(false)
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from: null })
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'created', worktree: WORKTREE })
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'restoring' })
+    expect(state().restoring).toBe(true)
+    const checkpoint = state()
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'restoring' })
+    expect(state()).toBe(checkpoint)
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'restored' })
+    expect(state().restoring).toBe(false)
+    const restored = state()
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'restored' })
+    expect(state()).toBe(restored)
   })
 
   it('starts without a request, a created worktree, a started turn, or a started step', async () => {
@@ -165,7 +183,7 @@ describe('forgeWorktree projection', () => {
     startTurn(session, 3)
 
     expect(locked).toEqual({ ...EMPTY, locked: true })
-    expect(stepped).toEqual({ ...EMPTY, locked: true, stepped: true })
+    expect(stepped).toEqual({ ...EMPTY, locked: true, stepped: true, restoring: false })
     expect(state()).toBe(stepped)
   })
 
@@ -531,4 +549,14 @@ describe('worktree creation at the first step proposal', () => {
     expect(opened.changes).toEqual([])
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
   })
+})
+
+
+it('does not admit a new message hold after worktree operations stop', async () => {
+  const opened = await creating(await project())
+  request(opened, null)
+  await opened.creations.dispose()
+  opened.creations.holdCreation(opened.agent)
+  expect(opened.creations.waitingOf(opened.session)).toBeNull()
+  expect(opened.changes).toEqual([])
 })

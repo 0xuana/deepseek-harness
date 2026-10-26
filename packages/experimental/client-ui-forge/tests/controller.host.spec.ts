@@ -9,6 +9,7 @@ import WorktreeService from '@deepseek-ai/dsh-experimental-worktree'
 import ForgePanelController from '../src/index.ts'
 import type { Config, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState } from '../src/index.ts'
 import { WORKTREE_RECORD } from '../src/worktree.ts'
+import { missingWorktree } from '../src/panel.ts'
 import {
   bench, branches, commitAt, demo, follow, git, hold, notice, prompt, proposeStep, pullUrl,
   rejectionOf, repository, scratch, sendPrompt, shellTurn, snapshot, startStep, startTurn,
@@ -714,7 +715,7 @@ describe('forgePanel worktree requests', () => {
 
     await expect(opened.ctx.forgePanel.requestWorktree(opened.session, 'main', signal)).rejects.toMatchObject({ code: 'forgePanel/session-started' })
     await expect(opened.ctx.forgePanel.cancelWorktree(opened.session, signal)).rejects.toMatchObject({ code: 'forgePanel/session-started' })
-    expect(worktreeState(opened)).toMatchObject({ request: { from: null }, locked: false, stepped: false })
+    expect(worktreeState(opened)).toMatchObject({ request: { from: null }, locked: false, stepped: false, restoring: false })
     expect(opened.records).toHaveLength(2)
   })
 
@@ -1094,7 +1095,7 @@ describe('forgePanel removed worktrees', () => {
     sendPrompt(opened.agent, 'next')
     const missing = await follower.until(state => state.worktree.waiting === 'restoration')
     expect(opened.agent.wakes).toBe(1)
-    const pruning = hold(opened.sandbox, 'prune')
+    const pruning = hold(opened.sandbox, 'list')
     const resetting = hold(opened.sandbox, 'reset')
     const restoring = opened.ctx.forgePanel.restoreWorktree(opened.session, signal)
     await pruning.reached
@@ -1252,7 +1253,7 @@ describe('forgePanel removed worktrees', () => {
 
     await opened.ctx.forgePanel.restoreWorktree(opened.session, signal)
 
-    expect(opened.sandbox.calls).toHaveLength(commands)
+    expect(opened.sandbox.calls.slice(commands).every(call => !call.argv.includes('add'))).toBe(true)
     expect(await git(created.path, 'symbolic-ref', '--short', 'HEAD')).toBe(created.branch)
   })
 
@@ -1281,7 +1282,7 @@ describe('forgePanel removed worktrees', () => {
     await rm(created.path, { recursive: true, force: true })
     sendPrompt(opened.agent, 'next')
     await follower.until(state => state.worktree.waiting === 'restoration')
-    const pruning = hold(opened.sandbox, 'prune')
+    const pruning = hold(opened.sandbox, 'list')
     const caller = new AbortController()
     const reason = new Error('closed')
 
@@ -1307,7 +1308,7 @@ describe('forgePanel removed worktrees', () => {
     const opened = await open(repo, {}, { worktrees: true })
     const created = await startInWorktree(opened)
     await rm(created.path, { recursive: true, force: true })
-    const pruning = hold(opened.sandbox, 'prune')
+    const pruning = hold(opened.sandbox, 'list')
     const caller = new AbortController()
     const reason = new Error('closed')
 
@@ -1600,7 +1601,7 @@ describe('forgePanel lifecycle', () => {
     await opened.ctx.plugin(ForgePanelController, {})
 
     expect(opened.ctx.sessionProjections.checkpoint(opened.session).forgeWorktree?.val)
-      .toEqual({ request: { from: null }, created: null, locked: false, stepped: false, cwd: repo })
+      .toEqual({ request: { from: null }, created: null, locked: false, stepped: false, cwd: repo, restoring: false })
   })
 })
 
@@ -1641,4 +1642,95 @@ describe('forgePanel configuration', () => {
 
     await expect(opened.ctx.plugin(ForgePanelController, config)).rejects.toThrow(message)
   })
+})
+
+
+describe('worktree recovery and unload', () => {
+  it('keeps a failed restoration blocked after the panel reloads, despite its leftover directory', async () => {
+    const { repo } = await project()
+    const opened = await open(repo, {}, { worktrees: true })
+    const created = await startInWorktree(opened)
+    await rm(created.path, { recursive: true, force: true })
+    const occupied = join(repo, '.agents/worktrees/occupied')
+    await git(repo, 'worktree', 'add', '--force', occupied, created.branch)
+    await expect(opened.ctx.forgePanel.restoreWorktree(opened.session, signal)).rejects.toMatchObject({ code: 'forgePanel/restore-failed' })
+    await expect(access(created.path)).resolves.toBeUndefined()
+    expect(worktreeState(opened).restoring).toBe(true)
+    await opened.panel.dispose()
+    await opened.ctx.plugin(ForgePanelController, {})
+    const follower = reader(opened)
+    await follower.until(state => state.worktree.missing !== null)
+    const wakes = opened.agent.wakes
+    opened.sandbox.failure = new Error('Git temporarily unavailable')
+    sendPrompt(opened.agent, 'after failure')
+    await follower.until(state => state.worktree.waiting === 'restoration')
+    expect(opened.agent.wakes).toBe(wakes)
+    expect(follower.states.at(-1)?.worktree.missing).toEqual({ branchExists: null })
+    opened.sandbox.failure = undefined
+    await expect(opened.ctx.forgePanel.restoreWorktree(opened.session, signal)).rejects.toMatchObject({ code: 'forgePanel/restore-failed' })
+    expect(opened.agent.wakes).toBe(wakes)
+    await opened.ctx.forgePanel.continueInProject(opened.session, signal)
+    await opened.agent.whenIdle()
+    expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
+  })
+
+  it.each(['creation', 'restoration', 'validation'] as const)('waits for cancelled %s before completing panel unload', async (kind) => {
+    const { repo } = await project()
+    const opened = await open(repo, {}, { worktrees: true })
+    const created = kind !== 'creation' ? await startInWorktree(opened) : undefined
+    if (created !== undefined) await rm(created.path, { recursive: true, force: true })
+    else await opened.ctx.forgePanel.requestWorktree(opened.session, null, signal)
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const released: PromiseWithResolvers<void> = Promise.withResolvers()
+    let cancellation: AbortSignal | undefined
+    const confine = opened.ctx.sandbox.confine.bind(opened.ctx.sandbox)
+    const inspection = vi.spyOn(opened.ctx.sandbox, 'confine').mockImplementation(async (argv, policy, signal) => {
+      if (kind === 'validation' && argv.includes('show-ref')) {
+        cancellation = signal; entered.resolve(); await released.promise
+      }
+      return confine(argv, policy, signal)
+    })
+    const create = vi.spyOn(opened.ctx.worktrees, 'create').mockImplementation(async (_agent, _request, signal) => {
+      cancellation = signal; entered.resolve(); await released.promise
+      return { path: join(repo, '.agents/worktrees/pending'), branch: 'pending', repositoryRoot: repo, baseCommit: 'a'.repeat(40) }
+    })
+    const restore = vi.spyOn(opened.ctx.worktrees, 'restore').mockImplementation(async (_agent, request, signal) => {
+      cancellation = signal; entered.resolve(); await released.promise
+      return { path: request.path, branchRecreated: false }
+    })
+    const operation = rejectionOf(kind === 'creation'
+      ? proposeStep(opened.ctx, opened.agent, { turn: 1, step: 1, messages: [prompt('go')] })
+      : opened.ctx.forgePanel.restoreWorktree(opened.session, signal))
+    let disposed = false
+    let unloading: Promise<void> | undefined
+    try {
+      await entered.promise
+      unloading = opened.panel.dispose().then(() => { disposed = true })
+      await vi.waitFor(() => { expect(cancellation?.aborted).toBe(true) })
+      expect(disposed).toBe(false)
+      released.resolve()
+      expect(await operation).toBeInstanceOf(Error)
+      await unloading
+      expect(opened.records.filter(record => typeof record === 'object' && record !== null && 'action' in record
+        && record.action === (kind === 'creation' ? 'created' : 'restored'))).toEqual([])
+    } finally {
+      released.resolve()
+      await Promise.allSettled([operation, ...unloading === undefined ? [] : [unloading]])
+      create.mockRestore(); restore.mockRestore(); inspection.mockRestore()
+    }
+  })
+})
+
+
+it.each(['empty', 'foreign', 'non-git'] as const)('keeps a recorded worktree unavailable when its directory is %s', async (kind) => {
+  const { repo } = await project()
+  const opened = await open(repo, {}, { worktrees: true })
+  const created = await startInWorktree(opened)
+  await rm(created.path, { recursive: true, force: true })
+  const path = kind === 'non-git' ? await plain() : created.path
+  if (kind !== 'non-git') await mkdir(path)
+  if (kind === 'foreign') await git(path, 'init', '-b', 'other')
+  const state = { ...worktreeState(opened), created: { ...created, path } }
+  expect(await missingWorktree(opened.ctx, { gitCommand: 'git', gitTimeoutMs: 10_000, graceMs: 500, maxOutputBytes: 1_048_576 },
+    opened.session, state, path, signal)).toEqual({ branchExists: true })
 })

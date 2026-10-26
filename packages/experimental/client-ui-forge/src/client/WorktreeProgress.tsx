@@ -235,7 +235,7 @@ function MissingCard({ created, missing, restoration, waiting, restore, leave, t
           <span className={css.title}>{t('missing.title')}</span>
           <span className={css.branch}>{created.branch}</span>
         </div>
-        <p className={css.note}>{t(missing.branchExists ? 'missing.kept' : 'missing.recreated', { branch: created.branch })}</p>
+        <p className={css.note}>{t(missing.branchExists === null ? 'missing.unknown' : missing.branchExists ? 'missing.kept' : 'missing.recreated', { branch: created.branch })}</p>
         {waiting && <p className={css.note}>{t('missing.waiting')}</p>}
         {error !== null && <p className={css.error}>{error}</p>}
         <div className={css.footer}>

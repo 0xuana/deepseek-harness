@@ -220,7 +220,7 @@ describe('forge watch', () => {
     expect(provider.fetches).toHaveLength(3)
   })
 
-  it('lets a fetch already in flight serve a refresh', async () => {
+  it('coalesces refreshes during a fetch into one immediate subsequent fetch', async () => {
     const provider = new FakeProvider()
     const release = held(provider, target => snapshot(target))
     const context = await setup(provider)
@@ -229,14 +229,37 @@ describe('forge watch', () => {
     expect(provider.fetches).toHaveLength(1)
 
     context.forge.refresh(ref(1))
+    context.forge.refresh(ref(1))
     await vi.advanceTimersByTimeAsync(0)
     expect(provider.fetches).toHaveLength(1)
     release()
     await vi.advanceTimersByTimeAsync(0)
 
     expect(updates).toHaveLength(1)
-    await vi.advanceTimersByTimeAsync(4_999)
-    expect(provider.fetches).toHaveLength(1)
+    expect(provider.fetches).toHaveLength(2)
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(updates).toHaveLength(2)
+    expect(provider.fetches).toHaveLength(2)
+  })
+
+  it.each(['ready', 'merge'] as const)('fetches again after %s when an older poll is still pending', async (action) => {
+    const provider = new FakeProvider()
+    const release = held(provider, target => snapshot(target, { draft: true }))
+    const context = await setup(provider)
+    const { updates } = collect(context)
+    await vi.advanceTimersByTimeAsync(0)
+
+    const signal = new AbortController().signal
+    if (action === 'ready') await context.forge.markReady(ref(1), signal)
+    else await context.forge.merge(ref(1), { method: 'merge', headSha: 'a'.repeat(40) }, signal)
+    provider.fetchImpl = undefined
+    provider.results.set(key, snapshot(ref(1), { draft: false, state: action === 'merge' ? 'merged' : 'open' }))
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(provider.fetches).toHaveLength(2)
+    expect(updates.at(-1)).toMatchObject({ snapshot: { draft: false, state: action === 'merge' ? 'merged' : 'open' } })
   })
 
   it('keeps notifying other listeners when one listener throws', async () => {

@@ -27,7 +27,7 @@ function card(value: ForgePanelChangeRequest, options: { expanded?: boolean; act
   const actions: ChangeRequestActions = { openLink, copyLink, retry, remove, ...options.actions }
   const view = render(
     <ul>
-      <ChangeRequestCard entry={value} expanded={options.expanded ?? false} onToggle={onToggle} now={NOW} actions={actions} t={t} />
+      <ChangeRequestCard locale="en" entry={value} expanded={options.expanded ?? false} onToggle={onToggle} now={NOW} actions={actions} t={t} />
     </ul>,
   )
   const item = view.container.querySelector('[data-forge-change]')
@@ -448,12 +448,31 @@ describe('ChangeRequestCard actions', () => {
     expect(merge).toHaveBeenCalledOnce()
   })
 
+  it('requires a new confirmation after the head changes while the menu is open', async () => {
+    const merge = vi.fn<NonNullable<ChangeRequestActions['merge']>>(async () => {})
+    const actions: ChangeRequestActions = { openLink: vi.fn(), copyLink: vi.fn(), retry: vi.fn(), merge }
+    const view = (headSha: string) => <ChangeRequestCard locale="en" entry={entry(7, snapshot(7, { mergeReady: true, headSha }))}
+      expanded onToggle={vi.fn()} now={NOW} actions={actions} t={t} />
+    const rendered = render(view(head))
+    const button = screen.getByRole('button', { name: en['change.merge'] })
+    fireEvent.click(button)
+    rendered.rerender(view('c'.repeat(40)))
+    const changed = screen.getByRole('menuitem', { name: en['change.mergeChanged'] })
+    expect(changed.hasAttribute('disabled')).toBe(true)
+    fireEvent.click(changed)
+    expect(merge).not.toHaveBeenCalled()
+    fireEvent.click(button)
+    fireEvent.click(button)
+    await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: en['change.mergeConfirm'] })) })
+    expect(merge).toHaveBeenCalledWith(expect.anything(), { method: 'squash', headSha: 'c'.repeat(40) })
+  })
+
   it('falls back to the usual method once the repository stops allowing the chosen one', async () => {
     const merge = vi.fn<(entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>>(async () => {})
     const actions: ChangeRequestActions = { openLink: vi.fn(), copyLink: vi.fn(), retry: vi.fn(), merge }
     const view = (methods: MergeRequest['method'][]) => (
       <ul>
-        <ChangeRequestCard
+        <ChangeRequestCard locale="en"
           entry={entry(7, snapshot(7, { mergeReady: true, mergeMethods: methods, headSha: head }))}
           expanded
           onToggle={vi.fn()}
@@ -537,5 +556,22 @@ describe('ChangeRequestCard layout', () => {
     const b = card(entry(1, snapshot(1, { checksRollup: 'none' })), { expanded: true })
     expect(rowValue(b.item, en['change.row.checks']).textContent).toBe(en['change.ci.none'])
     expect(b.item.querySelector('[data-forge-check]')?.getAttribute('data-forge-check')).toBe('neutral')
+  })
+})
+
+
+describe('change request number formatting', () => {
+  it('formats visible and accessible line counts with the selected UI language', () => {
+    const value = entry(7, snapshot(7, { additions: 1234, deletions: 5678 }))
+    const actions: ChangeRequestActions = { openLink: vi.fn(), copyLink: vi.fn(), retry: vi.fn(), viewChanges: vi.fn() }
+    const view = (locale: string) => <ChangeRequestCard locale={locale} entry={value} expanded onToggle={vi.fn()}
+      now={NOW} actions={actions} t={t} />
+    const rendered = render(view('de'))
+    expect(screen.getByText('+1.234')).toBeTruthy()
+    expect(screen.getByText('−5.678')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /1\.234.*5\.678/ })).toBeTruthy()
+    rendered.rerender(view('en'))
+    expect(screen.getByText('+1,234')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /1,234.*5,678/ })).toBeTruthy()
   })
 })

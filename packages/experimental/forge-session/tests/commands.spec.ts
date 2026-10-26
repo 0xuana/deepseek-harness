@@ -35,7 +35,7 @@ describe('commandEvidence', () => {
     [`gh pr view '${url}' --json title`, { urls: 'referenced', pushes: false, named: [url] }],
     [`gh pr edit ${url}/files --add-label bug`, { urls: 'referenced', pushes: false, named: [url] }],
     [`gh pr checkout ${url} && git push`, { urls: 'referenced', pushes: true, named: [url] }],
-    [`gh pr view --json url ${url}`, { urls: 'referenced', pushes: false, named: [] }],
+    [`gh pr view --json url ${url}`, { urls: 'referenced', pushes: false, named: [url] }],
     [`gh pr create --fill && gh pr view ${url}`, { ...created, named: [url] }],
   ])('classifies %j', (command, evidence) => {
     expect(commandEvidence(command)).toEqual(evidence)

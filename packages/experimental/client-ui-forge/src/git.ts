@@ -101,16 +101,19 @@ export async function inspectCheckout(
     if (NOT_A_CHECKOUT.test(top.stderr)) return undefined
     throw new Error(`git rev-parse failed: ${firstLine(top.stderr)}`)
   }
-  const canonical = async (path: string): Promise<string> => ctx.fs.processPath(await ctx.fs.resolve(path, { cwd: directory, signal }))
-  const [root, commonDir, gitDir, branch, commit, upstream, remotes] = await Promise.all([
-    canonical(parseTopLevel(top.stdout)),
-    git('common-dir', ['rev-parse', '--path-format=absolute', '--git-common-dir']).then(output => canonical(parseTopLevel(output.stdout))),
-    git('git-dir', ['rev-parse', '--path-format=absolute', '--git-dir']).then(output => canonical(parseTopLevel(output.stdout))),
-    currentBranch(git),
-    headCommit(git),
-    git('upstream', ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], [0, 128]),
-    git('remote', ['remote', '-v']),
-  ])
+  const [root, commonDir, gitDir, branch, commit, upstream, remotes] = await together(signal, (signal) => {
+    const git = gitIn(ctx, config, session, directory, signal)
+    const canonical = async (path: string): Promise<string> => ctx.fs.processPath(await ctx.fs.resolve(path, { cwd: directory, signal }))
+    return [
+      canonical(parseTopLevel(top.stdout)),
+      git('common-dir', ['rev-parse', '--path-format=absolute', '--git-common-dir']).then<string>(output => canonical(parseTopLevel(output.stdout))),
+      git('git-dir', ['rev-parse', '--path-format=absolute', '--git-dir']).then<string>(output => canonical(parseTopLevel(output.stdout))),
+      currentBranch(git),
+      headCommit(git),
+      git('upstream', ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], [0, 128]),
+      git('remote', ['remote', '-v']),
+    ] as const
+  })
   return {
     // A linked worktree keeps its own Git directory under the shared one; a submodule or a separate Git directory does not.
     checkout: { root, branch, linked: gitDir !== commonDir, commit },
@@ -140,12 +143,30 @@ export async function listBranches(
   limit: number,
   signal: AbortSignal,
 ): Promise<ForgeBranches> {
-  const git = gitIn(ctx, config, session, directory, signal)
-  const [current, refs] = await Promise.all([
-    currentBranch(git),
-    git('for-each-ref', ['for-each-ref', '--sort=-committerdate', `--count=${limit}`, '--format=%(refname:lstrip=2)', 'refs/heads/']),
-  ])
+  const [current, refs] = await together(signal, (signal) => {
+    const git = gitIn(ctx, config, session, directory, signal)
+    return [
+      currentBranch(git),
+      git('for-each-ref', ['for-each-ref', '--sort=-committerdate', `--count=${limit}`, '--format=%(refname:lstrip=2)', 'refs/heads/']),
+    ] as const
+  })
   return { current, branches: baseBranches(current, refs.stdout, limit) }
+}
+
+/** A failed read cancels its siblings and returns only after every read has finished cleanup. */
+async function together<T extends readonly Promise<unknown>[]>(
+  signal: AbortSignal,
+  start: (signal: AbortSignal) => T,
+): Promise<{ -readonly [K in keyof T]: Awaited<T[K]> }> {
+  const stop = new AbortController()
+  const tasks = start(AbortSignal.any([signal, stop.signal]))
+  try {
+    return await Promise.all(tasks)
+  } catch (error) {
+    stop.abort(error)
+    await Promise.allSettled(tasks)
+    throw error
+  }
 }
 
 /**

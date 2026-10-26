@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { access, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -382,7 +382,7 @@ describe('restoring removed worktrees', () => {
     return await git(checkout, 'rev-parse', 'HEAD')
   }
 
-  it('checks the branch out again at its latest commit after pruning stale registrations, without entering the checkout', async () => {
+  it('checks the branch out again at its latest commit after removing only its stale registration, without entering the checkout', async () => {
     const root = await repo()
     ctx = await harness(root)
     const agent = testAgent(ctx, root)
@@ -404,7 +404,7 @@ describe('restoring removed worktrees', () => {
     expect(await git(created.path, 'rev-parse', 'HEAD')).toBe(tip)
     expect(await contents(join(created.path, 'later.txt'))).toBe('later.txt\n')
     expect(await git(created.path, 'status', '--porcelain')).toBe('')
-    expect(await registered(root)).toEqual([gitPath(root), gitPath(created.path)])
+    expect(await registered(root)).toEqual([gitPath(root), gitPath(abandoned.path), gitPath(created.path)])
     expect(await git(root, 'branch', '--list', 'abandoned')).toContain('abandoned')
     expect(ctx.workingDirectory.get(agent.session)).toBe(root)
   })
@@ -442,21 +442,14 @@ describe('restoring removed worktrees', () => {
     expect(spawn).not.toHaveBeenCalled()
   })
 
-  it('names the branch and directory of a failed checkout and retains what it allocated', async () => {
+  it('rejects an unavailable recorded base before allocating files or removing registrations', async () => {
     const root = await repo()
     ctx = await harness(root)
     const agent = testAgent(ctx, root)
     const path = join(root, '.agents/worktrees/vanished')
     const request: RestoreWorktreeRequest = { path, branch: 'vanished', baseCommit: 'f'.repeat(40), repositoryRoot: root }
-    const commandFailure: unknown = expect.stringMatching(/^worktree command failed \(128\): fatal: /)
-    const cause: unknown = expect.objectContaining({ message: commandFailure })
-
-    const failure = ctx.worktrees.restore(agent, request)
-
-    await expect(failure).rejects.toThrow(`Could not restore worktree vanished at ${path}. Any created checkout and branch are retained. `
-      + 'worktree command failed (128): fatal: ')
-    await expect(failure).rejects.toMatchObject({ cause })
-    expect(await readdir(path)).toEqual([])
+    await expect(ctx.worktrees.restore(agent, request)).rejects.toThrow('worktree command failed')
+    await expect(access(path)).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await git(root, 'branch', '--list', 'vanished')).toBe('')
     expect(ctx.workingDirectory.get(agent.session)).toBe(root)
   })
@@ -500,4 +493,79 @@ describe('restoring removed worktrees', () => {
     expect(spawn).not.toHaveBeenCalled()
     expect(await readdir(root)).toEqual(['.git', 'tracked.txt'])
   })
+})
+
+
+describe('restoration validation', () => {
+  it.each(['outside', 'traversal', 'branch', 'unsafe-branch', 'commit', 'root', 'nested-root'] as const)('rejects invalid %s before mutating the repository', async (kind) => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const created = await ctx.worktrees.create(agent, { name: 'topic' })
+    await rm(created.path, { recursive: true, force: true })
+    const before = await git(root, 'worktree', 'list', '--porcelain')
+    const request = { ...created }
+    if (kind === 'outside') request.path = join(root, 'outside')
+    if (kind === 'traversal') request.path = `${root}/.agents/worktrees/../../outside`
+    if (kind === 'branch') request.branch = 'bad name'
+    if (kind === 'unsafe-branch') request.branch = '../topic'
+    if (kind === 'commit') request.baseCommit = 'HEAD'
+    if (kind === 'root') request.repositoryRoot = join(root, '.agents')
+    if (kind === 'nested-root') {
+      request.repositoryRoot = join(root, '.agents')
+      request.path = join(request.repositoryRoot, '.agents/worktrees/topic')
+    }
+    await expect(ctx.worktrees.restore(agent, request)).rejects.toThrow()
+    expect(await git(root, 'worktree', 'list', '--porcelain')).toBe(before)
+    await expect(access(created.path)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(access(join(root, 'outside'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('preserves a locked missing worktree registration', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const created = await ctx.worktrees.create(agent, { name: 'topic' })
+    await git(root, 'worktree', 'lock', created.path)
+    await rm(created.path, { recursive: true, force: true })
+    const before = await git(root, 'worktree', 'list', '--porcelain')
+    await expect(ctx.worktrees.restore(agent, created)).rejects.toThrow('worktree is locked')
+    expect(await git(root, 'worktree', 'list', '--porcelain')).toBe(before)
+  })
+})
+
+
+it('rejects a restore path redirected outside the pool by a symlink', async () => {
+  const root = await repo()
+  ctx = await harness(root)
+  const agent = testAgent(ctx, root)
+  const created = await ctx.worktrees.create(agent, { name: 'topic' })
+  await rm(created.path, { recursive: true, force: true })
+  const outside = join(root, 'outside')
+  const link = join(root, '.agents/worktrees/redirect')
+  await mkdir(outside)
+  await symlink(outside, link, 'junction')
+  const before = await git(root, 'worktree', 'list', '--porcelain')
+  await expect(ctx.worktrees.restore(agent, { ...created, path: join(link, 'topic') })).rejects.toThrow('configured pool')
+  expect(await readdir(outside)).toEqual([])
+  expect(await git(root, 'worktree', 'list', '--porcelain')).toBe(before)
+})
+
+
+it('does not remove a registration when its directory reappears during restoration validation', async () => {
+  const root = await repo()
+  ctx = await harness(root)
+  const agent = testAgent(ctx, root)
+  const created = await ctx.worktrees.create(agent, { name: 'topic' })
+  await rm(created.path, { recursive: true, force: true })
+  const resolve = ctx.fs.resolve.bind(ctx.fs)
+  let targetReads = 0
+  const probe = vi.spyOn(ctx.fs, 'resolve').mockImplementation(async (path, options) => {
+    if (path === created.path && ++targetReads === 2) await mkdir(created.path)
+    return resolve(path, options)
+  })
+  try {
+    await expect(ctx.worktrees.restore(agent, created)).rejects.toThrow('worktree path already exists')
+    expect(await git(root, 'worktree', 'list', '--porcelain')).toContain(`worktree ${created.path.split(sep).join('/')}`)
+  } finally { probe.mockRestore() }
 })

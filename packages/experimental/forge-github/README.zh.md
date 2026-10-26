@@ -34,11 +34,11 @@ kind: "package-reference"
     hosts: [github.com, ghe.example.com]
 ```
 
-即使 Session 在其他执行环境中运行命令，提供方也以宿主进程的形式运行 `gh`。每个主机执行一次 `gh auth login --hostname <host>` 完成登录。子进程继承的宿主环境去掉了 `DSH_*` 变量以及名称包含 `KEY`、`PASSWORD`、`SECRET` 或 `TOKEN` 的变量，因此 `GH_TOKEN` 与 `GITHUB_TOKEN` 不会被转发，`gh` 使用自己的凭据存储。交互提示、更新提醒、分页器与颜色输出均被关闭。`ghCommand`、`hosts`、`timeoutMs` 与 `maxOutputBytes` 见[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-forge-github)。
+即使 Session 在其他执行环境中运行命令，提供方也以宿主进程的形式运行 `gh`。每个主机执行一次 `gh auth login --hostname <host>` 完成登录。子进程继承的宿主环境去掉了 `DSH_*` 变量以及名称包含 `KEY`、`PASSWORD`、`SECRET` 或 `TOKEN` 的变量，因此 `GH_TOKEN` 与 `GITHUB_TOKEN` 不会被转发，`gh` 使用自己的凭据存储。交互提示、更新提醒、分页器与颜色输出均被关闭。`maxOutputBytes` 必须是正安全整数；只有 `timeoutMs` 受运行时定时器上限约束。`ghCommand`、`hosts`、`timeoutMs` 与 `maxOutputBytes` 见[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-forge-github)。
 
-当主机在配置中时，提供方服务 `https`、`http`、`ssh`、`git` 形式的远端 URL，以及 `git@github.com:owner/name.git` 这类 scp 形式。它服务 `https://<host>/<owner>/<name>/pull/<number>` 形式的 pull request URL，允许其后附带任意路径、查询或片段，并以去掉这些后缀的形式作为规范 URL。就绪探测运行 `gh auth status --hostname <host>`：退出码为 0 时为 `ready`，其他退出码为 `unauthenticated` 并带第一行诊断，`gh` 无法启动时为 `unavailable`。按 head 分支查找时，最多返回 20 个以该分支为 head 的打开状态 pull request，按创建时间从新到旧排列，不包含来自 fork 的 pull request；查找默认分支时返回空结果。
+当主机在配置中时，提供方服务 `https`、`http`、`ssh`、`git` 形式的远端 URL，以及 `git@github.com:owner/name.git` 这类 scp 形式。HTTP(S) 远端在主机标识中保留自定义端口；SSH 和 Git 传输端口不计入主机标识。它服务 `https://<host>/<owner>/<name>/pull/<number>` 形式的 pull request URL，允许其后附带任意路径、查询或片段，并以去掉这些后缀的形式作为规范 URL。就绪探测运行 `gh auth status --hostname <host>`：退出码为 0 时为 `ready`，其他退出码为 `unauthenticated` 并带第一行诊断，`gh` 无法启动时为 `unavailable`。按 head 分支查找时，最多返回 20 个以该分支为 head 的打开状态 pull request，按创建时间从新到旧排列，不包含来自 fork 的 pull request；查找默认分支时返回空结果。
 
-检查运行（check run）在完成前映射为 `pending`，完成后映射为 `success`、`failure`（失败、超时、启动失败或需要操作）、`cancelled`、`skipped` 或 `neutral`。检查运行保留其开始与完成时间。提交状态上下文把 `SUCCESS` 映射为 `success`，把 `FAILURE` 与 `ERROR` 映射为 `failure`，其余状态均映射为 `pending`，且不带时间。GraphQL 的 `NOT_FOUND` 错误转为 `not-found` 失败。`gh` 没有输出 JSON 时，提到身份验证或 `gh auth login` 的诊断转为 `unauthenticated`，其他诊断转为 `unavailable`。
+检查运行（check run）在完成前映射为 `pending`，完成后映射为 `success`、`failure`（失败、超时、启动失败或需要操作）、`cancelled`、`skipped` 或 `neutral`。检查运行保留其开始与完成时间。提交状态上下文把 `SUCCESS` 映射为 `success`，把 `FAILURE` 与 `ERROR` 映射为 `failure`，其余状态均映射为 `pending`，且不带时间。GraphQL 的 `NOT_FOUND` 错误转为 `not-found` 失败。响应不含 GraphQL data 或 errors 时（包括 HTTP 错误 JSON），使用 stderr 的首条诊断或响应体的 message。认证诊断转为 `unauthenticated`；限流与其他失败转为 `unavailable`。head 查找在拒绝时保留相同诊断。
 
 pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为 `CLEAN`、`HAS_HOOKS` 或 `UNSTABLE`，且已登录用户具有 write、maintain 或 admin 权限时，`mergeReady` 为真。`mergeMethods` 列出仓库允许的压缩合并、合并提交与变基合并方式，用户默认的合并方式排在最前。标记为可评审运行 `gh pr ready <number> --repo <host>/<owner>/<name>`。合并经 `gh api` 调用 `PUT repos/<owner>/<name>/pulls/<number>/merge`，带上合并方式与预期的 head SHA，因此有新提交到达后 GitHub 会拒绝，报告为 `stale`。与 `gh pr merge` 不同，它从不启用自动合并、从不加入合并队列，也从不删除 head 分支。被拒绝的操作报告 GitHub 的原因，提到身份验证的诊断转为 `unauthenticated`。
 
@@ -88,7 +88,7 @@ pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **宿主需要 GitHub CLI**——必须安装 `gh` 并为每个已配置主机登录；环境变量中的令牌不会被转发。不在 `hosts` 中的主机永远不会被读取。
+- **宿主需要 GitHub CLI**——必须安装 `gh` 并为每个已配置主机登录；环境变量中的令牌不会被转发。不在 `hosts` 中的主机永远不会被读取，包括配置变更后保留的引用。状态读取为这些引用返回 `unavailable`；head 查找会在启动 `gh` 前拒绝。
 - **前 100 个检查与评审讨论**——head 提交的检查超过上限时以 `checksTruncated` 标记；前 100 个之后的未解决讨论不计入。
 - **不发现 fork**——按 head 分支查找时，不包含 head 位于其他仓库的 pull request。
 - **速率限制**——每次轮询都会以已登录账号的速率配额为每个主机消耗一次 GraphQL 查询。

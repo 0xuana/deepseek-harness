@@ -43,9 +43,52 @@ describe('GitHub provider addressing', () => {
   it('builds canonical pull request URLs', () => {
     expect(subject.changeRequestUrl(pull(4, enterprise))).toBe('https://ghe.corp.example/team/svc/pull/4')
   })
+
+  it('uses a configured HTTP port for URL mapping and GitHub queries', async () => {
+    const gh = fakeGh(() => output({ data: { r0: { p0: pullRequestNode(1) } } }))
+    const subject = new GitHubProvider(gh.run, ['ghe.example.com:8443'])
+    const repository = subject.repositoryFromRemote('https://ghe.example.com:8443/team/repo.git')!
+    const ref = { repository, number: 1 }
+    expect(subject.changeRequestFromUrl(subject.changeRequestUrl(ref))).toEqual(ref)
+    await subject.fetch([ref], signal)
+    expect(gh.calls[0]?.[3]).toBe('ghe.example.com:8443')
+  })
 })
 
 describe('GitHub provider fetch', () => {
+  it.each([
+    [{ message: 'Bad credentials' }, 1, 'gh: Bad credentials (HTTP 401)', 'unauthenticated', 'gh: Bad credentials (HTTP 401)'],
+    [{ message: 'API rate limit exceeded' }, 1, 'gh: API rate limit exceeded (HTTP 403)', 'unavailable', 'gh: API rate limit exceeded (HTTP 403)'],
+    [{ message: 'Bad credentials' }, 1, '', 'unauthenticated', 'Bad credentials'],
+    [{ message: '' }, 0, '', 'unavailable', 'unexpected GitHub response'],
+    [null, 1, '', 'unavailable', 'gh exited with 1'],
+    [[], 0, '', 'unavailable', 'unexpected GitHub response'],
+  ])('preserves HTTP failure diagnostics for %j', async (body, exitCode, stderr, code, message) => {
+    const gh = fakeGh(() => output(body, exitCode, stderr))
+    const subject = provider(gh.run)
+    expect([...(await subject.fetch([pull(1)], signal)).values()]).toEqual([{ code, message }])
+    await expect(subject.findByHead(demo, 'topic', signal)).rejects.toThrow(`head branch lookup failed: ${message}`)
+  })
+
+  it('rejects unconfigured hosts without querying them and still fetches allowed hosts', async () => {
+    const gh = fakeGh(() => output({ data: { r0: { p0: pullRequestNode(1) } } }))
+    const denied = pull(2, { ...enterprise, host: 'unconfigured.example' })
+    const results = await provider(gh.run).fetch([denied, pull(1)], signal)
+    expect(gh.calls.map(call => call[3])).toEqual(['github.com'])
+    expect(results.get(changeRequestKey(denied))).toEqual({ code: 'unavailable', message: 'forge-github: host "unconfigured.example" is not configured' })
+    expect(results.get(changeRequestKey(pull(1)))).toMatchObject({ title: 'Change 1' })
+  })
+
+  it('rejects references retained after their host was removed from configuration', async () => {
+    const gh = fakeGh(() => output(''))
+    const retained = provider(gh.run).changeRequestFromUrl('https://ghe.corp.example/team/svc/pull/2')!
+    const replacement = new GitHubProvider(gh.run, ['github.com'])
+    const results = await replacement.fetch([retained], signal)
+    await expect(replacement.findByHead(retained.repository, 'topic', signal)).rejects.toThrow('is not configured')
+    expect(results.get(changeRequestKey(retained))).toMatchObject({ code: 'unavailable' })
+    expect(gh.calls).toEqual([])
+  })
+
   it('runs one GraphQL request per host and merges the results', async () => {
     const gh = fakeGh((args) => {
       const host = args[3]
@@ -264,4 +307,17 @@ describe('GitHub provider reads', () => {
     await expect(provider(() => Promise.reject(new GhTimeoutError('gh api timed out after 30000ms'))).fileText(pull(7), head, 'a', signal))
       .resolves.toEqual({ code: 'unavailable', message: 'gh api timed out after 30000ms' })
   })
+})
+
+it('rejects readiness, actions, and content reads for an unconfigured host without starting gh', async () => {
+  const gh = fakeGh(() => output('unexpected'))
+  const subject = provider(gh.run)
+  const target = pull(7, { ...demo, host: 'unconfigured.example' })
+  const message = 'forge-github: host "unconfigured.example" is not configured'
+  await expect(subject.readiness(target.repository.host, signal)).resolves.toEqual({ state: 'unavailable', message })
+  await expect(subject.markReady(target, signal)).resolves.toEqual({ code: 'failed', message })
+  await expect(subject.merge(target, { method: 'squash', headSha: 'a'.repeat(40) }, signal)).resolves.toEqual({ code: 'failed', message })
+  await expect(subject.diff(target, signal)).resolves.toEqual({ code: 'unavailable', message })
+  await expect(subject.fileText(target, 'a'.repeat(40), 'file.txt', signal)).resolves.toEqual({ code: 'unavailable', message })
+  expect(gh.calls).toEqual([])
 })

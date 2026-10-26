@@ -33,6 +33,11 @@ interface ChangeRequestRef {
 ```
 
 ```ts type-equiv
+/** Canonical identity of a change request across providers; built by `changeRequestKey`. */
+type ChangeRequestKey = Branded<'ChangeRequestKey'>
+```
+
+```ts type-equiv
 /**
  * Host-specific access registered with `ctx.forge`. One provider serves one
  * forge family; methods that take a signal must stop work when it aborts.
@@ -81,6 +86,49 @@ interface ForgeReadiness {
 ## Status polling
 
 `ctx.forge.watch` shares one polling loop among the watchers of a change request and delivers every result as an update. Each forge has at most one fetch in flight. The [registry README](../../packages/experimental/forge/README.md#use-this-package) owns the poll cadence, backoff, and timeout rules.
+
+```ts type-equiv
+/** Lifecycle state of a change request. */
+type ChangeRequestState = 'open' | 'closed' | 'merged'
+```
+
+```ts type-equiv
+/** Normalized outcome of one status check. */
+type CheckState = 'pending' | 'success' | 'failure' | 'neutral' | 'skipped' | 'cancelled'
+```
+
+```ts type-equiv
+/** One status check reported for the head commit of a change request. */
+interface ChangeRequestCheck {
+  /** Check name as the host displays it. */
+  readonly name: string
+  /** Normalized check outcome. */
+  readonly state: CheckState
+  /** Web page for the check, or null when the host reports none. */
+  readonly url: string | null
+  /** Workflow that produced the check, or null when the host reports none. */
+  readonly workflow: string | null
+  /** ISO 8601 time the check started, or null before it starts and when the host reports none. */
+  readonly startedAt: string | null
+  /** ISO 8601 time the check completed, or null while it runs and when the host reports none. */
+  readonly completedAt: string | null
+}
+```
+
+```ts type-equiv
+/** Combined outcome of all checks on the head commit. */
+type ChecksRollup = 'none' | 'pending' | 'success' | 'failure'
+```
+
+```ts type-equiv
+/** Whether the change request can merge into its base without conflicts. */
+type Mergeability = 'mergeable' | 'conflicting' | 'unknown'
+```
+
+```ts type-equiv
+/** Aggregate review outcome required by the host's merge rules. */
+type ReviewDecision = 'approved' | 'changes-requested' | 'review-required' | 'none'
+```
 
 ```ts type-equiv
 /** Status of one change request at the time its provider read it. */
@@ -216,8 +264,11 @@ type BindingOrigin = 'created' | 'referenced' | 'discovered' | 'tracked'
 ```ts type-equiv
 /** Payload of the `plugin:forge-session/binding` record. */
 interface BindingRecord {
-  /** `track` binds or restores, `dismiss` hides, `discover` binds a change request found for a branch the Session pushed or works on. */
-  readonly action: 'track' | 'dismiss' | 'discover'
+  /**
+   * `track` binds or restores, `dismiss` hides, `discover` binds a branch lookup,
+   * and `reference` binds a CLI selector lookup without restoring dismissed entries.
+   */
+  readonly action: 'track' | 'dismiss' | 'discover' | 'reference'
   /** Web URL of the change request. */
   readonly url: string
 }
@@ -239,7 +290,7 @@ interface SessionChangeRequest {
 
 ```ts type-equiv
 /**
- * Receives the complete visible list after a binding change or a polling result.
+ * Receives the complete visible list after a binding or provider change, or a polling result.
  * @param changeRequests - every visible binding of the watched Session, in first-recorded order.
  */
 type SessionChangeRequestsListener = (changeRequests: readonly SessionChangeRequest[]) => void
@@ -301,6 +352,18 @@ type WorktreeRecord =
   | { readonly action: 'cancel' }
   /** The requested worktree was created and became the Session's working directory. */
   | { readonly action: 'created'; readonly worktree: ForgeSessionWorktree }
+  /** Restoration started; the checkout stays unavailable until restoration completes. */
+  | { readonly action: 'restoring' }
+  /** The recorded worktree was completely restored. */
+  | { readonly action: 'restored' }
+```
+
+```ts type-equiv
+/** One open worktree request. */
+interface ForgeWorktreeRequest {
+  /** Base branch, or null for HEAD of the source checkout. */
+  readonly from: string | null
+}
 ```
 
 ```ts type-equiv
@@ -364,10 +427,10 @@ type ForgeWorktreeWaiting = 'creation' | 'restoration'
 ```
 
 ```ts type-equiv
-/** The worktree a Session works in, whose directory no longer exists. */
+/** The recorded worktree whose directory is missing, invalid, or incompletely restored. */
 interface ForgeMissingWorktree {
-  /** Whether the worktree's branch still exists; restoring creates a missing branch again at its base commit. */
-  readonly branchExists: boolean
+  /** Whether its branch exists, or null when an incomplete restoration cannot inspect it. */
+  readonly branchExists: boolean | null
 }
 ```
 
@@ -603,12 +666,13 @@ Registry of forge providers. Watchers of one change request share a single polli
 /**
  * Register the provider of one forge family as an effect on the calling
  * fiber. Watches of that forge receive an `unavailable` failure when the
- * registration ends.
+ * registration ends. Unregistering cancels and awaits its in-flight calls;
+ * results from the withdrawn registration are discarded.
  * @param provider - provider to serve `provider.forge`.
- * @returns the disposer that unregisters the provider.
+ * @returns the disposer that unregisters the provider and waits for its calls to finish.
  * @throws when another provider already serves the same forge.
  */
-register(provider: ForgeProvider): () => void
+register(provider: ForgeProvider): () => Promise<void>
 
 /**
  * Map a Git remote URL to a repository through the first provider that serves it.
@@ -714,8 +778,8 @@ watch(ref: ChangeRequestRef, listener: ChangeRequestListener): () => void
 
 /**
  * Poll a watched change request at once, including after a terminal state.
- * A fetch already in flight for its forge serves the request; an unwatched
- * change request is unchanged.
+ * A fetch already in flight is followed immediately by another fetch; an
+ * unwatched change request is unchanged.
  * @param ref - change request to poll.
  */
 refresh(ref: ChangeRequestRef): void
@@ -1003,7 +1067,7 @@ dismiss(session: Session, url: string): void
  * Watch a Session's visible change requests as an effect on the calling
  * fiber. Every visible change request that a provider recognizes is polled
  * through `ctx.forge` while the Session has a watcher. Listeners receive the
- * complete list after each later binding change or polling result; read the
+ * complete list after each later binding or provider change, or polling result; read the
  * current list with {@link changeRequests}. Listeners must not throw; a
  * thrown error is logged and skipped.
  * @param session - Session to watch.
@@ -1016,4 +1080,26 @@ watch(session: Session, listener: SessionChangeRequestsListener): () => void
 Types: [Session](session.md)
 
 Source: [`packages/experimental/forge-session/src/index.ts`](../../packages/experimental/forge-session/src/index.ts)
+
+<a id="forge-events"></a>
+
+### `forge/*` events
+
+<a id="forgeproviders-changed--parallel"></a>
+
+#### `forge/providers-changed` — parallel
+
+Announces a provider registration or withdrawal after the registry changes. Listener failures are logged without preventing other listeners from running.
+
+```ts cordis-catalog
+/**
+ * Announces a provider registration or withdrawal after the registry changes.
+ * Listener failures are logged without preventing other listeners from running.
+ * @param forge - family whose provider changed.
+ * @mode parallel
+ */
+'forge/providers-changed'(forge: string): void | Promise<void>
+```
+
+Source: [`packages/experimental/forge/src/index.ts`](../../packages/experimental/forge/src/index.ts)
 <!-- END GENERATED cordis-surface -->

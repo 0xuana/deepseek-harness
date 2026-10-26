@@ -10,6 +10,7 @@ import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { deadline, MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { sameChangeRequestUrl } from './commands.ts'
 import { BINDING_RECORD, forgeChangeRequestsProjection } from './projection.ts'
+import { observeReferences } from './reference-lookup.ts'
 import type { BindingState, Config, ForgeChangeRequestsState, SessionChangeRequest, SessionChangeRequestsListener } from './types.ts'
 
 export type * from './types.ts'
@@ -39,7 +40,7 @@ interface SessionWatch {
  * `ctx.forge`.
  */
 export class ForgeSessionService extends Service {
-  static inject = ['forge', 'sessionProjections']
+  static inject = ['forge', 'sessions', 'sessionProjections']
 
   static Config: z<Config> = z.object({
     discoveryTimeoutMs: z.number().default(30_000),
@@ -47,8 +48,9 @@ export class ForgeSessionService extends Service {
 
   private readonly home: Context
   private readonly discoveryTimeoutMs: number
-  private readonly watches = new WeakMap<Session, SessionWatch>()
+  private readonly watches = new Map<Session, SessionWatch>()
   private readonly discoveries = new Set<Promise<void>>()
+  private readonly sessionLifetimes = new WeakMap<Session, AbortController>()
   private readonly lifetime = new AbortController()
   private projection!: ProjectionHandle<ForgeChangeRequestsState>
 
@@ -121,7 +123,7 @@ export class ForgeSessionService extends Service {
    * Watch a Session's visible change requests as an effect on the calling
    * fiber. Every visible change request that a provider recognizes is polled
    * through `ctx.forge` while the Session has a watcher. Listeners receive the
-   * complete list after each later binding change or polling result; read the
+   * complete list after each later binding or provider change, or polling result; read the
    * current list with {@link changeRequests}. Listeners must not throw; a
    * thrown error is logged and skipped.
    * @param session - Session to watch.
@@ -154,6 +156,22 @@ export class ForgeSessionService extends Service {
     // Events react against the projection, so the listener starts once its reader is ready.
     this.home.on('session/event', (session: Session, event: SessionEvent) => {
       this.react(session, event)
+    })
+    observeReferences(this.home, this.discoveryTimeoutMs, (session, url) => {
+      if (!this.state(session).bindings.some(binding => sameChangeRequestUrl(binding.url, url))) {
+        appendPluginRecord(session, BINDING_RECORD, { action: 'reference', url })
+      }
+    })
+    this.home.on('session/disposed', (session: Session) => {
+      this.sessionLifetimes.get(session)?.abort(new Error('forge-session: Session was disposed'))
+      this.sessionLifetimes.delete(session)
+    })
+    this.home.on('forge/providers-changed', () => {
+      for (const [session, watch] of [...this.watches]) {
+        if (this.watches.get(session) !== watch) continue
+        this.sync(watch)
+        this.notify(watch)
+      }
     })
   }
 
@@ -216,8 +234,14 @@ export class ForgeSessionService extends Service {
   private discover(session: Session, remote: string, branch: string): Promise<void> {
     const repository = this.home.forge.repositoryFromRemote(remote)
     if (repository === undefined) return Promise.resolve()
-    const task = this.lookup(session, repository, branch).catch((error: unknown) => {
-      if (this.lifetime.signal.aborted) return
+    let lifetime = this.sessionLifetimes.get(session)
+    if (lifetime === undefined) {
+      lifetime = new AbortController()
+      this.sessionLifetimes.set(session, lifetime)
+    }
+    const signal = AbortSignal.any([this.lifetime.signal, lifetime.signal])
+    const task = this.lookup(session, repository, branch, signal).catch((error: unknown) => {
+      if (signal.aborted) return
       this.home.logger.warn(`forge-session: change request lookup for ${branch} failed: ${error instanceof Error ? error.message : String(error)}`)
     })
     this.discoveries.add(task)
@@ -225,11 +249,11 @@ export class ForgeSessionService extends Service {
     return task
   }
 
-  private async lookup(session: Session, repository: ForgeRepository, branch: string): Promise<void> {
-    using timeout = deadline(this.lifetime.signal, this.discoveryTimeoutMs, 'FORGE_DISCOVERY_TIMEOUT')
+  private async lookup(session: Session, repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<void> {
+    using timeout = deadline(signal, this.discoveryTimeoutMs, 'FORGE_DISCOVERY_TIMEOUT')
     const refs = await this.home.forge.findByHead(repository, branch, timeout.signal)
-    if (this.lifetime.signal.aborted) return
     for (const ref of refs) {
+      if (signal.aborted || this.home.sessions.get(session.id) !== session) return
       const url = this.home.forge.changeRequestUrl(ref)
       if (this.state(session).bindings.some(binding => sameChangeRequestUrl(binding.url, url))) continue
       appendPluginRecord(session, BINDING_RECORD, { action: 'discover', url })

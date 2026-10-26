@@ -130,7 +130,7 @@ export class WorktreeService extends Service {
   /**
    * Check out a removed worktree again at its recorded directory: its branch
    * when the branch still exists, otherwise a new branch of the same name at
-   * `baseCommit`. Stale worktree registrations are pruned first, and an
+   * `baseCommit`. Only the missing target's unlocked registration is removed, and an
    * existing directory fails. Changes that were never committed are not
    * recovered. Checkout disables configured clean, smudge, and process filters,
    * as creation does. The calling Session's working directory does not change.
@@ -212,10 +212,33 @@ export class WorktreeService extends Service {
     const policy = this.ctx.sandboxPolicy.resolve({ session: agent.session })
     const run = this.gitRunner(policy, signal)
     if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new Error(`worktree path already exists: ${path}`)
-    await run(repositoryRoot, ['worktree', 'prune'])
+    const root = await this.ctx.fs.resolve(repositoryRoot, { signal })
+    const pool = await this.ctx.fs.resolve(this.config.directory, { cwd: repositoryRoot, signal })
+    const target = await this.ctx.fs.resolve(path, { cwd: repositoryRoot, signal })
+    if (this.ctx.fs.processPath(root) !== repositoryRoot || this.ctx.fs.processPath(target) !== path
+      || !this.ctx.fs.contains(root, pool) || !this.ctx.fs.contains(pool, target) || pool.targetKey === target.targetKey) {
+      throw new Error('worktree restoration must use a canonical directory inside the configured pool')
+    }
+    if (!relativePath(branch) || branch.startsWith('-')) throw new Error('worktree branch must be a relative Git branch name')
+    if (!/^(?:[a-f\d]{40}|[a-f\d]{64})$/i.test(baseCommit)) throw new Error('worktree baseCommit must be a full commit object name')
+    await run(repositoryRoot, ['check-ref-format', `refs/heads/${branch}`])
+    const top = await run(repositoryRoot, ['rev-parse', '--show-toplevel'])
+    const actualRoot = await this.ctx.fs.resolve(top.stdout.replace(/\r?\n$/, ''), { cwd: repositoryRoot, signal })
+    if (actualRoot.targetKey !== root.targetKey) throw new Error('worktree repositoryRoot must be the source checkout root')
+    await run(repositoryRoot, ['rev-parse', '--verify', '--end-of-options', `${baseCommit}^{commit}`])
+    const registered = await run(repositoryRoot, ['worktree', 'list', '--porcelain', '-z'])
+    for (const entry of registered.stdout.split('\0\0')) {
+      const fields = entry.split('\0')
+      const recordedPath = fields.find(field => field.startsWith('worktree '))?.slice('worktree '.length)
+      if (recordedPath === undefined) continue
+      const recorded = await this.ctx.fs.resolve(recordedPath, { cwd: repositoryRoot, signal })
+      if (recorded.targetKey !== target.targetKey) continue
+      if (fields.some(field => field === 'locked' || field.startsWith('locked '))) throw new Error(`worktree is locked: ${path}`)
+      if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new Error(`worktree path already exists: ${path}`)
+      await run(repositoryRoot, ['worktree', 'remove', '--', path])
+    }
     const existing = await run(repositoryRoot, ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], [0, 1])
     const branchRecreated = existing.exitCode !== 0
-    const pool = await this.ctx.fs.resolve(this.config.directory, { cwd: repositoryRoot, signal })
     try {
       await this.prepareDirectory(policy, repositoryRoot, this.ctx.fs.processPath(pool), path, signal)
       await run(repositoryRoot, [

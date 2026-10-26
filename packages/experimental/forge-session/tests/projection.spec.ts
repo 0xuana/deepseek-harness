@@ -174,6 +174,16 @@ describe('forgeChangeRequests projection', () => {
     ])
   })
 
+  it('binds a numbered PR in an explicit host repository when JSON omits the URL', () => {
+    const session = Session.create(SessionId('numbered-reference'))
+    shellTurn(session, [{
+      callId: 'view',
+      command: 'gh pr view 5960 --repo fake.test/octo/demo --json number,title,body 2>&1 | head -200',
+      output: JSON.stringify({ number: 5960, title: 'Change', body: 'See #5961' }),
+    }])
+    expect(fold(session).bindings).toEqual([{ url: pullUrl(5960), origin: 'referenced', dismissed: false }])
+  })
+
   it('folds only the first result of a call and drops calls without results at turn end', () => {
     const session = Session.create(SessionId('pending'))
     shellTurn(session, [{ callId: 'create', command: 'gh pr create --fill', output: created(1) }])
@@ -244,5 +254,13 @@ describe('forgeChangeRequests projection', () => {
     expect(stateSchema.parse(JSON.parse(JSON.stringify(state)))).toEqual(state)
     expect(() => stateSchema.parse({ ...state, pushes: [{ remote: 'r', branch: 'b', seq: -1 }] })).toThrow()
     expect(() => stateSchema.parse({ ...state, extra: true })).toThrow()
+  })
+
+  it('replays confirmed references without restoring hidden bindings or changing their first origin', () => {
+    const session = Session.create(SessionId('confirmed-reference'))
+    appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'reference', url: pullUrl(9) })
+    appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'dismiss', url: pullUrl(9) })
+    appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'reference', url: pullUrl(9) })
+    expect(fold(session).bindings).toEqual([{ url: pullUrl(9), origin: 'referenced', dismissed: true }])
   })
 })

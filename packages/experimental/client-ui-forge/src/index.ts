@@ -82,6 +82,7 @@ export class ForgePanelController extends TypertRemoteService {
   private creations!: WorktreeCreations
   private readonly patches: PatchCache
   private states: ChangeRequestStates | undefined
+  private readonly stopPanels: () => Promise<void>
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'forgePanel')
@@ -100,7 +101,7 @@ export class ForgePanelController extends TypertRemoteService {
     this.home = ctx
     this.config = resolved
     this.patches = new PatchCache(resolved.maxCachedDiffBytes)
-    ctx.effect(() => async () => {
+    this.stopPanels = ctx.effect(() => async () => {
       const panels = [...this.panels.values()]
       this.panels.clear()
       await Promise.allSettled(panels.map(panel => panel.dispose()))
@@ -113,19 +114,35 @@ export class ForgePanelController extends TypertRemoteService {
 
   protected async [Service.init](): Promise<void> {
     const ctx = this.home
-    this.worktreeStates = await ctx.sessionProjections.register(forgeWorktreeProjection)
+    const stateOwner = ctx.plugin({
+      name: 'forge-panel-state',
+      inject: ['sessionProjections'],
+      apply: async (scope: Context) => {
+        this.worktreeStates = await scope.sessionProjections.register(forgeWorktreeProjection)
+      },
+    })
+    await stateOwner
     // Inbox insertions, step proposals, and Session events read the worktree state, so they start once its reader is ready.
     this.creations = new WorktreeCreations(ctx, this.worktreeStates, this.config.worktreePrefix, (session) => {
       this.panels.get(session)?.updateWorktree()
     })
-    ctx.on('agent/inbox/inserted', ({ agent }) => { this.holdTurn(agent) })
-    ctx.on('session/event', (session: Session, event: SessionEvent) => {
+    const inbox = ctx.on('agent/inbox/inserted', ({ agent }) => { this.holdTurn(agent) })
+    const events = ctx.on('session/event', (session: Session, event: SessionEvent) => {
       this.panels.get(session)?.observe(event)
     })
-    ctx.on('internal/service', (name: string) => {
+    const services = ctx.on('internal/service', (name: string) => {
       if (name !== 'worktrees') return
       for (const panel of this.panels.values()) panel.updateWorktree()
     })
+    const { creations, stopPanels } = this
+    ctx.effect(function* () {
+      yield stateOwner.dispose
+      yield inbox
+      yield events
+      yield services
+      yield stopPanels
+      yield creations.dispose
+    }, 'forge-panel: drain before releasing state')
   }
 
   /**
@@ -443,9 +460,10 @@ export class ForgePanelController extends TypertRemoteService {
     if (worktrees === undefined) throw new RemoteError('forgePanel/worktrees-unavailable', 'No worktree service is mounted', {})
     await this.maintain(session, async (agent, work) => {
       const operation = AbortSignal.any([signal, work])
-      if (await this.home.fs.lstat(created.path, undefined, operation) !== undefined) return
       try {
-        await this.creations.restore(agent, worktrees, created, operation, () => { this.panels.get(session)?.restored() })
+        await this.creations.restore(agent, worktrees, created, operation,
+          () => { this.panels.get(session)?.restored() },
+          async check => await missingWorktree(this.home, this.config, session, this.worktreeState(session), created.path, check) === null)
       } catch (error) {
         operation.throwIfAborted()
         throw new RemoteError('forgePanel/restore-failed', messageOf(error), {}, { cause: error })
@@ -505,7 +523,7 @@ export class ForgePanelController extends TypertRemoteService {
     const directory = this.home.workingDirectory.get(session)
     const panel = this.panels.get(session)
     const missing = panel === undefined
-      ? await missingWorktree(this.home, this.config, session, this.worktreeState(session).created, directory, signal)
+      ? await missingWorktree(this.home, this.config, session, this.worktreeState(session), directory, signal)
       : await panel.checkMissing(signal)
     return this.home.workingDirectory.get(session) === directory ? missing : null
   }

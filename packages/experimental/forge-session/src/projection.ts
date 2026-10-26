@@ -22,7 +22,7 @@ const EMPTY: ForgeChangeRequestsState = Object.freeze({
 })
 
 const bindingRecordSchema: z.ZodType<BindingRecord> = z.object({
-  action: z.enum(['track', 'dismiss', 'discover']),
+  action: z.enum(['track', 'dismiss', 'discover', 'reference']),
   url: z.string().regex(/^https?:\/\/\S+$/),
 })
 
@@ -62,7 +62,7 @@ const stateSchema: z.ZodType<ForgeChangeRequestsState> = z.object({
  */
 export const forgeChangeRequestsProjection = {
   key: 'forgeChangeRequests',
-  stateVersion: 2,
+  stateVersion: 3,
   stateSchema,
   init: () => EMPTY,
   apply,
@@ -115,6 +115,8 @@ function applyRecord(state: ForgeChangeRequestsState, event: SessionEvent): Forg
   const index = state.bindings.findIndex(binding => sameChangeRequestUrl(binding.url, url))
   const existing = state.bindings[index]
   switch (action) {
+    case 'reference':
+      return existing === undefined ? { ...state, bindings: bind(state.bindings, [url], 'referenced') } : state
     case 'discover':
       return existing === undefined ? { ...state, bindings: bind(state.bindings, [url], 'discovered') } : state
     case 'track':

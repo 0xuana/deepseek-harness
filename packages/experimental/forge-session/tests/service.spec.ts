@@ -2,12 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import ForgeService from '@deepseek-ai/dsh-experimental-forge'
-import SessionStore, { pluginRecordOf } from '@deepseek-ai/dsh-session'
+import SessionStore, { appendPluginRecord, pluginRecordOf, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import ForgeSessionService from '../src/index.ts'
 import type { Config, SessionChangeRequest, SessionChangeRequestsListener } from '../src/index.ts'
-import { bench, demo, pull, pullUrl, pushOutput, shellTurn, snapshot } from './fixtures.ts'
+import { bench, demo, FakeProvider, pull, pullUrl, pushOutput, shellTurn, snapshot } from './fixtures.ts'
 import type { Bench } from './fixtures.ts'
 
 const contexts: Context[] = []
@@ -66,6 +66,49 @@ describe('forgeSession bindings', () => {
 })
 
 describe('forgeSession discovery', () => {
+  it('cancels a closed Session lookup and never writes its result into a same-id replacement', async () => {
+    const { ctx, provider } = await open()
+    const owner = ctx.plugin({ inject: ['sessions'], apply() {} })
+    await owner
+    const session = owner.ctx.sessions.create()
+    const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
+    const result = Promise.withResolvers<readonly ReturnType<typeof pull>[]>()
+    provider.findImpl = () => result.promise
+    try {
+      push(session, 'push', 'feat')
+      expect(provider.lookups).toHaveLength(1)
+      await owner.dispose()
+      expect(provider.lookups[0]?.signal.aborted).toBe(true)
+      const replacement = ctx.sessions.create(session.id)
+      result.resolve([pull(7)])
+      await settle()
+      expect(records(session)).toEqual([])
+      expect(records(replacement)).toEqual([])
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      result.resolve([])
+    }
+  })
+
+  it('stops publishing lookup results when the Session closes after the first binding', async () => {
+    const { ctx, provider } = await open()
+    const session = ctx.sessions.prepare()
+    const detach = ctx.sessions.enter(session)
+    ctx.sessions.announce(session)
+    ctx.on('session/event', (changed, event) => {
+      if (changed === session && pluginRecordOf(event)?.type === 'plugin:forge-session/binding') detach()
+    })
+    provider.heads.set('feat', [pull(7), pull(8)])
+    try {
+      push(session, 'push', 'feat')
+      await settle()
+      expect(records(session)).toEqual([{ action: 'discover', url: pullUrl(7) }])
+      expect(ctx.sessions.get(session.id)).toBeUndefined()
+    } finally {
+      detach()
+    }
+  })
+
   it('records change requests found for a pushed branch', async () => {
     const { ctx, provider, session } = await open()
     provider.heads.set('feat', [pull(7)])
@@ -203,6 +246,44 @@ describe('forgeSession track and dismiss', () => {
 })
 
 describe('forgeSession watch', () => {
+  it('resynchronizes existing watches when providers arrive, leave, and return', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(ForgeService)
+    await ctx.plugin(ForgeSessionService)
+    const session = ctx.sessions.create()
+    create(session, 'create', pullUrl(7))
+    const listener = vi.fn<SessionChangeRequestsListener>()
+    const stop = ctx.forgeSession.watch(session, listener)
+    expect(ctx.forgeSession.changeRequests(session)[0]?.ref).toBeNull()
+    const other = ctx.sessions.create()
+    create(other, 'other', pullUrl(8))
+    const stopOther = ctx.forgeSession.watch(other, () => {})
+    listener.mockImplementation((entries) => {
+      if (entries[0]?.ref !== null) stopOther()
+    })
+
+    const provider = new FakeProvider()
+    const register = () => ctx.plugin({ inject: ['forge'], apply(child: Context) { child.forge.register(provider) } })
+    const first = register()
+    await first
+    await vi.waitFor(() => { expect(lastList(listener)[0]?.update).toMatchObject({ snapshot: { ref: pull(7) } }) })
+    expect(provider.fetches).toEqual([[7]])
+    await first.dispose()
+    expect(lastList(listener)[0]).toMatchObject({ ref: null, update: null })
+
+    await register()
+    await vi.waitFor(() => { expect(provider.fetches).toEqual([[7], [7]]) })
+    expect(lastList(listener)[0]?.ref).toEqual(pull(7))
+    stop()
+    const calls = listener.mock.calls.length
+    ctx.emit('forge/providers-changed', 'fake')
+    expect(listener).toHaveBeenCalledTimes(calls)
+    expect(ctx.forge.latest(pull(7))).toBeUndefined()
+  })
+
   function lastList(listener: Mock<SessionChangeRequestsListener>): readonly SessionChangeRequest[] {
     return listener.mock.lastCall?.[0] ?? []
   }
@@ -286,6 +367,30 @@ describe('forgeSession watch', () => {
 })
 
 describe('forgeSession lifecycle', () => {
+  it('recovers references from an old checkpoint and preserves them across checkpoint suffix replay', async () => {
+    const { ctx, session } = await open()
+    create(session, 'create', pullUrl(1))
+    const rows = ctx.sessionProjections.checkpoint(session)
+    const offset = session.snapshotEvents().length
+    shellTurn(session, [{ callId: 'number', command: 'gh pr view 9 -R fake.test/octo/demo --json number', output: '{"number":9}' }])
+    appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'reference', url: pullUrl(8) })
+    appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'dismiss', url: pullUrl(9) })
+    const events = session.snapshotEvents()
+    const expected = ctx.sessionProjections.checkpoint(session)
+    const restore = (checkpoints: typeof rows, from: number) => ctx.sessionProjections.restore(
+      checkpoints, events.slice(from), SessionLogOffset(from), session.header, session.inheritedEventCount,
+    ).checkpoint
+    expect(restore({}, 0)).toEqual(expected)
+    expect(restore(rows, offset)).toEqual(expected)
+    const row = rows.forgeChangeRequests!
+    expect(restore({ forgeChangeRequests: { ...row, ver: 2 } }, 0)).toEqual(expected)
+    expect(expected.forgeChangeRequests?.val).toMatchObject({ bindings: [
+      { url: pullUrl(1), origin: 'created', dismissed: false },
+      { url: pullUrl(9), origin: 'referenced', dismissed: true },
+      { url: pullUrl(8), origin: 'referenced', dismissed: false },
+    ] })
+  })
+
   it('unregisters its projection and stops discovery when the service fiber is disposed', async () => {
     const { ctx, provider, session, service } = await open()
     create(session, 'create', pullUrl(1))
