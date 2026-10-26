@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import ForgeService from '@deepseek-ai/dsh-experimental-forge'
-import SessionStore, { pluginRecordOf } from '@deepseek-ai/dsh-session'
+import SessionStore, { appendPluginRecord, pluginRecordOf, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import ForgeSessionService from '../src/index.ts'
@@ -130,6 +130,19 @@ describe('forgeSession discovery', () => {
     await vi.waitFor(() => { expect(provider.lookups).toHaveLength(1) })
     await settle()
     expect(records(session)).toEqual([])
+  })
+
+  it('records the open change requests of a branch a caller reports, and nothing for a remote no provider serves', async () => {
+    const { ctx, provider, session } = await open()
+    provider.heads.set('feat', [pull(7), pull(8)])
+    create(session, 'create', pullUrl(8))
+
+    await ctx.forgeSession.discoverBranch(session, 'fake.test:octo/demo.git', 'feat')
+    expect(provider.lookups.map(lookup => [lookup.repository, lookup.branch])).toEqual([[demo, 'feat']])
+    expect(records(session)).toEqual([{ action: 'discover', url: pullUrl(7) }])
+
+    await ctx.forgeSession.discoverBranch(session, 'github.com:octo/demo.git', 'feat')
+    expect(provider.lookups).toHaveLength(1)
   })
 
   it('looks up again on every push of a branch', async () => {
@@ -354,6 +367,30 @@ describe('forgeSession watch', () => {
 })
 
 describe('forgeSession lifecycle', () => {
+  it('recovers references from an old checkpoint and preserves them across checkpoint suffix replay', async () => {
+    const { ctx, session } = await open()
+    create(session, 'create', pullUrl(1))
+    const rows = ctx.sessionProjections.checkpoint(session)
+    const offset = session.snapshotEvents().length
+    shellTurn(session, [{ callId: 'number', command: 'gh pr view 9 -R fake.test/octo/demo --json number', output: '{"number":9}' }])
+    appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'reference', url: pullUrl(8) })
+    appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'dismiss', url: pullUrl(9) })
+    const events = session.snapshotEvents()
+    const expected = ctx.sessionProjections.checkpoint(session)
+    const restore = (checkpoints: typeof rows, from: number) => ctx.sessionProjections.restore(
+      checkpoints, events.slice(from), SessionLogOffset(from), session.header, session.inheritedEventCount,
+    ).checkpoint
+    expect(restore({}, 0)).toEqual(expected)
+    expect(restore(rows, offset)).toEqual(expected)
+    const row = rows.forgeChangeRequests!
+    expect(restore({ forgeChangeRequests: { ...row, ver: 2 } }, 0)).toEqual(expected)
+    expect(expected.forgeChangeRequests?.val).toMatchObject({ bindings: [
+      { url: pullUrl(1), origin: 'created', dismissed: false },
+      { url: pullUrl(9), origin: 'referenced', dismissed: true },
+      { url: pullUrl(8), origin: 'referenced', dismissed: false },
+    ] })
+  })
+
   it('unregisters its projection and stops discovery when the service fiber is disposed', async () => {
     const { ctx, provider, session, service } = await open()
     create(session, 'create', pullUrl(1))

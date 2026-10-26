@@ -16,6 +16,8 @@ export function checkRun(name: string, status: string, conclusion: string | null
     status,
     conclusion,
     detailsUrl: `https://github.com/octo/demo/actions/runs/1/job/${name}`,
+    startedAt: status === 'QUEUED' ? null : '2026-10-09T01:00:00Z',
+    completedAt: status === 'COMPLETED' ? '2026-10-09T01:02:07Z' : null,
     checkSuite: workflow === null ? { workflowRun: null } : { workflowRun: { workflow: { name: workflow } } },
   }
 }
@@ -23,6 +25,18 @@ export function checkRun(name: string, status: string, conclusion: string | null
 /** One StatusContext node as GitHub returns it. */
 export function statusContext(context: string, state: string): Record<string, unknown> {
   return { __typename: 'StatusContext', context, state, targetUrl: null }
+}
+
+/** Merge settings of a repository that allows squash and merge commits and whose viewer may merge, usually with a merge commit. */
+export function repositorySettings(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    squashMergeAllowed: true,
+    mergeCommitAllowed: true,
+    rebaseMergeAllowed: false,
+    viewerPermission: 'WRITE',
+    viewerDefaultMergeMethod: 'MERGE',
+    ...overrides,
+  }
 }
 
 /** A pull request node with the fields the snapshot query selects. */
@@ -34,11 +48,15 @@ export function pullRequestNode(number: number, overrides: Record<string, unknow
     state: 'OPEN',
     isDraft: false,
     updatedAt: '2026-10-09T01:02:03Z',
+    closedAt: null,
     author: { login: 'octo' },
     headRefName: `topic-${number}`,
     headRefOid: 'f'.repeat(40),
     baseRefName: 'master',
+    additions: 128,
+    deletions: 14,
     mergeable: 'MERGEABLE',
+    mergeStateStatus: 'CLEAN',
     reviewDecision: null,
     reviewThreads: { nodes: [{ isResolved: true }, { isResolved: false }, { isResolved: false }] },
     commits: {

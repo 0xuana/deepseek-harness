@@ -119,3 +119,49 @@ it('does not announce provider withdrawal after its registry has stopped', async
   await unregister()
   expect(observer).toHaveBeenCalledTimes(1)
 })
+
+it.each(['readiness', 'markReady', 'merge', 'diff', 'fileText'] as const)(
+  'cancels and drains %s when its provider stops', async (method) => {
+    ctx = await forgeContext()
+    const provider: ForgeProvider = new FakeProvider()
+    const entered = Promise.withResolvers<undefined>()
+    const aborted = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const hold = async (signal: AbortSignal): Promise<void> => {
+      signal.addEventListener('abort', () => { aborted.resolve(undefined) }, { once: true })
+      entered.resolve(undefined)
+      await release.promise
+    }
+    vi.spyOn(provider, 'readiness').mockImplementation(async (_host, signal) => {
+      await hold(signal); return { state: 'ready', message: null }
+    })
+    vi.spyOn(provider, 'markReady').mockImplementation(async (_ref, signal) => { await hold(signal); return undefined })
+    vi.spyOn(provider, 'merge').mockImplementation(async (_ref, _request, signal) => { await hold(signal); return undefined })
+    vi.spyOn(provider, 'diff').mockImplementation(async (_ref, signal) => { await hold(signal); return 'diff' })
+    vi.spyOn(provider, 'fileText').mockImplementation(async (_ref, _commit, _path, signal) => { await hold(signal); return 'file' })
+    const fiber = await provide(ctx, provider)
+    const service = ctx.forge
+    const signal = new AbortController().signal
+    const calls = {
+      readiness: () => service.readiness(demo, signal),
+      markReady: () => service.markReady(ref(1), signal),
+      merge: () => service.merge(ref(1), { method: 'squash', headSha: 'a'.repeat(40) }, signal),
+      diff: () => service.diff(ref(1), signal),
+      fileText: () => service.fileText(ref(1), 'a'.repeat(40), 'file.txt', signal),
+    }
+    const rejected = expect(calls[method]()).rejects.toThrow('was unregistered')
+    let disposed = false
+    try {
+      await entered.promise
+      const disposal = fiber.dispose().then(() => { disposed = true })
+      await aborted.promise
+      expect(disposed).toBe(false)
+      release.resolve(undefined)
+      await rejected
+      await disposal
+    } finally {
+      release.resolve(undefined)
+      await rejected
+    }
+  },
+)

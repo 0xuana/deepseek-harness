@@ -38,11 +38,13 @@ describe('forge registry', () => {
     ctx = await forgeContext()
     const provider = new FakeProvider()
     provider.heads.set('Octo/Demo:topic', [ref(3)])
+    provider.readinessResult = { state: 'unauthenticated', message: 'run gh auth login' }
     await provide(ctx, provider)
     const signal = new AbortController().signal
 
     expect(ctx.forge.changeRequestUrl(ref(3))).toBe('https://fake.test/Octo/Demo/change/3')
     await expect(ctx.forge.findByHead(demo, 'topic', signal)).resolves.toEqual([ref(3)])
+    await expect(ctx.forge.readiness(demo, signal)).resolves.toEqual({ state: 'unauthenticated', message: 'run gh auth login' })
   })
 
   it('rejects operations for a forge without a provider', async () => {
@@ -52,6 +54,40 @@ describe('forge registry', () => {
 
     expect(() => ctx!.forge.changeRequestUrl(ref(1, elsewhere))).toThrow('forge: no provider is registered for "missing"')
     await expect(ctx.forge.findByHead(elsewhere, 'topic', signal)).rejects.toThrow('forge: no provider is registered for "missing"')
+    await expect(ctx.forge.readiness(elsewhere, signal)).rejects.toThrow('forge: no provider is registered for "missing"')
+    await expect(ctx.forge.markReady(ref(1, elsewhere), signal)).rejects.toThrow('forge: no provider is registered for "missing"')
+    await expect(ctx.forge.merge(ref(1, elsewhere), { method: 'squash', headSha: 'a'.repeat(40) }, signal))
+      .rejects.toThrow('forge: no provider is registered for "missing"')
+    await expect(ctx.forge.diff(ref(1, elsewhere), signal)).rejects.toThrow('forge: no provider is registered for "missing"')
+    await expect(ctx.forge.fileText(ref(1, elsewhere), 'a'.repeat(40), 'x', signal)).rejects.toThrow('forge: no provider is registered for "missing"')
+    expect(() => ctx!.forge.fileUrl(ref(1, elsewhere), 'a'.repeat(40), 'x')).toThrow('forge: no provider is registered for "missing"')
+  })
+
+  it('delegates change request reads to the provider of their forge', async () => {
+    ctx = await forgeContext()
+    const provider = new FakeProvider()
+    provider.readResult = 'diff --git a/x b/x'
+    await provide(ctx, provider)
+    const signal = new AbortController().signal
+
+    await expect(ctx.forge.diff(ref(3), signal)).resolves.toBe('diff --git a/x b/x')
+    provider.readResult = { code: 'not-found', message: 'gone' }
+    await expect(ctx.forge.fileText(ref(3), 'b'.repeat(40), 'src/a.ts', signal)).resolves.toEqual({ code: 'not-found', message: 'gone' })
+    expect(ctx.forge.fileUrl(ref(3), 'b'.repeat(40), 'src/a.ts')).toBe(`https://fake.test/Octo/Demo/file/${'b'.repeat(40)}/src/a.ts`)
+    expect(provider.actions).toEqual(['diff 3', `text 3 ${'b'.repeat(40)} src/a.ts`])
+  })
+
+  it('delegates change request actions to the provider of their forge and returns its outcome', async () => {
+    ctx = await forgeContext()
+    const provider = new FakeProvider()
+    await provide(ctx, provider)
+    const signal = new AbortController().signal
+
+    await expect(ctx.forge.markReady(ref(3), signal)).resolves.toBeUndefined()
+    provider.actionResult = { code: 'stale', message: 'Head branch was modified' }
+    await expect(ctx.forge.merge(ref(3), { method: 'rebase', headSha: 'b'.repeat(40) }, signal))
+      .resolves.toEqual({ code: 'stale', message: 'Head branch was modified' })
+    expect(provider.actions).toEqual(['ready 3', `merge 3 rebase ${'b'.repeat(40)}`])
   })
 
   it('refuses a second provider for the same forge', async () => {

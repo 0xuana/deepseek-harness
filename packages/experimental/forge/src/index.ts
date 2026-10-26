@@ -7,7 +7,7 @@ import { changeRequestKey } from './keys.ts'
 import { nextPollDelay } from './schedule.ts'
 import type {
   ChangeRequestKey, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, Config,
-  ForgeFailure, ForgeProvider, ForgeRepository,
+  ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, MergeRequest,
 } from './types.ts'
 
 export { changeRequestKey } from './keys.ts'
@@ -120,7 +120,7 @@ export class ForgeService extends Service {
         this.providers.delete(provider.forge)
         registration.lifetime.abort(new Error(`forge: provider "${provider.forge}" was unregistered`))
         for (const watch of [...this.watches.values()]) {
-          if (watch.ref.repository.forge === provider.forge) this.settle(watch, this.missing(provider.forge))
+          if (watch.ref.repository.forge === provider.forge) this.settle(watch, this.missing(provider.forge), undefined)
         }
         this.providersChanged(provider.forge)
         this.schedule()
@@ -180,6 +180,86 @@ export class ForgeService extends Service {
   }
 
   /**
+   * Report whether the provider can reach the repository's host with current credentials.
+   * @param repository - repository served by a registered provider.
+   * @param signal - cancellation for the probe.
+   * @returns the provider's readiness for the host.
+   * @throws when no provider serves the repository's forge.
+   */
+  async readiness(repository: ForgeRepository, signal: AbortSignal): Promise<ForgeReadiness> {
+    return await this.invoke(this.registration(repository.forge), signal,
+      (provider, operation) => provider.readiness(repository.host, operation))
+  }
+
+  /**
+   * Mark a draft change request ready for review, then poll it at once when it is watched.
+   * @param ref - change request served by a registered provider.
+   * @param signal - cancellation of the request.
+   * @returns undefined once the host accepted the change, or why it did not.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    const failure = await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.markReady(ref, operation))
+    this.refresh(ref)
+    return failure
+  }
+
+  /**
+   * Merge a change request while its head is still `request.headSha`, then
+   * poll it at once when it is watched.
+   * @param ref - change request served by a registered provider.
+   * @param request - merge method and the head commit the user confirmed.
+   * @param signal - cancellation of the request.
+   * @returns undefined once the host merged it, or why it did not.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    const failure = await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.merge(ref, request, operation))
+    this.refresh(ref)
+    return failure
+  }
+
+  /**
+   * Read the changes of a change request as its host computes them.
+   * @param ref - change request served by a registered provider.
+   * @param signal - cancellation of the read.
+   * @returns one unified patch with `a/` and `b/` path prefixes, or why the host did not provide it.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure> {
+    return await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.diff(ref, operation))
+  }
+
+  /**
+   * Read the text of one file at a commit of a change request's repository.
+   * @param ref - change request served by a registered provider.
+   * @param commit - commit object name.
+   * @param path - path relative to the repository root.
+   * @param signal - cancellation of the read.
+   * @returns the text, or why the host did not provide it.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure> {
+    return await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.fileText(ref, commit, path, operation))
+  }
+
+  /**
+   * Build the web page of one file at a commit of a change request's repository.
+   * @param ref - change request served by a registered provider.
+   * @param commit - commit object name.
+   * @param path - path relative to the repository root.
+   * @returns the provider's URL.
+   * @throws when no provider serves the change request's forge.
+   */
+  fileUrl(ref: ChangeRequestRef, commit: string, path: string): string {
+    return this.provider(ref.repository.forge).fileUrl(ref, commit, path)
+  }
+
+  /**
    * Watch one change request as an effect on the calling fiber. The first
    * watcher starts polling at once; listeners receive every later result,
    * and `latest` returns the current one. Polling stops when the last watcher
@@ -208,6 +288,19 @@ export class ForgeService extends Service {
       }
     }, 'forge.watch()')
     return () => void dispose()
+  }
+
+  /**
+   * Poll a watched change request at once, including after a terminal state.
+   * A fetch already in flight is followed immediately by another fetch; an
+   * unwatched change request is unchanged.
+   * @param ref - change request to poll.
+   */
+  refresh(ref: ChangeRequestRef): void {
+    const watch = this.watches.get(changeRequestKey(ref))
+    if (watch === undefined) return
+    watch.dueAt = Date.now()
+    this.schedule()
   }
 
   /**
@@ -322,12 +415,12 @@ export class ForgeService extends Service {
     for (const watch of batch) {
       if (this.watches.get(watch.key) !== watch) continue
       const result = failure ?? results?.get(watch.key) ?? { code: 'unavailable', message: `provider returned no result for ${watch.key}` }
-      this.settle(watch, result)
+      this.settle(watch, result, watch.dueAt)
     }
     this.schedule()
   }
 
-  private settle(watch: Watch, result: ChangeRequestSnapshot | ForgeFailure): void {
+  private settle(watch: Watch, result: ChangeRequestSnapshot | ForgeFailure, refreshAt: number | undefined): void {
     const fetchedAt = Date.now()
     let update: ChangeRequestUpdate
     if ('code' in result) {
@@ -339,7 +432,8 @@ export class ForgeService extends Service {
     }
     watch.latest = update
     const delay = nextPollDelay(result, watch.failures, this.config)
-    watch.dueAt = delay === undefined ? undefined : fetchedAt + delay
+    // A refresh requested after this fetch started needs a subsequent fetch, even for a terminal result.
+    watch.dueAt = refreshAt ?? (delay === undefined ? undefined : fetchedAt + delay)
     for (const listener of [...watch.listeners]) {
       try {
         listener(update)

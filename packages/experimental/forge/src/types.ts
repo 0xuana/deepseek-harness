@@ -41,6 +41,10 @@ export interface ChangeRequestCheck {
   readonly url: string | null
   /** Workflow that produced the check, or null when the host reports none. */
   readonly workflow: string | null
+  /** ISO 8601 time the check started, or null before it starts and when the host reports none. */
+  readonly startedAt: string | null
+  /** ISO 8601 time the check completed, or null while it runs and when the host reports none. */
+  readonly completedAt: string | null
 }
 
 /** Combined outcome of all checks on the head commit. */
@@ -51,6 +55,9 @@ export type Mergeability = 'mergeable' | 'conflicting' | 'unknown'
 
 /** Aggregate review outcome required by the host's merge rules. */
 export type ReviewDecision = 'approved' | 'changes-requested' | 'review-required' | 'none'
+
+/** How a merge brings the commits of a change request into its base branch. */
+export type MergeMethod = 'merge' | 'squash' | 'rebase'
 
 /** Status of one change request at the time its provider read it. */
 export interface ChangeRequestSnapshot {
@@ -72,8 +79,19 @@ export interface ChangeRequestSnapshot {
   readonly headSha: string
   /** Branch the change request merges into. */
   readonly baseBranch: string
+  /** Lines the change request adds. */
+  readonly additions: number
+  /** Lines the change request deletes. */
+  readonly deletions: number
   /** Merge conflict status; `unknown` while the host computes it. */
   readonly mergeability: Mergeability
+  /**
+   * Whether the host would merge the change request now for the signed-in
+   * user: open, not a draft, and meeting the base branch's merge rules.
+   */
+  readonly mergeReady: boolean
+  /** Merge methods the repository accepts, the signed-in user's usual one first. */
+  readonly mergeMethods: readonly MergeMethod[]
   /** Aggregate review outcome. */
   readonly reviewDecision: ReviewDecision
   /** Checks on the head commit in host order. */
@@ -86,12 +104,18 @@ export interface ChangeRequestSnapshot {
   readonly unresolvedThreads: number
   /** ISO 8601 time of the host's last update to the change request. */
   readonly updatedAt: string
+  /** ISO 8601 time the change request was merged or closed, or null while it is open. */
+  readonly closedAt: string | null
 }
 
 /** Why a provider could not read a change request. */
 export interface ForgeFailure {
-  /** `not-found`: the host does not expose it; `unauthenticated`: credentials are missing or rejected; `unavailable`: any other failure. */
-  readonly code: 'not-found' | 'unauthenticated' | 'unavailable'
+  /**
+   * `not-found`: the host does not expose it; `unauthenticated`: credentials are missing or rejected;
+   * `too-large`: the host or the provider refuses an answer over its size limit, so reading again fails
+   * the same way; `unavailable`: any other failure.
+   */
+  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'unavailable'
   /** Human-readable cause. */
   readonly message: string
 }
@@ -109,6 +133,33 @@ export type ChangeRequestUpdate = {
   /** Reason the status could not be read. */
   readonly failure: ForgeFailure
 })
+
+/** A merge the user confirmed for the head commit they saw. */
+export interface MergeRequest {
+  /** How the commits enter the base branch. */
+  readonly method: MergeMethod
+  /** Commit object name the head must still have; the merge is refused once the head moves. */
+  readonly headSha: string
+}
+
+/** Why a provider could not change a change request. */
+export interface ForgeActionFailure {
+  /**
+   * `unauthenticated`: credentials are missing or rejected; `stale`: the head
+   * moved past the confirmed commit; `failed`: the host refused or could not be reached.
+   */
+  readonly code: 'unauthenticated' | 'stale' | 'failed'
+  /** Human-readable cause, usually the host's own message. */
+  readonly message: string
+}
+
+/** Whether a provider can reach one host with the current credentials. */
+export interface ForgeReadiness {
+  /** `ready`, `unauthenticated` (sign-in needed), or `unavailable` (tool missing or host unreachable). */
+  readonly state: 'ready' | 'unauthenticated' | 'unavailable'
+  /** Human-readable detail, or null when ready. */
+  readonly message: string | null
+}
 
 /**
  * Host-specific access registered with `ctx.forge`. One provider serves one
@@ -130,6 +181,18 @@ export interface ForgeProvider {
   ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>
   /** Find open change requests whose head is `branch` in `repository`, excluding the default branch and forks. */
   findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>
+  /** Report whether the provider can reach `host` with current credentials. */
+  readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness>
+  /** Mark a draft change request ready for review, resolving to undefined once the host accepted it. */
+  markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+  /** Merge a change request while its head is still `request.headSha`, resolving to undefined once merged. */
+  merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+  /** Read the changes of a change request as the host computes them, as one unified patch with `a/` and `b/` path prefixes. */
+  diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure>
+  /** Read the text of `path` at `commit` in the change request's repository. */
+  fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure>
+  /** Build the web page of `path` at `commit` in the change request's repository. */
+  fileUrl(ref: ChangeRequestRef, commit: string, path: string): string
 }
 
 /**

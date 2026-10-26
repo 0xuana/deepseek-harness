@@ -98,6 +98,8 @@ kind: "package-group"
 | [`forge`](forge/README.zh.md) | 代码托管提供方注册表，共享变更请求轮询 | `ctx.forge` |
 | [`forge-github`](forge-github/README.zh.md) | 通过宿主 GitHub CLI 读取 pull request 的 GitHub 提供方 | 在 `ctx.forge` 上注册提供方 |
 | [`forge-session`](forge-session/README.zh.md) | 把变更请求绑定到创建、推送或跟踪它们的 Session | `ctx.forgeSession` |
+| [`client-ui-forge`](client-ui-forge/README.zh.md) | 展示 Session 的 Git 检出、worktree 与已绑定 pull request 的 GUI 面板 | `ctx.forgePanel` |
+| [`forge-bundle`](forge-bundle/README.zh.md) | 默认禁用的 pull request 与 worktree 面板组合 | — |
 
 -----
 
@@ -106,7 +108,7 @@ kind: "package-group"
 
 - [实验包发布说明](../../scripts/experimental-package-policy.ts)——默认公开与私有例外。
 - [工作树](../../docs/subsystems/worktrees.zh.md)——显式创建分支与检出目录。
-- [Forges](../../docs/subsystems/forge.zh.md)——变更请求提供方、状态轮询与 Session 绑定。
+- [Forges](../../docs/subsystems/forge.zh.md)——变更请求提供方、状态轮询、Session 绑定与面板。
 - [计算机操作](../../docs/subsystems/computer-use.zh.md)——桌面提供方选择。
 - [浏览器操作](../../docs/subsystems/browser-use.zh.md)——浏览器提供方选择与 Session 所有权。
 - [Agent Teams 子系统](../../docs/subsystems/agent-team.zh.md)——持久 Team 类型与 `ctx.agentTeams` 服务 API。

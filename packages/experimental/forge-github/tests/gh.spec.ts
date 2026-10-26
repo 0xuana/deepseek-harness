@@ -2,7 +2,7 @@ import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ghRunner } from '../src/gh.ts'
+import { GhOutputLimitError, GhTimeoutError, GhUnavailableError, ghRunner } from '../src/gh.ts'
 
 let root = ''
 
@@ -53,7 +53,10 @@ describe.skipIf(process.platform === 'win32')('gh runner', () => {
   it('rejects when gh outlives the timeout', async () => {
     const run = ghRunner({ ghCommand: await fakeGh(), timeoutMs: 100, maxOutputBytes: 10_000 })
 
-    await expect(run(['sleep'], new AbortController().signal)).rejects.toThrow('gh sleep timed out after 100ms')
+    const result = run(['sleep'], new AbortController().signal)
+
+    await expect(result).rejects.toBeInstanceOf(GhTimeoutError)
+    await expect(result).rejects.toThrow('gh sleep timed out after 100ms')
   })
 
   it('rejects with the abort reason when cancelled', async () => {
@@ -69,12 +72,17 @@ describe.skipIf(process.platform === 'win32')('gh runner', () => {
   it('rejects output beyond maxOutputBytes', async () => {
     const run = ghRunner({ ghCommand: await fakeGh(), timeoutMs: 5_000, maxOutputBytes: 1_000 })
 
-    await expect(run(['big'], new AbortController().signal)).rejects.toThrow('gh big output exceeds maxOutputBytes')
+    const result = run(['big'], new AbortController().signal)
+
+    await expect(result).rejects.toBeInstanceOf(GhOutputLimitError)
+    await expect(result).rejects.toThrow('gh big output exceeds maxOutputBytes')
   })
 
   it('reports an executable that cannot start', async () => {
     const run = ghRunner({ ghCommand: join(root, 'missing-gh'), timeoutMs: 5_000, maxOutputBytes: 1_000 })
+    const result = run([], new AbortController().signal)
 
-    await expect(run([], new AbortController().signal)).rejects.toThrow(/^gh could not start: /)
+    await expect(result).rejects.toBeInstanceOf(GhUnavailableError)
+    await expect(result).rejects.toThrow(/^gh could not start: /)
   })
 })

@@ -1,5 +1,6 @@
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import { describe, expect, it } from 'vitest'
+import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from '../src/gh.ts'
 import type { GhOutput, GhRunner } from '../src/gh.ts'
 import { GitHubProvider } from '../src/provider.ts'
 import { demo, pull, pullRequestNode } from './fixtures.ts'
@@ -158,4 +159,165 @@ describe('GitHub provider head branch lookup', () => {
     await expect(provider(fakeGh(() => output('', 2)).run).findByHead(demo, 'topic', signal))
       .rejects.toThrow('forge-github: head branch lookup failed: gh exited with 2')
   })
+})
+
+describe('GitHub provider readiness', () => {
+  it('is ready when gh auth status succeeds for the host', async () => {
+    const gh = fakeGh(() => output('Logged in to github.com'))
+
+    await expect(provider(gh.run).readiness('github.com', signal)).resolves.toEqual({ state: 'ready', message: null })
+    expect(gh.calls).toEqual([['auth', 'status', '--hostname', 'github.com']])
+  })
+
+  it('reports the first diagnostic line when gh is not signed in', async () => {
+    await expect(provider(fakeGh(() => output('', 1, 'You are not logged into any GitHub hosts.\nRun gh auth login')).run).readiness('github.com', signal))
+      .resolves.toEqual({ state: 'unauthenticated', message: 'You are not logged into any GitHub hosts.' })
+    await expect(provider(fakeGh(() => output('github.com\n  X Failed to log in', 1)).run).readiness('github.com', signal))
+      .resolves.toEqual({ state: 'unauthenticated', message: 'github.com' })
+    await expect(provider(fakeGh(() => output('', 1)).run).readiness('github.com', signal))
+      .resolves.toEqual({ state: 'unauthenticated', message: 'gh is not signed in to github.com' })
+  })
+
+  it('is unavailable when gh cannot start and rethrows other failures', async () => {
+    await expect(provider(() => Promise.reject(new GhUnavailableError('gh could not start: spawn gh ENOENT')))
+      .readiness('github.com', signal)).resolves.toEqual({ state: 'unavailable', message: 'gh could not start: spawn gh ENOENT' })
+    await expect(provider(() => Promise.reject(new Error('timed out'))).readiness('github.com', signal)).rejects.toThrow('timed out')
+  })
+})
+
+describe('GitHub provider actions', () => {
+  const head = 'c'.repeat(40)
+
+  it('marks a pull request ready for review through gh pr ready on its host', async () => {
+    const gh = fakeGh(() => output(''))
+
+    await expect(provider(gh.run).markReady(pull(7, enterprise), signal)).resolves.toBeUndefined()
+    expect(gh.calls).toEqual([['pr', 'ready', '7', '--repo', 'ghe.corp.example/team/svc']])
+  })
+
+  it('merges a pull request through the REST merge endpoint with the confirmed head', async () => {
+    const gh = fakeGh(() => output({ sha: 'd'.repeat(40), merged: true, message: 'Pull Request successfully merged' }))
+
+    await expect(provider(gh.run).merge(pull(7), { method: 'squash', headSha: head }, signal)).resolves.toBeUndefined()
+    expect(gh.calls).toEqual([[
+      'api', '--hostname', 'github.com', '--method', 'PUT', 'repos/octo/demo/pulls/7/merge', '-f', 'merge_method=squash', '-f', `sha=${head}`,
+    ]])
+  })
+
+  it.each([
+    ['a moved head', { message: 'Head branch was modified. Review and try the merge again.' }, 'gh: Head branch was modified. Review and try the merge again. (HTTP 409)',
+      { code: 'stale', message: 'Head branch was modified. Review and try the merge again.' }],
+    ['an unmet merge rule', { message: 'Pull Request is not mergeable' }, 'gh: Pull Request is not mergeable (HTTP 405)',
+      { code: 'failed', message: 'Pull Request is not mergeable' }],
+    ['rejected credentials', { message: 'Bad credentials' }, 'gh: Bad credentials (HTTP 401)', { code: 'unauthenticated', message: 'Bad credentials' }],
+    ['an error body without a message', { errors: [] }, 'gh: Validation Failed (HTTP 422)', { code: 'failed', message: 'gh: Validation Failed (HTTP 422)' }],
+    ['an empty message', { message: ' ' }, 'gh: Not Found (HTTP 404)', { code: 'failed', message: 'gh: Not Found (HTTP 404)' }],
+    ['no output', '', '', { code: 'failed', message: 'gh exited with 1' }],
+  ])('reports a merge refused for %s', async (_label, body, stderr, failure) => {
+    await expect(provider(fakeGh(() => output(body, 1, stderr)).run).merge(pull(7), { method: 'merge', headSha: head }, signal)).resolves.toEqual(failure)
+  })
+
+  it('reports a failed ready mark by the first diagnostic line, recognizing a missing sign-in', async () => {
+    await expect(provider(fakeGh(() => output('', 1, '\nGraphQL: Resource not accessible by integration (markPullRequestReadyForReview)\n')).run)
+      .markReady(pull(7), signal)).resolves.toEqual({ code: 'failed', message: 'GraphQL: Resource not accessible by integration (markPullRequestReadyForReview)' })
+    await expect(provider(fakeGh(() => output('', 4, 'To get started with GitHub CLI, please run:  gh auth login')).run).markReady(pull(7), signal))
+      .resolves.toEqual({ code: 'unauthenticated', message: 'To get started with GitHub CLI, please run:  gh auth login' })
+  })
+
+  it('reports an action as failed when gh cannot start and rethrows other failures', async () => {
+    await expect(provider(() => Promise.reject(new GhUnavailableError('gh could not start: spawn gh ENOENT'))).markReady(pull(7), signal))
+      .resolves.toEqual({ code: 'failed', message: 'gh could not start: spawn gh ENOENT' })
+    await expect(provider(() => Promise.reject(new Error('aborted'))).merge(pull(7), { method: 'rebase', headSha: head }, signal)).rejects.toThrow('aborted')
+  })
+
+  it('refuses to address a pull request or head commit that cannot be inlined', async () => {
+    const gh = fakeGh(() => output(''))
+    const subject = provider(gh.run)
+
+    await expect(subject.markReady(pull(7, { ...demo, owner: 'oc/to' }), signal)).rejects.toThrow('forge-github: invalid repository "oc/to/demo"')
+    await expect(subject.merge(pull(0), { method: 'merge', headSha: head }, signal)).rejects.toThrow('forge-github: invalid pull request number 0')
+    await expect(subject.merge(pull(7), { method: 'merge', headSha: 'HEAD' }, signal)).rejects.toThrow('forge-github: invalid head commit "HEAD"')
+    await expect(subject.merge(pull(7), { method: 'merge', headSha: 'e'.repeat(64) }, signal)).resolves.toBeUndefined()
+    expect(gh.calls).toHaveLength(1)
+  })
+})
+
+describe('GitHub provider reads', () => {
+  const head = 'c'.repeat(40)
+
+  it('reads the pull request diff through gh pr diff on its host', async () => {
+    const gh = fakeGh(() => output('diff --git a/x b/x\n'))
+
+    await expect(provider(gh.run).diff(pull(7, enterprise), signal)).resolves.toBe('diff --git a/x b/x\n')
+    expect(gh.calls).toEqual([['pr', 'diff', '7', '--repo', 'ghe.corp.example/team/svc', '--color', 'never']])
+  })
+
+  it('reads a file at a commit through the raw contents API, encoding each path segment', async () => {
+    const gh = fakeGh(() => output('line\n'))
+
+    await expect(provider(gh.run).fileText(pull(7), head, 'docs/中文 notes/#1.md', signal)).resolves.toBe('line\n')
+    expect(gh.calls).toEqual([[
+      'api', '--hostname', 'github.com', '-H', 'Accept: application/vnd.github.raw+json',
+      `repos/octo/demo/contents/docs/${encodeURIComponent('中文 notes')}/%231.md?ref=${head}`,
+    ]])
+  })
+
+  it('builds the web page of a file at a commit', () => {
+    expect(provider(fakeGh(() => output('')).run).fileUrl(pull(7), head, 'src/a b.ts')).toBe(`https://github.com/octo/demo/blob/${head}/src/a%20b.ts`)
+  })
+
+  it.each([
+    ['a missing pull request', '', 'GraphQL: Could not resolve to a PullRequest with the number of 7. (repository.pullRequest)',
+      { code: 'not-found', message: 'GraphQL: Could not resolve to a PullRequest with the number of 7. (repository.pullRequest)' }],
+    ['a missing file', { message: 'Not Found' }, 'gh: Not Found (HTTP 404)', { code: 'not-found', message: 'Not Found' }],
+    // What gh 2.100 prints for a pull request over 300 files.
+    ['a diff over GitHub\'s size limit', '', [
+      'could not find pull request diff: HTTP 406: Sorry, the diff exceeded the maximum number of files (300). Consider using \'List pull '
+      + 'requests files\' API or locally cloning the repository instead. (https://api.github.com/repos/octo/demo/pulls/7)',
+      'PullRequest.diff too_large',
+    ].join('\n'), {
+      code: 'too-large',
+      message: 'could not find pull request diff: HTTP 406: Sorry, the diff exceeded the maximum number of files (300). Consider using '
+        + '\'List pull requests files\' API or locally cloning the repository instead. (https://api.github.com/repos/octo/demo/pulls/7)',
+    }],
+    ['a file over the contents API limit', {
+      message: 'This API returns blobs up to 1 MB in size. The requested blob is too large to fetch via the API.',
+      errors: [{ resource: 'Blob', field: 'data', code: 'too_large' }],
+    }, 'gh: This API returns blobs up to 1 MB in size. The requested blob is too large to fetch via the API. (HTTP 403)', {
+      code: 'too-large', message: 'This API returns blobs up to 1 MB in size. The requested blob is too large to fetch via the API.',
+    }],
+    ['another refusal', { message: 'Server Error' }, 'gh: Server Error (HTTP 502)', { code: 'unavailable', message: 'Server Error' }],
+    ['a missing sign-in', '', 'To get started with GitHub CLI, please run:  gh auth login',
+      { code: 'unauthenticated', message: 'To get started with GitHub CLI, please run:  gh auth login' }],
+    ['no output', '', '', { code: 'unavailable', message: 'gh exited with 1' }],
+  ])('reports a read refused for %s', async (_label, body, stderr, failure) => {
+    await expect(provider(fakeGh(() => output(body, 1, stderr)).run).diff(pull(7), signal)).resolves.toEqual(failure)
+  })
+
+  it('reports a read as unavailable when gh cannot start, rethrows other failures, and refuses an invalid commit', async () => {
+    await expect(provider(() => Promise.reject(new GhUnavailableError('gh could not start: spawn gh ENOENT'))).diff(pull(7), signal))
+      .resolves.toEqual({ code: 'unavailable', message: 'gh could not start: spawn gh ENOENT' })
+    await expect(provider(() => Promise.reject(new Error('aborted'))).fileText(pull(7), head, 'a', signal)).rejects.toThrow('aborted')
+    await expect(provider(fakeGh(() => output('')).run).fileText(pull(7), 'main', 'a', signal)).rejects.toThrow('forge-github: invalid commit "main"')
+  })
+
+  it('reports output over maxOutputBytes as too large and a run past timeoutMs as unavailable', async () => {
+    await expect(provider(() => Promise.reject(new GhOutputLimitError('gh pr output exceeds maxOutputBytes'))).diff(pull(7), signal))
+      .resolves.toEqual({ code: 'too-large', message: 'gh pr output exceeds maxOutputBytes' })
+    await expect(provider(() => Promise.reject(new GhTimeoutError('gh api timed out after 30000ms'))).fileText(pull(7), head, 'a', signal))
+      .resolves.toEqual({ code: 'unavailable', message: 'gh api timed out after 30000ms' })
+  })
+})
+
+it('rejects readiness, actions, and content reads for an unconfigured host without starting gh', async () => {
+  const gh = fakeGh(() => output('unexpected'))
+  const subject = provider(gh.run)
+  const target = pull(7, { ...demo, host: 'unconfigured.example' })
+  const message = 'forge-github: host "unconfigured.example" is not configured'
+  await expect(subject.readiness(target.repository.host, signal)).resolves.toEqual({ state: 'unavailable', message })
+  await expect(subject.markReady(target, signal)).resolves.toEqual({ code: 'failed', message })
+  await expect(subject.merge(target, { method: 'squash', headSha: 'a'.repeat(40) }, signal)).resolves.toEqual({ code: 'failed', message })
+  await expect(subject.diff(target, signal)).resolves.toEqual({ code: 'unavailable', message })
+  await expect(subject.fileText(target, 'a'.repeat(40), 'file.txt', signal)).resolves.toEqual({ code: 'unavailable', message })
+  expect(gh.calls).toEqual([])
 })

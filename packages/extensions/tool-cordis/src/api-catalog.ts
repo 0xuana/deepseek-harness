@@ -1257,10 +1257,57 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when no provider serves the repository\'s forge or the lookup fails.'],
       },
       {
+        signature: 'async readiness(repository: ForgeRepository, signal: AbortSignal): Promise<ForgeReadiness>',
+        description: 'Report whether the provider can reach the repository\'s host with current credentials.',
+        parameters: [{ name: 'repository', description: 'repository served by a registered provider.' }, { name: 'signal', description: 'cancellation for the probe.' }],
+        returns: 'the provider\'s readiness for the host.',
+        throws: ['when no provider serves the repository\'s forge.'],
+      },
+      {
+        signature: 'async markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>',
+        description: 'Mark a draft change request ready for review, then poll it at once when it is watched.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'signal', description: 'cancellation of the request.' }],
+        returns: 'undefined once the host accepted the change, or why it did not.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
+        signature: 'async merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>',
+        description: 'Merge a change request while its head is still `request.headSha`, then poll it at once when it is watched.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'request', description: 'merge method and the head commit the user confirmed.' }, { name: 'signal', description: 'cancellation of the request.' }],
+        returns: 'undefined once the host merged it, or why it did not.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
+        signature: 'async diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure>',
+        description: 'Read the changes of a change request as its host computes them.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'signal', description: 'cancellation of the read.' }],
+        returns: 'one unified patch with `a/` and `b/` path prefixes, or why the host did not provide it.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
+        signature: 'async fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure>',
+        description: 'Read the text of one file at a commit of a change request\'s repository.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'commit', description: 'commit object name.' }, { name: 'path', description: 'path relative to the repository root.' }, { name: 'signal', description: 'cancellation of the read.' }],
+        returns: 'the text, or why the host did not provide it.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
+        signature: 'fileUrl(ref: ChangeRequestRef, commit: string, path: string): string',
+        description: 'Build the web page of one file at a commit of a change request\'s repository.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'commit', description: 'commit object name.' }, { name: 'path', description: 'path relative to the repository root.' }],
+        returns: 'the provider\'s URL.',
+        throws: ['when no provider serves the change request\'s forge.'],
+      },
+      {
         signature: 'watch(ref: ChangeRequestRef, listener: ChangeRequestListener): () => void',
         description: 'Watch one change request as an effect on the calling fiber. The first watcher starts polling at once; listeners receive every later result, and `latest` returns the current one. Polling stops when the last watcher leaves. Listeners must not throw; a thrown error is logged and skipped.',
         parameters: [{ name: 'ref', description: 'change request to poll.' }, { name: 'listener', description: 'receives each polling result.' }],
         returns: 'the disposer that stops this watch.',
+      },
+      {
+        signature: 'refresh(ref: ChangeRequestRef): void',
+        description: 'Poll a watched change request at once, including after a terminal state. A fetch already in flight is followed immediately by another fetch; an unwatched change request is unchanged.',
+        parameters: [{ name: 'ref', description: 'change request to poll.' }],
       },
       {
         signature: 'latest(ref: ChangeRequestRef): ChangeRequestUpdate | undefined',
@@ -1271,9 +1318,121 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'forgePanel',
+    summary: 'Serves the forge panel.',
+    description: 'Serves the forge panel. Following a Session inspects the checkout of its current directory read-only in the Session\'s execution world, recognizes the code host of the upstream remote or `origin`, probes sign-in for that host, and polls the Session\'s bound change requests through `ctx.forge` until the last follower of that Session leaves. A worktree request makes the panel create a branch and checkout through an optional `ctx.worktrees` and enter it while the Session\'s first message waits in the inbox, or at the first step proposal of a message no wait took. After a failed or stopped attempt the message keeps waiting for another attempt or for the request to be withdrawn. A message also waits while the worktree the Session works in is gone, until that worktree is checked out again or left for the source checkout. Changes to a Session\'s checkout run as Agent maintenance, so a message that arrives meanwhile waits for them.',
+    methods: [
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *follow(session: Session, signal: AbortSignal): AsyncIterable<ForgePanelState>',
+        description: 'Stream the panel state of a Session: the current state first, then each later state. Intermediate states may be skipped when the reader is slower than the updates. The stream ends when `signal` aborts or the Remote stops.',
+        parameters: [{ name: 'session', description: 'Session to follow.' }, { name: 'signal', description: 'ends the stream.' }],
+        returns: 'panel states in publication order.',
+      },
+      {
+        signature: '@Remote async branches(session: Session, signal: AbortSignal): Promise<ForgeBranches>',
+        description: 'List the local branches that can start a worktree of the Session\'s current checkout.',
+        parameters: [{ name: 'session', description: 'Session whose current directory is listed.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the checked-out branch and at most `maxBranches` local branches, the checked-out one first.',
+        throws: ['when the current directory is not inside a checkout or Git fails.'],
+      },
+      {
+        signature: '@Remote async track(session: Session, url: string, signal: AbortSignal): Promise<void>',
+        description: 'Bind a change request to a Session by URL, or restore a dismissed binding.',
+        parameters: [{ name: 'session', description: 'Session that receives the binding.' }, { name: 'url', description: 'web URL of the change request.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/unrecognized-url` when no registered provider serves the URL.'],
+      },
+      {
+        signature: '@Remote async dismiss(session: Session, url: string, signal: AbortSignal): Promise<void>',
+        description: 'Hide a visible binding of a Session; other URLs leave the Session unchanged.',
+        parameters: [{ name: 'session', description: 'Session that owns the binding.' }, { name: 'url', description: 'web URL of the change request.' }, { name: 'signal', description: 'request cancellation.' }],
+      },
+      {
+        signature: '@Remote async refresh(session: Session, signal: AbortSignal): Promise<void>',
+        description: 'Reinspect a followed Session\'s checkout, probe sign-in again, and poll its change requests at once; an unfollowed Session is unchanged.',
+        parameters: [{ name: 'session', description: 'Session whose panel refreshes.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'settles once the inspection and the sign-in probe have ended; poll results reach the panel stream later.',
+      },
+      {
+        signature: '@Remote async localDiff(session: Session, scope: ForgeLocalScope, signal: AbortSignal): Promise<ForgeLocalDiff>',
+        description: 'Read the changes one scope covers in the checkout of the Session\'s current directory, with Git confined to the Session\'s read-only sandbox.',
+        parameters: [{ name: 'session', description: 'Session whose checkout is read.' }, { name: 'scope', description: 'which changes to read.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the files, the base of the `branch` scope, and the untracked files left out.',
+        throws: ['`forgePanel/not-a-checkout` outside a checkout; `forgePanel/no-fork-point` for the `branch` scope of a checkout without one; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.'],
+      },
+      {
+        signature: '@Remote async localText(session: Session, scope: ForgeLocalScope, path: string, signal: AbortSignal): Promise<string>',
+        description: 'Read the new side of one changed file in a scope, which supplies the unchanged lines between its hunks: the index for `staged`, else the working tree.',
+        parameters: [{ name: 'session', description: 'Session whose checkout is read.' }, { name: 'scope', description: 'the scope the diff was read in.' }, { name: 'path', description: 'path relative to the checkout\'s top-level directory, as the diff names it.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the text.',
+        throws: ['`forgePanel/not-a-checkout` outside a checkout; `forgePanel/diff-too-large` over `maxDiffBytes`; an error for a path outside the checkout, binary content, or a failed read.'],
+      },
+      {
+        signature: '@Remote async changeRequestDiff(session: Session, url: string, signal: AbortSignal): Promise<ForgeChangeRequestDiff>',
+        description: 'Read the changes of a change request of a Session as its code host computes them, at the head commit of its latest status. A patch already read at the same head commit and base branch is reused from memory, for any Session, until `maxCachedDiffBytes` evicts it.',
+        parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the files, the head commit, each file\'s web page, and the commits the checkout has beyond the head.',
+        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/diff-too-large` when the host or its provider refuses the diff over a size limit; `forgePanel/diff-failed` before its status was read and when the host does not provide the diff otherwise.'],
+      },
+      {
+        signature: '@Remote async changeRequestText(session: Session, url: string, commit: string, path: string, signal: AbortSignal): Promise<string>',
+        description: 'Read one file of a change request\'s repository at a commit, which supplies the unchanged lines between the hunks of its diff.',
+        parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'commit', description: 'commit object name, the head commit of the diff.' }, { name: 'path', description: 'path relative to the repository root.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the text.',
+        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/diff-too-large` when the host or its provider refuses the file over a size limit; `forgePanel/diff-failed` when the host does not provide the file otherwise.'],
+      },
+      {
+        signature: '@Remote async markReady(session: Session, url: string, signal: AbortSignal): Promise<void>',
+        description: 'Mark a draft change request of a Session ready for review; the change request is polled again once the host answers.',
+        parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/action-failed` with the host\'s reason when the host refuses or cannot be reached.'],
+      },
+      {
+        signature: '@Remote async merge(session: Session, url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void>',
+        description: 'Merge a change request of a Session while its head is still `headSha`; the change request is polled again once the host answers.',
+        parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'method', description: 'how the commits enter the base branch.' }, { name: 'headSha', description: 'head commit the user confirmed.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/stale-head` when the head moved past `headSha`; `forgePanel/action-failed` with the host\'s reason when the host refuses otherwise or cannot be reached.'],
+      },
+      {
+        signature: '@Remote async requestWorktree(session: Session, from: string | null, signal: AbortSignal): Promise<void>',
+        description: 'Ask for a new worktree before the Session\'s first turn, replacing an open request and forgetting a failed attempt. While the next message waits in the inbox, or else at the first step proposal, the panel creates a branch from `from`, or from HEAD of the current checkout when it is null, and enters its checkout. A message that already waits after a failed or stopped attempt keeps waiting for ForgePanelController.retryWorktree.',
+        parameters: [{ name: 'session', description: 'Session without a started turn.' }, { name: 'from', description: 'local base branch, or null for HEAD.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/invalid-branch` when `from` is empty; `forgePanel/worktrees-unavailable` without a worktree service; `forgePanel/session-started` after a turn started or the worktree was created; `forgePanel/session-busy` while the worktree is being created.'],
+      },
+      {
+        signature: '@Remote async cancelWorktree(session: Session, signal: AbortSignal): Promise<void>',
+        description: 'Withdraw the open worktree request of a Session with its failed attempt, which lets a waiting message go on in the current checkout; without a request the Session is unchanged. Withdrawing needs no worktree service.',
+        parameters: [{ name: 'session', description: 'Session without a started turn.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/session-started` after a turn started or the worktree was created; `forgePanel/session-busy` while the worktree is being created.'],
+      },
+      {
+        signature: '@Remote async stopCreation(session: Session, signal: AbortSignal): Promise<void>',
+        description: 'Stop the creation a message of the Session waits for; the message keeps waiting with the request still open. Without such a creation the Session is unchanged.',
+        parameters: [{ name: 'session', description: 'Session whose creation stops.' }, { name: 'signal', description: 'request cancellation.' }],
+      },
+      {
+        signature: '@Remote async retryWorktree(session: Session, signal: AbortSignal): Promise<void>',
+        description: 'Make another attempt, with a new branch name, at the worktree a message of the Session waits for after a failed or stopped attempt.',
+        parameters: [{ name: 'session', description: 'Session whose message waits.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/not-waiting` when no message waits or an attempt is running.'],
+      },
+      {
+        signature: '@Remote async restoreWorktree(session: Session, signal: AbortSignal): Promise<void>',
+        description: 'Check out the created worktree of a Session again at its recorded directory when that directory is gone: its branch when the branch still exists, otherwise a new branch of the same name at the base commit. Changes that were never committed are not recovered. Runs as Agent maintenance, inside the wait of a message that waits for the restoration, which then goes on; without a missing directory the Session is unchanged.',
+        parameters: [{ name: 'session', description: 'Session whose worktree directory is gone.' }, { name: 'signal', description: 'request cancellation, which aborts the restoration.' }],
+        throws: ['`forgePanel/no-worktree` without a created worktree; `forgePanel/worktrees-unavailable` without a worktree service; `forgePanel/session-busy` while the Session\'s Agent is not loaded or has other work; `forgePanel/restore-failed` when Git fails.'],
+      },
+      {
+        signature: '@Remote async continueInProject(session: Session, signal: AbortSignal): Promise<void>',
+        description: 'Move a Session from its created worktree to the source checkout the worktree came from; the Session no longer works in the worktree. Runs as Agent maintenance, inside the wait of a message that waits for the removed worktree, which then goes on.',
+        parameters: [{ name: 'session', description: 'Session with a created worktree.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/no-worktree` without a created worktree; `forgePanel/session-busy` while the Session\'s Agent is not loaded or has other work; the working-directory service\'s error when the source checkout no longer exists.'],
+      },
+    ],
+  },
+  {
     key: 'forgeSession',
     summary: 'Session-scoped change request bindings.',
-    description: 'Session-scoped change request bindings. The `forgeChangeRequests` projection derives them from `gh pr create` and `git push` results and from `plugin:forge-session/binding` records. After each push result the service looks up open change requests whose head is a pushed branch and records the unbound ones as discovered. Watching a Session polls its visible change requests through `ctx.forge`.',
+    description: 'Session-scoped change request bindings. The `forgeChangeRequests` projection derives them from `gh pr create`, `gh pr view`, `gh pr edit`, `gh pr checkout`, and `git push` results and from `plugin:forge-session/binding` records. After each push result, and when a caller reports the branch a Session works on, the service looks up open change requests whose head is that branch and records the unbound ones as discovered. Watching a Session polls its visible change requests through `ctx.forge`.',
     methods: [
       {
         signature: 'changeRequests(session: Session): SessionChangeRequest[]',
@@ -1286,6 +1445,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Bind a change request to a Session by URL, or restore a dismissed binding. Appends a `track` record with the provider\'s canonical URL unless the change request is already visible.',
         parameters: [{ name: 'session', description: 'Session that receives the binding.' }, { name: 'url', description: 'web URL of the change request.' }],
         throws: ['when no registered provider recognizes the URL.'],
+      },
+      {
+        signature: 'discoverBranch(session: Session, remote: string, branch: string): Promise<void>',
+        description: 'Look up open change requests whose head is a branch the Session works on, and record the unbound ones as discovered, as after a push of that branch. A remote that no provider recognizes changes nothing; a failed lookup is logged and changes nothing.',
+        parameters: [{ name: 'session', description: 'Session that receives the bindings.' }, { name: 'remote', description: 'URL of the remote that holds the branch.' }, { name: 'branch', description: 'branch name on that remote.' }],
+        returns: 'resolves once the lookup has recorded its bindings or failed.',
       },
       {
         signature: 'dismiss(session: Session, url: string): void',
@@ -4331,10 +4496,16 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers.',
     methods: [
       {
-        signature: 'async create(agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal): Promise<CreatedWorktree>',
+        signature: 'async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<CreatedWorktree>',
         description: 'Create a fresh branch and checkout at a pinned local revision, then enter it. Existing branches or checkout paths fail. Uncommitted files stay in the source checkout. Checkout disables configured clean, smudge, and process filters without changing Git config. Repository-local replacement refs still apply; baseCommit reports the resolved object name. The new checkout becomes current only after Git setup succeeds. Failures may retain newly allocated Git/filesystem artifacts; no branch or checkout is removed automatically.',
-        parameters: [{ name: 'agent', description: 'caller whose current directory selects the source repository and file policy.' }, { name: 'request', description: 'optional new name and local revision; defaults are generated name and HEAD.' }, { name: 'signal', description: 'cancellation of lookup, creation, and working-directory publication.' }],
+        parameters: [{ name: 'agent', description: 'caller whose current directory selects the source repository and file policy.' }, { name: 'request', description: 'optional new name and local revision; defaults are generated name and HEAD.' }, { name: 'signal', description: 'cancellation of lookup, creation, and working-directory publication.' }, { name: 'onPhase', description: 'receives each stage before it begins; it must not throw.' }],
         returns: 'canonical checkout path, branch name, pinned commit, and source repository root.',
+      },
+      {
+        signature: 'async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<RestoredWorktree>',
+        description: 'Check out a removed worktree again at its recorded directory: its branch when the branch still exists, otherwise a new branch of the same name at `baseCommit`. Only the missing target\'s unlocked registration is removed, and an existing directory fails. Changes that were never committed are not recovered. Checkout disables configured clean, smudge, and process filters, as creation does. The calling Session\'s working directory does not change. Failures may retain newly allocated Git/filesystem artifacts.',
+        parameters: [{ name: 'agent', description: 'caller whose sandbox policy confines the commands.' }, { name: 'request', description: 'recorded directory, branch, base commit, and source repository root.' }, { name: 'signal', description: 'cancellation of the restoration.' }, { name: 'onPhase', description: 'receives each stage before it begins; it must not throw.' }],
+        returns: 'the directory and whether the branch was created again.',
       },
     ],
   },
@@ -5368,7 +5539,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'BindingOrigin',
-    declaration: 'export type BindingOrigin = \'created\' | \'discovered\' | \'tracked\';',
+    declaration: 'export type BindingOrigin = \'created\' | \'referenced\' | \'discovered\' | \'tracked\';',
   },
   {
     name: 'BoxProps',
@@ -5404,7 +5575,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ChangeRequestCheck',
-    declaration: 'export interface ChangeRequestCheck {\n    readonly name: string;\n    readonly state: CheckState;\n    readonly url: string | null;\n    readonly workflow: string | null;\n}',
+    declaration: 'export interface ChangeRequestCheck {\n    readonly name: string;\n    readonly state: CheckState;\n    readonly url: string | null;\n    readonly workflow: string | null;\n    readonly startedAt: string | null;\n    readonly completedAt: string | null;\n}',
   },
   {
     name: 'ChangeRequestKey',
@@ -5420,7 +5591,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ChangeRequestSnapshot',
-    declaration: 'export interface ChangeRequestSnapshot {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly state: ChangeRequestState;\n    readonly draft: boolean;\n    readonly author: string | null;\n    readonly headBranch: string;\n    readonly headSha: string;\n    readonly baseBranch: string;\n    readonly mergeability: Mergeability;\n    readonly reviewDecision: ReviewDecision;\n    readonly checks: readonly ChangeRequestCheck[];\n    readonly checksRollup: ChecksRollup;\n    readonly checksTruncated: boolean;\n    readonly unresolvedThreads: number;\n    readonly updatedAt: string;\n}',
+    declaration: 'export interface ChangeRequestSnapshot {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly state: ChangeRequestState;\n    readonly draft: boolean;\n    readonly author: string | null;\n    readonly headBranch: string;\n    readonly headSha: string;\n    readonly baseBranch: string;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly mergeability: Mergeability;\n    readonly mergeReady: boolean;\n    readonly mergeMethods: readonly MergeMethod[];\n    readonly reviewDecision: ReviewDecision;\n    readonly checks: readonly ChangeRequestCheck[];\n    readonly checksRollup: ChecksRollup;\n    readonly checksTruncated: boolean;\n    readonly unresolvedThreads: number;\n    readonly updatedAt: string;\n    readonly closedAt: string | null;\n}',
   },
   {
     name: 'ChangeRequestState',
@@ -5723,6 +5894,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface CreateTeamTaskRequest {\n    readonly subject: string;\n    readonly description: string;\n    readonly blockedBy?: readonly TeamTaskId[];\n    readonly writeScopes?: readonly string[];\n}',
   },
   {
+    name: 'CreateWorktreePhase',
+    declaration: 'export type CreateWorktreePhase = \'prepare\' | \'checkout\';',
+  },
+  {
     name: 'CreateWorktreeRequest',
     declaration: 'export interface CreateWorktreeRequest {\n    name?: string;\n    from?: string;\n}',
   },
@@ -5995,16 +6170,112 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface FinishReasonMap {\n    \'stop\': {\n        kind: \'stop\';\n    };\n    \'tool-calls\': {\n        kind: \'tool-calls\';\n    };\n    \'max-tokens\': {\n        kind: \'max-tokens\';\n    };\n    \'aborted\': {\n        kind: \'aborted\';\n        failure: LlmFailure;\n    };\n    \'error\': {\n        kind: \'error\';\n        failure: LlmFailure;\n    };\n}',
   },
   {
+    name: 'ForgeActionFailure',
+    declaration: 'export interface ForgeActionFailure {\n    readonly code: \'unauthenticated\' | \'stale\' | \'failed\';\n    readonly message: string;\n}',
+  },
+  {
+    name: 'ForgeBranches',
+    declaration: 'export interface ForgeBranches {\n    readonly current: string | null;\n    readonly branches: readonly string[];\n}',
+  },
+  {
+    name: 'ForgeChangedFile',
+    declaration: 'export interface ForgeChangedFile {\n    readonly path: string;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly binary: boolean;\n}',
+  },
+  {
+    name: 'ForgeChangeRequestDiff',
+    declaration: 'export interface ForgeChangeRequestDiff {\n    readonly headSha: string;\n    readonly files: readonly ForgeDiffFile[];\n    readonly localAhead: number | null;\n    readonly fileUrls: Readonly<Record<string, string>>;\n}',
+  },
+  {
+    name: 'ForgeCheckout',
+    declaration: 'export interface ForgeCheckout {\n    readonly root: string;\n    readonly branch: string | null;\n    readonly linked: boolean;\n    readonly commit: string | null;\n}',
+  },
+  {
+    name: 'ForgeCheckoutState',
+    declaration: 'export type ForgeCheckoutState = {\n    readonly state: \'pending\';\n} | {\n    readonly state: \'none\';\n} | {\n    readonly state: \'failed\';\n    readonly message: string;\n} | {\n    readonly state: \'ready\';\n    readonly checkout: ForgeCheckout;\n};',
+  },
+  {
+    name: 'ForgeDiffFile',
+    declaration: 'export interface ForgeDiffFile {\n    readonly path: string;\n    readonly previousPath: string | null;\n    readonly status: ForgeDiffStatus;\n    readonly binary: boolean;\n    readonly oversized: boolean;\n    readonly untracked: boolean;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly hunks: readonly ForgeDiffHunk[];\n}',
+  },
+  {
+    name: 'ForgeDiffHunk',
+    declaration: 'export interface ForgeDiffHunk {\n    readonly oldStart: number;\n    readonly oldLines: number;\n    readonly newStart: number;\n    readonly newLines: number;\n    readonly lines: readonly string[];\n}',
+  },
+  {
+    name: 'ForgeDiffStatus',
+    declaration: 'export type ForgeDiffStatus = \'added\' | \'deleted\' | \'modified\' | \'renamed\';',
+  },
+  {
     name: 'ForgeFailure',
-    declaration: 'export interface ForgeFailure {\n    readonly code: \'not-found\' | \'unauthenticated\' | \'unavailable\';\n    readonly message: string;\n}',
+    declaration: 'export interface ForgeFailure {\n    readonly code: \'not-found\' | \'unauthenticated\' | \'too-large\' | \'unavailable\';\n    readonly message: string;\n}',
+  },
+  {
+    name: 'ForgeLocalChanges',
+    declaration: 'export interface ForgeLocalChanges {\n    readonly base: string;\n    readonly files: readonly ForgeChangedFile[];\n}',
+  },
+  {
+    name: 'ForgeLocalDiff',
+    declaration: 'export interface ForgeLocalDiff {\n    readonly base: string | null;\n    readonly files: readonly ForgeDiffFile[];\n    readonly omitted: number;\n}',
+  },
+  {
+    name: 'ForgeLocalScope',
+    declaration: 'export type ForgeLocalScope = {\n    readonly kind: \'branch\';\n} | {\n    readonly kind: \'uncommitted\';\n} | {\n    readonly kind: \'unstaged\';\n} | {\n    readonly kind: \'staged\';\n};',
+  },
+  {
+    name: 'ForgeMissingWorktree',
+    declaration: 'export interface ForgeMissingWorktree {\n    readonly branchExists: boolean | null;\n}',
+  },
+  {
+    name: 'ForgePanelChangeRequest',
+    declaration: 'export interface ForgePanelChangeRequest extends SessionChangeRequest {\n    readonly snapshot: ChangeRequestSnapshot | null;\n}',
+  },
+  {
+    name: 'ForgePanelState',
+    declaration: 'export interface ForgePanelState {\n    readonly directory: string;\n    readonly checkout: ForgeCheckoutState;\n    readonly repository: ForgeRepository | null;\n    readonly readiness: ForgeReadiness | null;\n    readonly changeRequests: readonly ForgePanelChangeRequest[];\n    readonly worktree: ForgePanelWorktree;\n    readonly local: ForgeLocalChanges | null;\n}',
+  },
+  {
+    name: 'ForgePanelWorktree',
+    declaration: 'export interface ForgePanelWorktree {\n    readonly editable: boolean;\n    readonly blocker: ForgeWorktreeBlocker | null;\n    readonly request: ForgeWorktreeRequest | null;\n    readonly created: ForgeSessionWorktree | null;\n    readonly creation: ForgeWorktreeCreation | null;\n    readonly failure: ForgeWorktreeFailure | null;\n    readonly missing: ForgeMissingWorktree | null;\n    readonly restoration: ForgeWorktreeRestoration | null;\n    readonly waiting: ForgeWorktreeWaiting | null;\n}',
   },
   {
     name: 'ForgeProvider',
-    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>;\n}',
+    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>;\n    readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness>;\n    markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure>;\n    fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure>;\n    fileUrl(ref: ChangeRequestRef, commit: string, path: string): string;\n}',
+  },
+  {
+    name: 'ForgeReadiness',
+    declaration: 'export interface ForgeReadiness {\n    readonly state: \'ready\' | \'unauthenticated\' | \'unavailable\';\n    readonly message: string | null;\n}',
   },
   {
     name: 'ForgeRepository',
     declaration: 'export interface ForgeRepository {\n    readonly forge: string;\n    readonly host: string;\n    readonly owner: string;\n    readonly name: string;\n}',
+  },
+  {
+    name: 'ForgeSessionWorktree',
+    declaration: 'export interface ForgeSessionWorktree {\n    readonly path: string;\n    readonly branch: string;\n    readonly from: string | null;\n    readonly baseCommit: string;\n    readonly repositoryRoot: string;\n}',
+  },
+  {
+    name: 'ForgeWorktreeBlocker',
+    declaration: 'export type ForgeWorktreeBlocker = \'not-git\' | \'outside-writable-root\' | \'read-only\';',
+  },
+  {
+    name: 'ForgeWorktreeCreation',
+    declaration: 'export interface ForgeWorktreeCreation {\n    readonly phase: \'prepare\' | \'checkout\';\n    readonly branch: string;\n    readonly from: string | null;\n    readonly held: boolean;\n}',
+  },
+  {
+    name: 'ForgeWorktreeFailure',
+    declaration: 'export interface ForgeWorktreeFailure {\n    readonly branch: string | null;\n    readonly from: string | null;\n    readonly phase: \'prepare\' | \'checkout\';\n    readonly message: string;\n}',
+  },
+  {
+    name: 'ForgeWorktreeRequest',
+    declaration: 'export interface ForgeWorktreeRequest {\n    readonly from: string | null;\n}',
+  },
+  {
+    name: 'ForgeWorktreeRestoration',
+    declaration: 'export interface ForgeWorktreeRestoration {\n    readonly phase: \'prepare\' | \'checkout\';\n}',
+  },
+  {
+    name: 'ForgeWorktreeWaiting',
+    declaration: 'export type ForgeWorktreeWaiting = \'creation\' | \'restoration\';',
   },
   {
     name: 'FrequencyTooHighError',
@@ -6621,6 +6892,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'Mergeability',
     declaration: 'export type Mergeability = \'mergeable\' | \'conflicting\' | \'unknown\';',
+  },
+  {
+    name: 'MergeMethod',
+    declaration: 'export type MergeMethod = \'merge\' | \'squash\' | \'rebase\';',
+  },
+  {
+    name: 'MergeRequest',
+    declaration: 'export interface MergeRequest {\n    readonly method: MergeMethod;\n    readonly headSha: string;\n}',
   },
   {
     name: 'Message',
@@ -7397,6 +7676,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RestoredSessionOptions',
     declaration: 'export interface RestoredSessionOptions {\n    readonly seed: SessionEvent[];\n    readonly meta: SessionHeader;\n    readonly inheritedEventCount: SessionLogOffset;\n    readonly eventState: SessionSeedEventState;\n}',
+  },
+  {
+    name: 'RestoredWorktree',
+    declaration: 'export interface RestoredWorktree {\n    path: string;\n    branchRecreated: boolean;\n}',
+  },
+  {
+    name: 'RestoreWorktreeRequest',
+    declaration: 'export interface RestoreWorktreeRequest {\n    path: string;\n    branch: string;\n    baseCommit: string;\n    repositoryRoot: string;\n}',
   },
   {
     name: 'ResumeAgentOptions',

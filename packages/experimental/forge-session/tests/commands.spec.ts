@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { changeRequestUrls, commandKind, commandOf, pushedBranches, sameChangeRequestUrl } from '../src/commands.ts'
+import { changeRequestUrls, commandEvidence, commandOf, ownChangeRequestUrls, pushedBranches, sameChangeRequestUrl } from '../src/commands.ts'
 
 describe('commandOf', () => {
   it('reads the string command argument', () => {
@@ -17,28 +17,56 @@ describe('commandOf', () => {
   })
 })
 
-describe('commandKind', () => {
+describe('commandEvidence', () => {
+  const url = 'https://github.com/octo/demo/pull/12'
+  const created = { urls: 'created', pushes: false, named: [] }
+  const pushed = { urls: null, pushes: true, named: [] }
+
   it.each([
-    ['gh pr create --fill', 'create'],
-    ['gh pr new -t title -b body', 'create'],
-    ['git push', 'push'],
-    ['git push -u origin HEAD', 'push'],
-    ['git -C ../checkout push origin feat', 'push'],
-    ['git -c credential.helper= push', 'push'],
-    ['git --no-pager push --force-with-lease', 'push'],
-    ['cd repo && git push && gh pr create --fill', 'both'],
-  ])('classifies %j as %s', (command, kind) => {
-    expect(commandKind(command)).toBe(kind)
+    ['gh pr create --fill', created],
+    ['gh pr new -t title -b body', created],
+    ['git push', pushed],
+    ['git push -u origin HEAD', pushed],
+    ['git -C ../checkout push origin feat', pushed],
+    ['git -c credential.helper= push', pushed],
+    ['git --no-pager push --force-with-lease', pushed],
+    ['cd repo && git push && gh pr create --fill', { ...created, pushes: true }],
+    ['gh pr view 12 --json url', { urls: 'referenced', pushes: false, named: [] }],
+    [`gh pr view '${url}' --json title`, { urls: 'referenced', pushes: false, named: [url] }],
+    [`gh pr edit ${url}/files --add-label bug`, { urls: 'referenced', pushes: false, named: [url] }],
+    [`gh pr checkout ${url} && git push`, { urls: 'referenced', pushes: true, named: [url] }],
+    [`gh pr view --json url ${url}`, { urls: 'referenced', pushes: false, named: [url] }],
+    [`gh pr create --fill && gh pr view ${url}`, { ...created, named: [url] }],
+  ])('classifies %j', (command, evidence) => {
+    expect(commandEvidence(command)).toEqual(evidence)
   })
 
   it.each([
     'git commit -m "push the fix"',
     'git stash push -m wip',
-    'gh pr view 12',
     'gh pr list --head feat',
+    'gh pr status',
     'git-push origin',
   ])('ignores %j', (command) => {
-    expect(commandKind(command)).toBeUndefined()
+    expect(commandEvidence(command)).toBeUndefined()
+  })
+})
+
+describe('ownChangeRequestUrls', () => {
+  const pull = (number: number): string => `https://github.com/octo/demo/pull/${number}`
+
+  it('reads the url field and a URL alone on a line before a description, and JSON url members', () => {
+    const view = ['title:\tAdd it', 'state:\tOPEN', `url:\t${pull(7)}`, '--', `Stacked on ${pull(8)}`, pull(9)].join('\n')
+    expect(ownChangeRequestUrls(view)).toEqual([pull(7)])
+    expect(ownChangeRequestUrls(`${pull(5)}\n`)).toEqual([pull(5)])
+    const members = JSON.stringify({ number: 6, url: pull(6), body: `see ${pull(8)}`, comments: [{ url: `${pull(6)}#issuecomment-1` }] })
+    expect(ownChangeRequestUrls(members)).toEqual([pull(6)])
+    expect(ownChangeRequestUrls(`{\n  "url": "${pull(4)}/"\n}`)).toEqual([pull(4)])
+  })
+
+  it('finds nothing in output that names no change request of its own', () => {
+    expect(ownChangeRequestUrls("Switched to branch 'feat'\n")).toEqual([])
+    expect(ownChangeRequestUrls(`see ${pull(3)} for details`)).toEqual([])
   })
 })
 

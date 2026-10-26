@@ -31,6 +31,18 @@
     },
     {
       "path": "../../util/values"
+    },
+    {
+      "path": "../../shell/shell"
+    },
+    {
+      "path": "../../shell/shell-env"
+    },
+    {
+      "path": "../../core/tools"
+    },
+    {
+      "path": "../../sandbox/sandbox-policy"
     }
   ]
 }

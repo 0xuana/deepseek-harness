@@ -351,6 +351,9 @@ importers:
       '@deepseek-ai/dsh-experimental-cot-translation-bundle':
         specifier: workspace:*
         version: link:../../packages/experimental/cot-translation-bundle
+      '@deepseek-ai/dsh-experimental-forge-bundle':
+        specifier: workspace:*
+        version: link:../../packages/experimental/forge-bundle
       '@deepseek-ai/dsh-experimental-inspector-profile':
         specifier: workspace:*
         version: link:../../packages/experimental/inspector-profile
@@ -1004,6 +1007,9 @@ importers:
       '@deepseek-ai/dsh-experimental-cot-translation-bundle':
         specifier: workspace:*
         version: link:../../packages/experimental/cot-translation-bundle
+      '@deepseek-ai/dsh-experimental-forge-bundle':
+        specifier: workspace:*
+        version: link:../../packages/experimental/forge-bundle
       '@deepseek-ai/dsh-experimental-plugin-market-bundle':
         specifier: workspace:*
         version: link:../../packages/experimental/plugin-market-bundle
@@ -8980,6 +8986,136 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
+  packages/experimental/client-ui-forge:
+    dependencies:
+      '@deepseek-ai/dsh-typert-protocol':
+        specifier: workspace:*
+        version: link:../../typert/protocol
+      '@deepseek-ai/dsh-util-values':
+        specifier: workspace:*
+        version: link:../../util/values
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+      diff:
+        specifier: ^9.0.0
+        version: 9.0.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../core/agent
+      '@deepseek-ai/dsh-agent-loop-testkit':
+        specifier: workspace:*
+        version: link:../../test-support/agent-loop-testkit
+      '@deepseek-ai/dsh-api-remotes':
+        specifier: workspace:*
+        version: link:../../api/remotes
+      '@deepseek-ai/dsh-api-session-controller':
+        specifier: workspace:*
+        version: link:../../api/session-controller
+      '@deepseek-ai/dsh-client-locale':
+        specifier: workspace:*
+        version: link:../../client/locale
+      '@deepseek-ai/dsh-client-store':
+        specifier: workspace:*
+        version: link:../../client/store
+      '@deepseek-ai/dsh-client-test-runtime':
+        specifier: workspace:*
+        version: link:../../test-support/client-runtime
+      '@deepseek-ai/dsh-client-ui-conversation':
+        specifier: workspace:*
+        version: link:../../client/ui-conversation
+      '@deepseek-ai/dsh-client-ui-layout':
+        specifier: workspace:*
+        version: link:../../client/ui-layout
+      '@deepseek-ai/dsh-client-ui-primitives':
+        specifier: workspace:*
+        version: link:../../client/ui-primitives
+      '@deepseek-ai/dsh-client-ui-renderer':
+        specifier: workspace:*
+        version: link:../../client/ui-renderer
+      '@deepseek-ai/dsh-client-ui-session':
+        specifier: workspace:*
+        version: link:../../client/ui-session
+      '@deepseek-ai/dsh-client-ui-sidebar-right':
+        specifier: workspace:*
+        version: link:../../client/ui-sidebar-right
+      '@deepseek-ai/dsh-client-ui-slots':
+        specifier: workspace:*
+        version: link:../../client/ui-slots
+      '@deepseek-ai/dsh-client-ui-workspace':
+        specifier: workspace:*
+        version: link:../../client/ui-workspace
+      '@deepseek-ai/dsh-experimental-forge':
+        specifier: workspace:*
+        version: link:../forge
+      '@deepseek-ai/dsh-experimental-forge-session':
+        specifier: workspace:*
+        version: link:../forge-session
+      '@deepseek-ai/dsh-experimental-worktree':
+        specifier: workspace:*
+        version: link:../worktree
+      '@deepseek-ai/dsh-fs':
+        specifier: workspace:*
+        version: link:../../fs/fs
+      '@deepseek-ai/dsh-fs-local':
+        specifier: workspace:*
+        version: link:../../fs/fs-local
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-sandbox':
+        specifier: workspace:*
+        version: link:../../sandbox/sandbox
+      '@deepseek-ai/dsh-sandbox-local':
+        specifier: workspace:*
+        version: link:../../sandbox/sandbox-local
+      '@deepseek-ai/dsh-sandbox-policy':
+        specifier: workspace:*
+        version: link:../../sandbox/sandbox-policy
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../core/session
+      '@deepseek-ai/dsh-session-projection':
+        specifier: workspace:*
+        version: link:../../session/session-projection
+      '@deepseek-ai/dsh-subprocess':
+        specifier: workspace:*
+        version: link:../../subprocess/subprocess
+      '@deepseek-ai/dsh-subprocess-local':
+        specifier: workspace:*
+        version: link:../../subprocess/subprocess-local
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:*
+        version: link:../../core/system-prompt
+      '@deepseek-ai/dsh-timeout':
+        specifier: workspace:*
+        version: link:../../util/timeout
+      '@deepseek-ai/dsh-util-workspace-path':
+        specifier: workspace:*
+        version: link:../../util/workspace-path
+      '@deepseek-ai/dsh-working-directory':
+        specifier: workspace:*
+        version: link:../../session/working-directory
+      '@testing-library/react':
+        specifier: ^16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.3.1(react@18.3.1)
+
   packages/experimental/client-ui-plugin-recommendations:
     devDependencies:
       '@deepseek-ai/cordis':
@@ -9706,6 +9842,28 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/cordis
 
+  packages/experimental/forge-bundle:
+    dependencies:
+      '@deepseek-ai/dsh-experimental-client-ui-forge':
+        specifier: workspace:*
+        version: link:../client-ui-forge
+      '@deepseek-ai/dsh-experimental-forge':
+        specifier: workspace:*
+        version: link:../forge
+      '@deepseek-ai/dsh-experimental-forge-github':
+        specifier: workspace:*
+        version: link:../forge-github
+      '@deepseek-ai/dsh-experimental-forge-session':
+        specifier: workspace:*
+        version: link:../forge-session
+      '@deepseek-ai/dsh-experimental-worktree':
+        specifier: workspace:*
+        version: link:../worktree
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+
   packages/experimental/forge-github:
     dependencies:
       '@deepseek-ai/dsh-timeout':
@@ -9742,6 +9900,9 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
+      shell-quote:
+        specifier: ^1.12.0
+        version: 1.12.0
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -9776,12 +9937,18 @@ importers:
       '@deepseek-ai/dsh-llm':
         specifier: workspace:*
         version: link:../../llm/llm
+      '@deepseek-ai/dsh-sandbox-policy':
+        specifier: workspace:*
+        version: link:../../sandbox/sandbox-policy
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../../core/session
       '@deepseek-ai/dsh-session-projection':
         specifier: workspace:*
         version: link:../../session/session-projection
+      '@deepseek-ai/dsh-shell':
+        specifier: workspace:*
+        version: link:../../shell/shell
       '@deepseek-ai/dsh-shell-env':
         specifier: workspace:*
         version: link:../../shell/shell-env
@@ -24618,6 +24785,10 @@ packages:
     resolution: {integrity: sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==}
     engines: {node: '>=8'}
 
+  shell-quote@1.12.0:
+    resolution: {integrity: sha512-PcByqNyT/38F2kDNi006HAMRJaULuBzq/FOsw3qdZvX/GA9W/jamDaRskgHjubHiftXK5sIFxLNkvrXUwcof6Q==}
+    engines: {node: '>= 0.4'}
+
   sherpa-onnx-darwin-arm64@1.13.8:
     resolution: {integrity: sha512-FPNgJMgnWVl/KhRTIhG3KL3A4Om63Rn4YKXc9/uHY7SzLcvqLJLc/h7UBWJwduXvv7K18t5NpxHR6XgXn4sjWw==}
     cpu: [arm64]
@@ -32626,6 +32797,8 @@ snapshots:
       shebang-regex: 3.0.0
 
   shebang-regex@3.0.0: {}
+
+  shell-quote@1.12.0: {}
 
   sherpa-onnx-darwin-arm64@1.13.8:
     optional: true

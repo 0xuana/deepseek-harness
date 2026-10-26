@@ -187,6 +187,81 @@ describe('forge watch', () => {
     expect(context.forge.latest(ref(1))).toBeUndefined()
   })
 
+  it('refreshes a watched change request at once, including after a terminal state', async () => {
+    const provider = new FakeProvider()
+    provider.results.set(key, snapshot(ref(1), { state: 'closed' }))
+    const context = await setup(provider)
+    collect(context)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(provider.fetches).toHaveLength(1)
+
+    context.forge.refresh(ref(1))
+    context.forge.refresh(ref(9))
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(provider.fetches).toEqual([[ref(1)], [ref(1)]])
+  })
+
+  it('polls a watched change request at once after an action settles, whatever its outcome', async () => {
+    const provider = new FakeProvider()
+    provider.results.set(key, snapshot(ref(1), { draft: true }))
+    const context = await setup(provider)
+    collect(context)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(1)
+
+    await context.forge.markReady(ref(1), new AbortController().signal)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(2)
+
+    provider.actionResult = { code: 'failed', message: 'Pull Request is not mergeable' }
+    await context.forge.merge(ref(1), { method: 'merge', headSha: 'a'.repeat(40) }, new AbortController().signal)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(3)
+  })
+
+  it('coalesces refreshes during a fetch into one immediate subsequent fetch', async () => {
+    const provider = new FakeProvider()
+    const release = held(provider, target => snapshot(target))
+    const context = await setup(provider)
+    const { updates } = collect(context)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(1)
+
+    context.forge.refresh(ref(1))
+    context.forge.refresh(ref(1))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(1)
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(updates).toHaveLength(1)
+    expect(provider.fetches).toHaveLength(2)
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(updates).toHaveLength(2)
+    expect(provider.fetches).toHaveLength(2)
+  })
+
+  it.each(['ready', 'merge'] as const)('fetches again after %s when an older poll is still pending', async (action) => {
+    const provider = new FakeProvider()
+    const release = held(provider, target => snapshot(target, { draft: true }))
+    const context = await setup(provider)
+    const { updates } = collect(context)
+    await vi.advanceTimersByTimeAsync(0)
+
+    const signal = new AbortController().signal
+    if (action === 'ready') await context.forge.markReady(ref(1), signal)
+    else await context.forge.merge(ref(1), { method: 'merge', headSha: 'a'.repeat(40) }, signal)
+    provider.fetchImpl = undefined
+    provider.results.set(key, snapshot(ref(1), { draft: false, state: action === 'merge' ? 'merged' : 'open' }))
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(provider.fetches).toHaveLength(2)
+    expect(updates.at(-1)).toMatchObject({ snapshot: { draft: false, state: action === 'merge' ? 'merged' : 'open' } })
+  })
+
   it('keeps notifying other listeners when one listener throws', async () => {
     const provider = new FakeProvider()
     provider.results.set(key, snapshot(ref(1)))

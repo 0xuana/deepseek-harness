@@ -1,4 +1,6 @@
-/** GitHub remote URL and pull request URL parsing. */
+/** GitHub remote URL and pull request URL parsing, and validation of the parts inlined into requests. */
+
+import type { ChangeRequestRef, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge'
 
 /** Characters GitHub permits in owner and repository names. */
 const SEGMENT = /^[A-Za-z0-9_.-]+$/
@@ -20,6 +22,20 @@ export interface GitHubLocation {
  */
 export function isSegment(value: string): boolean {
   return SEGMENT.test(value) && value !== '.' && value !== '..'
+}
+
+/**
+ * Validate a pull request before its owner, name, and number are inlined into
+ * a GraphQL document, a `gh` argument, or an API path.
+ * @param ref - pull request on a GitHub host.
+ * @returns its repository.
+ * @throws when the owner or name is not a permitted segment or the number is not a positive integer.
+ */
+export function checkedRepository(ref: ChangeRequestRef): ForgeRepository {
+  const { owner, name } = ref.repository
+  if (!isSegment(owner) || !isSegment(name)) throw new Error(`forge-github: invalid repository ${JSON.stringify(`${owner}/${name}`)}`)
+  if (!Number.isSafeInteger(ref.number) || ref.number <= 0) throw new Error(`forge-github: invalid pull request number ${ref.number}`)
+  return ref.repository
 }
 
 /**

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-读取 pull request 与 merge request，而不把消费方绑定到某一个代码托管平台。提供方把远端 URL 和变更请求（change request，即 pull request 或 merge request）URL 映射为提供方无关的引用，按 head 分支查找变更请求，并批量读取其状态。同一变更请求的所有监听方共享一个轮询循环，轮询节奏随检查、可合并性与生命周期状态变化。
+读取并操作 pull request 与 merge request，而不把消费方绑定到某一个代码托管平台。提供方把远端 URL 和变更请求（change request，即 pull request 或 merge request）URL 映射为提供方无关的引用，按 head 分支查找变更请求，批量读取其状态，读取其 diff 与文件，并按请求把草稿标记为可评审或合并变更请求。同一变更请求的所有监听方共享一个轮询循环，轮询节奏随检查、可合并性与生命周期状态变化。
 
 ## 目录
 
@@ -32,9 +32,13 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-experimental-forge-github'
 ```
 
-`ctx.forge.register(provider)` 是调用方 fiber 上的 effect，返回异步 disposer，取消并等待该次注册的调用结束。取消后到达的结果会被丢弃。一个提供方服务一个 forge 家族；为同一家族注册第二个提供方会抛错。注册变化会发出 `forge/providers-changed`；注册提供方会立即轮询其已有监听。`repositoryFromRemote(url)` 与 `changeRequestFromUrl(url)` 按注册顺序询问提供方并返回第一个匹配结果。`changeRequestUrl(ref)` 与 `findByHead(repository, branch, signal)` 委托给引用所属 forge 的提供方；没有注册提供方时抛错。
+`ctx.forge.register(provider)` 是调用方 fiber 上的 effect，返回异步 disposer，取消并等待该次注册的调用结束。取消后到达的结果会被丢弃。一个提供方服务一个 forge 家族；为同一家族注册第二个提供方会抛错。注册变化会发出 `forge/providers-changed`；注册提供方会立即轮询其已有监听。`repositoryFromRemote(url)` 与 `changeRequestFromUrl(url)` 按注册顺序询问提供方并返回第一个匹配结果。`changeRequestUrl(ref)`、`findByHead(repository, branch, signal)` 与 `readiness(repository, signal)` 委托给引用所属 forge 的提供方，没有注册提供方时抛错；`readiness` 报告提供方能否用当前凭据访问该主机。
 
-`ctx.forge.watch(ref, listener)` 同样是 effect。变更请求的第一个监听方会立即触发轮询；`latest(ref)` 返回最近一次结果。每个 forge 同时最多只有一次读取在进行，这次读取包含该 forge 所有到期的变更请求。打开状态的变更请求在检查未完成或可合并性未知时每 `activeIntervalMs` 轮询一次，否则每 `idleIntervalMs` 轮询一次。已关闭和已合并的变更请求不再轮询。读取失败后，重试间隔为 `activeIntervalMs` 按连续失败次数翻倍，最长 `maxBackoffMs`；该值必须大于或等于 `activeIntervalMs`。注销提供方会让其被监听的变更请求以 `unavailable` 结束。最后一个监听方离开后轮询停止。默认值见[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-forge)。
+`markReady(ref, signal)` 把草稿标记为可评审；`merge(ref, { method, headSha }, signal)` 只在 head 仍是 `headSha` 时合并变更请求。两者都委托给引用所属 forge 的提供方，没有注册提供方时抛错；主机接受时 resolve 为 undefined，否则为 `ForgeActionFailure`：`unauthenticated`、head 已越过 `headSha` 时的 `stale`，或带主机原因的 `failed`。两者结束后，被监听的变更请求会立即重新轮询。快照带有 `mergeReady`（主机现在是否会为已登录用户合并该变更请求）与 `mergeMethods`（仓库接受的合并方式，该用户常用的方式排在最前）。
+
+`diff(ref, signal)` 读取托管平台计算出的变更请求统一补丁，路径带 `a/` 与 `b/` 前缀；`fileText(ref, commit, path, signal)` 读取其仓库中某个提交下的一个文件。两者都委托给引用所属 forge 的提供方，没有注册提供方时抛错，resolve 为文本或 `ForgeFailure`；托管平台或提供方因结果超过其大小上限而拒绝时，失败为 `too-large`。`fileUrl(ref, commit, path)` 返回该文件在该提交下的网页地址。
+
+`ctx.forge.watch(ref, listener)` 同样是 effect。变更请求的第一个监听方会立即触发轮询；`latest(ref)` 返回最近一次结果。每个 forge 同时最多只有一次读取在进行，这次读取包含该 forge 所有到期的变更请求。打开状态的变更请求在检查未完成或可合并性未知时每 `activeIntervalMs` 轮询一次，否则每 `idleIntervalMs` 轮询一次。已关闭和已合并的变更请求不再轮询。`refresh(ref)` 立即轮询一个被监听的变更请求，已结束的也包括在内；该 forge 已有读取在进行时，等待其结束后立即再读一次。读取失败后，重试间隔为 `activeIntervalMs` 按连续失败次数翻倍，最长 `maxBackoffMs`；该值必须大于或等于 `activeIntervalMs`。注销提供方会让其被监听的变更请求以 `unavailable` 结束。最后一个监听方离开后轮询停止。默认值见[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-forge)。
 
 达到 `fetchTimeoutMs` 时，读取信号会以 `FORGE_FETCH_TIMEOUT` 中止。提供方必须在信号中止时停止工作并结束请求；被拒绝的读取会转为 `unavailable` 失败。忽略取消的提供方可能阻塞轮询和服务销毁。
 
@@ -82,7 +86,7 @@ kind: "package-reference"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **仅轮询**——状态在下一次计划轮询时才送达监听方；没有 webhook 接入、手动刷新或提供方就绪探测。凭据缺失会在读取后表现为 `unauthenticated` 失败。
+- **仅轮询**——状态在下一次计划轮询或 `refresh` 时才送达监听方；没有 webhook 接入。
 - **结果只在进程内**——最近结果保存在内存中，重启后丢失；下一个监听方会重新轮询。
 
 <a id="dev-note"></a>
