@@ -45,7 +45,11 @@
       "default": "./lib/types/tools.js"
     },
     "./tools/locale/*.json": "./locale/tools/*.json",
-    "./locale/*.json": "./locale/*.json"
+    "./locale/*.json": "./locale/*.json",
+    "./diagnostic": {
+      "types": "./lib/types/diagnostic.d.ts",
+      "default": "./lib/types/diagnostic.js"
+    }
   },
   "files": [
     "locale/*.json",
