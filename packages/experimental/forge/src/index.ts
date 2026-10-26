@@ -21,6 +21,12 @@ declare module '@deepseek-ai/cordis' {
 
 type FetchResults = ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>
 
+interface Registration {
+  readonly provider: ForgeProvider
+  readonly lifetime: AbortController
+  readonly pending: Set<Promise<void>>
+}
+
 interface Watch {
   readonly key: ChangeRequestKey
   readonly ref: ChangeRequestRef
@@ -45,7 +51,7 @@ export class ForgeService extends Service {
   })
 
   private readonly config: Required<Config>
-  private readonly providers = new Map<string, ForgeProvider>()
+  private readonly providers = new Map<string, Registration>()
   private readonly watches = new Map<ChangeRequestKey, Watch>()
   private readonly fetching = new Set<string>()
   private readonly pending = new Set<Promise<void>>()
@@ -82,24 +88,28 @@ export class ForgeService extends Service {
   /**
    * Register the provider of one forge family as an effect on the calling
    * fiber. Watches of that forge receive an `unavailable` failure when the
-   * registration ends.
+   * registration ends. Unregistering cancels and awaits its in-flight calls;
+   * results from the withdrawn registration are discarded.
    * @param provider - provider to serve `provider.forge`.
-   * @returns the disposer that unregisters the provider.
+   * @returns the disposer that unregisters the provider and waits for its calls to finish.
    * @throws when another provider already serves the same forge.
    */
-  register(provider: ForgeProvider): () => void {
+  register(provider: ForgeProvider): () => Promise<void> {
     const dispose = this.ctx.effect(() => {
       if (this.providers.has(provider.forge)) throw new Error(`forge: a provider for "${provider.forge}" is already registered`)
-      this.providers.set(provider.forge, provider)
-      return () => {
+      const registration: Registration = { provider, lifetime: new AbortController(), pending: new Set() }
+      this.providers.set(provider.forge, registration)
+      return async () => {
         this.providers.delete(provider.forge)
-        for (const watch of this.watches.values()) {
+        registration.lifetime.abort(new Error(`forge: provider "${provider.forge}" was unregistered`))
+        for (const watch of [...this.watches.values()]) {
           if (watch.ref.repository.forge === provider.forge) this.settle(watch, this.missing(provider.forge))
         }
         this.schedule()
+        await Promise.allSettled(registration.pending)
       }
     }, `forge.register(${provider.forge})`)
-    return () => void dispose()
+    return async () => { await dispose() }
   }
 
   /**
@@ -108,7 +118,7 @@ export class ForgeService extends Service {
    * @returns the repository, or undefined when no provider serves the URL.
    */
   repositoryFromRemote(url: string): ForgeRepository | undefined {
-    for (const provider of this.providers.values()) {
+    for (const { provider } of this.providers.values()) {
       const repository = provider.repositoryFromRemote(url)
       if (repository !== undefined) return repository
     }
@@ -121,7 +131,7 @@ export class ForgeService extends Service {
    * @returns the change request, or undefined when no provider serves the URL.
    */
   changeRequestFromUrl(url: string): ChangeRequestRef | undefined {
-    for (const provider of this.providers.values()) {
+    for (const { provider } of this.providers.values()) {
       const ref = provider.changeRequestFromUrl(url)
       if (ref !== undefined) return ref
     }
@@ -147,7 +157,8 @@ export class ForgeService extends Service {
    * @throws when no provider serves the repository's forge or the lookup fails.
    */
   async findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]> {
-    return await this.provider(repository.forge).findByHead(repository, branch, signal)
+    return await this.invoke(this.registration(repository.forge), signal,
+      (provider, operation) => provider.findByHead(repository, branch, operation))
   }
 
   /**
@@ -191,9 +202,34 @@ export class ForgeService extends Service {
   }
 
   private provider(forge: string): ForgeProvider {
-    const provider = this.providers.get(forge)
-    if (provider === undefined) throw new Error(`forge: ${this.missing(forge).message}`)
-    return provider
+    return this.registration(forge).provider
+  }
+
+  private registration(forge: string): Registration {
+    const registration = this.providers.get(forge)
+    if (registration === undefined) throw new Error(`forge: ${this.missing(forge).message}`)
+    return registration
+  }
+
+  private async invoke<T>(
+    registration: Registration,
+    signal: AbortSignal,
+    action: (provider: ForgeProvider, signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    const operation = AbortSignal.any([signal, this.lifetime.signal, registration.lifetime.signal])
+    operation.throwIfAborted()
+    const completion = Promise.withResolvers<void>()
+    registration.pending.add(completion.promise)
+    this.pending.add(completion.promise)
+    try {
+      const result = await action(registration.provider, operation)
+      operation.throwIfAborted()
+      return result
+    } finally {
+      registration.pending.delete(completion.promise)
+      this.pending.delete(completion.promise)
+      completion.resolve()
+    }
   }
 
   private missing(forge: string): ForgeFailure {
@@ -237,13 +273,14 @@ export class ForgeService extends Service {
     for (const watch of batch) watch.dueAt = undefined
     let results: FetchResults | undefined
     let failure: ForgeFailure | undefined
+    const registration = this.providers.get(forge)
     try {
-      const provider = this.providers.get(forge)
-      if (provider === undefined) {
+      if (registration === undefined) {
         failure = this.missing(forge)
       } else {
         using timeout = deadline(this.lifetime.signal, this.config.fetchTimeoutMs, 'FORGE_FETCH_TIMEOUT')
-        results = await provider.fetch(batch.map(watch => watch.ref), timeout.signal)
+        results = await this.invoke(registration, timeout.signal,
+          (provider, operation) => provider.fetch(batch.map(watch => watch.ref), operation))
       }
     } catch (error) {
       failure = { code: 'unavailable', message: error instanceof Error ? error.message : String(error) }
@@ -251,6 +288,10 @@ export class ForgeService extends Service {
       this.fetching.delete(forge)
     }
     if (this.lifetime.signal.aborted) return
+    if (registration !== this.providers.get(forge)) {
+      this.schedule()
+      return
+    }
     for (const watch of batch) {
       if (this.watches.get(watch.key) !== watch) continue
       const result = failure ?? results?.get(watch.key) ?? { code: 'unavailable', message: `provider returned no result for ${watch.key}` }

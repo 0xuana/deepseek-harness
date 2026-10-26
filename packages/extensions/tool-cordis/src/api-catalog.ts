@@ -1224,10 +1224,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Registry of forge providers. Watchers of one change request share a single polling loop; each forge has at most one fetch in flight, which batches every due change request of that forge.',
     methods: [
       {
-        signature: 'register(provider: ForgeProvider): () => void',
-        description: 'Register the provider of one forge family as an effect on the calling fiber. Watches of that forge receive an `unavailable` failure when the registration ends.',
+        signature: 'register(provider: ForgeProvider): () => Promise<void>',
+        description: 'Register the provider of one forge family as an effect on the calling fiber. Watches of that forge receive an `unavailable` failure when the registration ends. Unregistering cancels and awaits its in-flight calls; results from the withdrawn registration are discarded.',
         parameters: [{ name: 'provider', description: 'provider to serve `provider.forge`.' }],
-        returns: 'the disposer that unregisters the provider.',
+        returns: 'the disposer that unregisters the provider and waits for its calls to finish.',
         throws: ['when another provider already serves the same forge.'],
       },
       {

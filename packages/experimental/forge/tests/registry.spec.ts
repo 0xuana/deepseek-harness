@@ -65,7 +65,7 @@ describe('forge registry', () => {
     const unregister = ctx.forge.register(new FakeProvider())
     expect(ctx.forge.repositoryFromRemote('fake://fake.test/Octo/Demo')).toBeDefined()
 
-    unregister()
+    await unregister()
 
     expect(ctx.forge.repositoryFromRemote('fake://fake.test/Octo/Demo')).toBeUndefined()
   })

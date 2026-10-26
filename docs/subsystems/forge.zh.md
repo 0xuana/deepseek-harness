@@ -240,12 +240,13 @@ Registry of forge providers. Watchers of one change request share a single polli
 /**
  * Register the provider of one forge family as an effect on the calling
  * fiber. Watches of that forge receive an `unavailable` failure when the
- * registration ends.
+ * registration ends. Unregistering cancels and awaits its in-flight calls;
+ * results from the withdrawn registration are discarded.
  * @param provider - provider to serve `provider.forge`.
- * @returns the disposer that unregisters the provider.
+ * @returns the disposer that unregisters the provider and waits for its calls to finish.
  * @throws when another provider already serves the same forge.
  */
-register(provider: ForgeProvider): () => void
+register(provider: ForgeProvider): () => Promise<void>
 
 /**
  * Map a Git remote URL to a repository through the first provider that serves it.
