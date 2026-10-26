@@ -326,6 +326,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   PluginInstallRequestId: 'boot.md',
   PluginSpecInspection: 'boot.md',
   PluginChange: 'boot.md',
+  PluginOperation: 'boot.md',
   PluginInstallLogChunk: 'boot.md',
   PluginInstallProgress: 'boot.md',
   PluginUpdateProgress: 'boot.md',
