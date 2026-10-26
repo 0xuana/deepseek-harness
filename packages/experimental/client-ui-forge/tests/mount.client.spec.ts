@@ -8,7 +8,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type { TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { RemoteError, type RemoteResult, type TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -150,7 +150,15 @@ async function base() {
   const unregisterTab = vi.fn()
   const sidebarRightTabs = { register: vi.fn((_type: { id: string; kind: string; title: () => string }) => unregisterTab) }
   ctx.provide('sidebarRightTabs', sidebarRightTabs)
-  const sidebarRight = { openTab: vi.fn(), toggleExpanded: vi.fn() }
+  const sidebarRight = { openTab: vi.fn(), toggleExpanded: vi.fn(), hide: vi.fn(),
+    tabsIn: vi.fn(() => [{ id: 'forge-tab' as TabId, kind: TAB_KIND }]) }
+  const scopes = new Map<SessionId, ReturnType<Context['plugin']>>()
+  const sessions = { scope: vi.fn<(id: SessionId) => Context | undefined>((id) => {
+    let fiber = scopes.get(id)
+    if (fiber === undefined) { fiber = ctx.plugin(() => {}); scopes.set(id, fiber) }
+    return fiber.ctx
+  }) }
+  ctx.provide('sessions', sessions)
   ctx.provide('sidebarRight', sidebarRight)
   await ctx.plugin(SlotRegistry)
   ctx.slots.register({
@@ -166,7 +174,7 @@ async function base() {
       'shell.overlay': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
-  return { ctx, remote, unmount, streams, forgePanel, sidebarRightTabs, unregisterTab, sidebarRight }
+  return { ctx, remote, unmount, streams, forgePanel, sidebarRightTabs, unregisterTab, sidebarRight, sessions, scopes }
 }
 
 async function fixture() {
@@ -220,7 +228,7 @@ async function fixture() {
 
 describe('mountForgePanel registration', () => {
   it('declares the browser services it needs', () => {
-    expect(inject).toEqual(['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight'])
+    expect(inject).toEqual(['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions'])
   })
 
   it('registers the tab types, their bodies and titles, the header button, the worktree option and card, and the toast', async () => {
@@ -323,6 +331,40 @@ describe('mountForgePanel Session stores', () => {
     unsubscribe()
     f.ctx.emit('connection/reset')
     expect(listener).toHaveBeenCalledOnce()
+    await f.dispose()
+  })
+
+  it('releases a closed Session and recreates its shared state on reopen', async () => {
+    const f = await fixture()
+    const first = f.tab(S1)
+    first.hooks.panel.subscribe(() => {})
+    expect(f.header(S1).hooks.panel).toBe(first.hooks.panel)
+    f.streams[0]!.push(ready({ changeRequests: [entry(1, snapshot(1))] }))
+    await settle()
+    await f.scopes.get(S1)!.dispose()
+    f.scopes.delete(S1)
+    expect(f.streams[0]!.signal.aborted).toBe(true)
+    const next = f.tab(S1)
+    expect(next.hooks.panel).not.toBe(first.hooks.panel)
+    expect(next.hooks.panel.getSnapshot().state).toBeNull()
+    expect(f.header(S1).hooks.panel).toBe(next.hooks.panel)
+    next.hooks.panel.subscribe(() => {})
+    expect(f.streams).toHaveLength(2)
+    await f.dispose()
+  })
+
+  it('publishes the selected language and refuses state for a released Session', async () => {
+    const f = await fixture()
+    const locale = f.tab(S1).hooks.locale
+    const changed = vi.fn()
+    const unsubscribe = locale.subscribe(changed)
+    f.ctx.locale.addLanguage({ id: 'de', label: 'Deutsch', fallback: 'en' })
+    f.ctx.locale.setLocale('de')
+    expect(locale.getSnapshot()).toBe('de')
+    expect(changed).toHaveBeenCalled()
+    unsubscribe()
+    f.sessions.scope.mockReturnValue(undefined)
+    expect(() => f.tab(S2)).toThrow('is not retained')
     await f.dispose()
   })
 
@@ -626,7 +668,8 @@ describe('mountForgePanel changes view', () => {
   it('sends the request for a change request to the Session as a message and confirms it', async () => {
     const f = await fixture()
     const send = vi.fn(async (_text: string) => {})
-    f.ctx.provide('sessions', { scope: (sessionId: SessionId) => sessionId === S1 ? { get: (name: string) => name === 'conversation' ? { send } : undefined } : undefined })
+    const scope = f.sessions.scope(S1)!
+    vi.spyOn(scope, 'get').mockImplementation(name => name === 'conversation' ? { send } as never : undefined)
     f.changes(S1).createChangeRequest()
     await settle()
     const text = send.mock.calls[0]?.[0]
@@ -641,14 +684,12 @@ describe('mountForgePanel changes view', () => {
     await f.dispose()
   })
 
-  it.each([
-    ['without a sessions service', undefined],
-    ['for a Session without a scope', { scope: () => undefined }],
-    ['for a Session scope without a conversation', { scope: () => ({ get: () => undefined }) }],
-  ])('reports that the request cannot be sent %s', async (_label, sessions) => {
+  it.each(['no scope', 'no conversation'] as const)('reports a prompt failure with %s', async (missing) => {
     const f = await fixture()
-    if (sessions !== undefined) f.ctx.provide('sessions', sessions)
-    f.changes(S1).createChangeRequest()
+    const view = f.changes(S1)
+    if (missing === 'no scope') f.sessions.scope.mockReturnValue(undefined)
+    else vi.spyOn(f.sessions.scope(S1)!, 'get').mockReturnValue(undefined)
+    view.createChangeRequest()
     expect(f.notice()).toMatchObject({ key: 'toast.promptFailed', tone: 'failure' })
     await f.dispose()
   })

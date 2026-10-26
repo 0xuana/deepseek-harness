@@ -31,7 +31,7 @@ import { WorktreeProgress, type WorktreeProgressInjected } from './WorktreeProgr
 import { WorktreeToggle, type WorktreeToggleInjected } from './WorktreeToggle.tsx'
 
 /** Services required before the Remote contribution mounts. */
-export const inject = ['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight']
+export const inject = ['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions']
 
 /** Registry id of the forge tab type, also its slot key. */
 export const TAB_ID = '@deepseek-ai/dsh-experimental-client-ui-forge'
@@ -51,6 +51,7 @@ function openLink(url: string): void {
 interface SessionStores {
   readonly panel: PanelSource
   readonly visibility: VisibilitySource
+  readonly release: () => void
 }
 
 function registerUi(ctx: Context): void {
@@ -59,19 +60,23 @@ function registerUi(ctx: Context): void {
   const notices = createNoticeSource()
   const stores = new Map<SessionId, SessionStores>()
   ctx.effect(() => () => {
-    for (const store of stores.values()) store.panel.close()
+    for (const store of [...stores.values()]) store.release()
     stores.clear()
   }, 'forge-panel: panel streams')
   const storesOf = (sessionId: SessionId): SessionStores => {
     let store = stores.get(sessionId)
     if (store === undefined) {
-      store = {
-        panel: createPanelSource({
-          open: signal => ctx.remote.forgePanel.follow(sessionId, signal),
-          subscribeReset: listener => ctx.on('connection/reset', listener),
-        }),
-        visibility: createVisibilitySource(),
-      }
+      const scope = ctx.sessions.scope(sessionId)
+      if (scope === undefined) throw new Error(`forge-panel: Session ${sessionId} is not retained`)
+      const panel = createPanelSource({
+        open: signal => ctx.remote.forgePanel.follow(sessionId, signal),
+        subscribeReset: listener => ctx.on('connection/reset', listener),
+      })
+      const dispose = scope.effect(() => () => {
+        panel.close()
+        stores.delete(sessionId)
+      }, 'forge-panel: release Session state')
+      store = { panel, visibility: createVisibilitySource(), release: () => { void dispose() } }
       stores.set(sessionId, store)
     }
     return store
@@ -92,7 +97,7 @@ function registerUi(ctx: Context): void {
   /** Send the request for a change request to the Session as a message from the user. */
   const createChangeRequest = (sessionId: SessionId): void => {
     const text = t('changes.local.prompt')
-    const conversation = ctx.get('sessions')?.scope(sessionId)?.get('conversation')
+    const conversation = ctx.sessions.scope(sessionId)?.get('conversation')
     if (conversation === undefined) {
       notices.report('toast.promptFailed')
       return
