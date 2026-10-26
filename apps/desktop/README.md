@@ -18,6 +18,7 @@ Desktop runs the Harness workspace in a native application. This reference cover
 - [Key technical decisions](#key-technical-decisions)
 - [Bundled command runtime](#bundled-command-runtime)
 - [Installation ownership](#installation-ownership)
+- [Recovery and diagnostics](docs/diagnostics/README.md)
 - [Develop](#develop)
 - [Package](#package)
 - [Windows installer interface](#windows-installer-interface)
@@ -29,6 +30,8 @@ Desktop runs the Harness workspace in a native application. This reference cover
 <a id="application-overview"></a>
 
 ## Application overview
+
+Electron caches the last confirmed UI language in `userData/desktop/locale-cache` so startup recovery dialogs can use it before Host settings are available. Missing, invalid, or unreadable caches fall back to the system language; cache write failures do not block startup. A successful Host startup or a UI language change refreshes the cache. Until then, a changed system language may differ from the cached language.
 
 Desktop analytics follows the [product collection policy](../../packages/client/product-analytics/README.md), including its live application setting. Web usage is excluded. Update installation waits for its local analytics intake before locking API admission and stopping the Host. Intake has a one-second deadline; failure does not prevent installation, and collector delivery is not awaited.
 
@@ -172,13 +175,7 @@ The signed `resources/app.asar/dsh/desktop-runtime.json` binds the shell version
 
 The [Web plugin UI](../../packages/client/ui-plugin-manager/README.md) owns the management interface. Desktop profile initialization and recovery preserve installed plugin files.
 
-Fatal main-window creation, main-document loading, preload, renderer, Web initialization, or backend failures open one native recovery dialog per application process. It shows a bounded tail of the first error, notes any truncation, and offers Exit, Restart, and Disable third-party plugins, back up profile patch, and restart. Startup failures retain the Web loading page and spinner; runtime failures retain the current page. Expected shutdowns, cancelled navigation, and ordinary requests do not trigger recovery. The shared Web plugin manager reports package-operation errors; Host startup failures after plugin changes enter native recovery. There is no startup timeout heuristic. A listener failure containing `listen EADDRINUSE` replaces the diagnostics and reinstall advice with guidance to quit other running DSH instances, and offers only Exit and Restart.
-
-Native dialog details include at most 1,200 UTF-16 code units and eight diagnostic lines, plus the path of the crash report described below when one was written. Host error diagnostics retain only the last 64 Ki characters written to stderr. Earlier output is discarded so a long-running Host does not grow the shell’s diagnostic buffer indefinitely.
-
-Before the first fatal dialog opens, Electron writes a crash report to the platform logs directory (`app.getPath('logs')`: `~/Library/Logs/DeepSeek Harness` on macOS, `logs` under the application’s `userData` directory on Windows and Linux), waiting at most one second for the write; a slow or failed write shows the dialog without a path. The file `crash-<UTC time>-<source>.log` records the source (`host` for a Host exit, `web-boot` for a renderer boot failure, `renderer` for a renderer or document failure, `main` for a shell error), whether the backend had reached ready, application and runtime versions, the error with its enumerable properties and cause chain (cut at 256 KiB), the Host’s own inspected error (at most 64 KiB) when the Host reported a startup failure over IPC before exiting, and the primary window’s recent error-level console output (at most 64 KiB). A Host exit report therefore contains the retained stderr tail, which may include plugin output. A fatal failure during shutdown writes a report without opening a dialog. Files are owner-only where the platform supports it; startup keeps the ten newest reports and removes older ones without touching other files in the directory.
-
-Recovery waits for Host shutdown before changing plugin activation. The native recovery action calls the shared app-boot recovery function under the profile transaction lock. It disables third-party bundles and renames the profile’s `cordis.patch.yml` to `cordis.patch.yml.bak-<timestamp>` (with an ordinal on collisions) without parsing it; the next startup creates an empty patch. Installed packages and earlier backups remain. The home-level patch is unchanged. The Electron console records the backup path (or its absence) and the unchanged home-level patch. Invalid profile data, rename failures, or write failures are reported as recovery-operation errors; completed changes remain, and Desktop does not restart as though recovery succeeded. Desktop has no profile-reset action or emergency HTML document.
+Desktop fatal failures use native recovery with Exit, Restart, Disable third-party plugins, back up profile patch, and restart, and Get diagnostic report. See [recovery and diagnostics](docs/diagnostics/README.md) for triggers, report locations and contents, recent operation records, and shutdown limits.
 
 ### Host environment
 

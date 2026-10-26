@@ -4661,6 +4661,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'progress', description: 'the installation\'s request id and phase, with the attempt while installing.' }],
   },
   {
+    name: 'plugin-manager/operation',
+    mode: 'parallel',
+    signature: '\'plugin-manager/operation\'(operation: PluginOperation): void | Promise<void>',
+    summary: 'One manager invocation started or ended; subscribers run independently without delaying management.',
+    description: 'One manager invocation started or ended; subscribers run independently without delaying management.',
+    parameters: [{ name: 'operation', description: 'Correlated operation facts; a start without an end has an unknown outcome.' }],
+  },
+  {
     name: 'plugin-manager/update-state',
     mode: 'emit',
     signature: '\'plugin-manager/update-state\'(progress: PluginUpdateProgress): void',
@@ -6795,6 +6803,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PluginLocalizedMeta',
     declaration: 'export interface PluginLocalizedMeta {\n    readonly title?: LocalizedText;\n    readonly description?: LocalizedText;\n    readonly icon?: string;\n    readonly error?: string;\n}',
+  },
+  {
+    name: 'PluginOperation',
+    declaration: 'export type PluginOperation = {\n    readonly id: PluginOperationId;\n    readonly time: string;\n    readonly reason: PluginChange[\'reason\'];\n    readonly target: string | null;\n    readonly stage: ChangeResult[\'stage\'];\n    readonly enabled?: boolean | undefined;\n    readonly version?: string | undefined;\n} & ({\n    readonly phase: \'started\';\n} | {\n    readonly phase: \'settled\';\n    readonly application: ChangeResult[\'application\'];\n    readonly changed: boolean;\n    readonly errorCode?: ManagementError[\'code\'] | undefined;\n    readonly restartReason?: RestartReason | undefined;\n} | {\n    readonly phase: \'unknown\';\n});',
+  },
+  {
+    name: 'PluginOperationId',
+    declaration: 'export type PluginOperationId = Branded<\'PluginOperationId\'>;',
   },
   {
     name: 'PluginOptions',
