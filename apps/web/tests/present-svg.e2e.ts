@@ -32,8 +32,9 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
   const connectionDiagnostics: string[] = []
 
   beforeAll(async () => {
-    const terminate = WebSocket.prototype.terminate
-    const terminated = vi.spyOn(WebSocket.prototype, 'terminate').mockImplementation(function (this: WebSocket) {
+    const terminated = vi.spyOn(WebSocket.prototype, 'terminate')
+    const terminate = terminated.getMockImplementation()!
+    terminated.mockImplementation(function (this: WebSocket) {
       connectionDiagnostics.push(`Host terminated WebSocket with ${this.bufferedAmount} buffered bytes: ${new Error('Host termination').stack}`)
       terminate.call(this)
     })
