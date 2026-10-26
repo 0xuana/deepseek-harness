@@ -4,8 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type Page } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import WebSocket from 'ws'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type {} from '@deepseek-ai/dsh-tool-present/types'
 import { deriveReplayScript, parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import {
@@ -28,17 +27,9 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
   let tripwire: ReturnType<typeof watchConsole>
   let cwd: string
   let replayRoot: string | undefined
-  let restoreTransportDiagnostics: (() => void) | undefined
   const connectionDiagnostics: string[] = []
 
   beforeAll(async () => {
-    const terminated = vi.spyOn(WebSocket.prototype, 'terminate')
-    const terminate = terminated.getMockImplementation()!
-    terminated.mockImplementation(function (this: WebSocket) {
-      connectionDiagnostics.push(`Host terminated WebSocket with ${this.bufferedAmount} buffered bytes: ${new Error('Host termination').stack}`)
-      terminate.call(this)
-    })
-    restoreTransportDiagnostics = () => { terminated.mockRestore() }
     let replayOverride: string | undefined
     if (MODE !== 'record') {
       replayRoot = await mkdtemp(join(tmpdir(), 'dsh-present-svg-replay-'))
@@ -76,7 +67,6 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
   })
 
   afterAll(async () => {
-    restoreTransportDiagnostics?.()
     try {
       await browser?.close()
     } finally {
