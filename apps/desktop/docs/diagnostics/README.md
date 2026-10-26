@@ -1,5 +1,5 @@
 ---
-description: "Desktop failure recovery, diagnostic reports, and shutdown limits."
+description: "Use this reference when recovering Desktop failures or collecting reports; it explains report contents, operation history, and shutdown limits."
 ---
 
 # Desktop recovery and diagnostics
@@ -44,6 +44,8 @@ A Host exit report therefore contains the retained stderr tail, which may includ
 ## Recent operation records
 
 Operation records and the application single-instance lock are isolated by `userData`; the shared platform logs directory does not store operation records. The reader only reads the two operation files under `userData/plugin-operations`. Repairing an unfinished append preserves complete lines in the current segment and the previous segment.
+
+Version-exemption changes reuse the bundle enable/disable record fields. When the exemption and installed versions match, the record cannot distinguish an exemption change from a bundle toggle.
 
 Host `transportDropped` is a lower bound as of the last successful delivery; Desktop rejects malformed or mismatched-run records without adding them to that counter.
 

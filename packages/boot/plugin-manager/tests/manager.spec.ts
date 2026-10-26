@@ -2244,13 +2244,16 @@ it.each(['extra@^1.0.0', ' extra@1.0.0 ', 'https://user:secret@example.com/pkg']
     expect(fact.version).toBeUndefined()
   }
   expect(JSON.stringify(facts)).not.toContain(input)
+  expect(JSON.stringify(facts)).not.toContain('secret')
 })
 
-it('retains exact uninstalled bundle names in operation records', async () => {
+it.each(['disable', 'enable', 'remove'] as const)('retains exact uninstalled bundle names when attempting %s', async (operation) => {
   const { manager, ctx } = await fixture()
   const facts: PluginOperation[] = []
   ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
-  await manager.setBundleEnabled('absent', false)
+  const result = operation === 'remove' ? await manager.removeBundle('absent')
+    : await manager.setBundleEnabled('absent', operation === 'enable')
+  if (operation !== 'disable') expect(result.application).toBe('failed')
   expect(facts).toHaveLength(2)
   for (const fact of facts) {
     expect(fact.target).toBe('absent')
@@ -2265,4 +2268,16 @@ it.each(['extra', '@scope/extra'])('records the exemption version independently 
   await manager.setVersionExemption(`${name}@2.0.0`, getDshRuntimeVersion(), false)
   expect(facts).toHaveLength(2)
   for (const fact of facts) expect(fact).toMatchObject({ target: name, version: '2.0.0', enabled: false })
+})
+
+it('omits exemption identity when only the runtime version is invalid', async () => {
+  const { manager, ctx } = await fixture()
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  expect(await manager.setVersionExemption('extra@1.0.0', '^1.0.0', true, true)).toMatchObject({ application: 'failed' })
+  expect(facts).toHaveLength(2)
+  for (const fact of facts) {
+    expect(fact.target).toBeNull()
+    expect(fact.version).toBeUndefined()
+  }
 })

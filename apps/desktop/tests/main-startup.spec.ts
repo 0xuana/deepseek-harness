@@ -28,7 +28,7 @@ vi.mock('../src/operation-report-job.ts', () => ({ runOperationReportJob: vi.fn(
 // dialog never outlives the test that triggered it.
 vi.mock('../src/crash-report.ts', async importOriginal => ({
   ...await importOriginal<typeof import('../src/crash-report.ts')>(),
-  writeCrashReport: vi.fn(async () => 'desktop-test-logs/crash-test.log'),
+  writeCrashReport: vi.fn<(...args: unknown[]) => Promise<string | undefined>>(),
   pruneCrashReports: vi.fn(async () => {}),
 }))
 
@@ -433,7 +433,8 @@ beforeEach(() => {
   harness.reset()
   const userData = mkdtempSync(join(tmpdir(), 'dsh-main-user-data-'))
   onTestFinished(() => { rmSync(userData, { recursive: true, force: true }) })
-  harness.app.getPath.mockImplementation(name => name === 'userData' ? userData : `desktop-test-${name}`)
+  harness.app.getPath.mockImplementation(name => name === 'userData' ? userData : join(userData, `desktop-test-${name}`))
+  vi.mocked(writeCrashReport).mockResolvedValue(join(harness.app.getPath('logs'), 'crash-test.log'))
   harness.dialog.showMessageBox.mockImplementation((options: { title?: string }) => {
     if (options.title !== en.startupFailed && options.title !== zh.startupFailed) return Promise.resolve({ response: 1 })
     harness.dialogShown.resolve()
@@ -2238,8 +2239,8 @@ describe('desktop main startup', () => {
     handler(event, 'client mount failed')
     await harness.dialogShown.promise
     expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).detail).toContain('client mount failed')
-    expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).detail).toContain('desktop-test-logs/crash-test.log')
-    expect(writeCrashReport).toHaveBeenCalledWith('desktop-test-logs', expect.objectContaining({ source: 'web-boot', phase: 'startup' }))
+    expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).detail).toContain(join(harness.app.getPath('logs'), 'crash-test.log'))
+    expect(writeCrashReport).toHaveBeenCalledWith(harness.app.getPath('logs'), expect.objectContaining({ source: 'web-boot', phase: 'startup' }))
     expect(window.urls).toEqual(['dsh-app://app/'])
   })
 
@@ -2253,7 +2254,7 @@ describe('desktop main startup', () => {
     window.webContents.emit('did-fail-load', {}, -2, 'failed', 'dsh-app://app/', true)
     await harness.dialogShown.promise
     expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).detail).toContain('Desktop page failed to load')
-    expect(writeCrashReport).toHaveBeenCalledWith('desktop-test-logs', expect.objectContaining({ source: 'renderer' }))
+    expect(writeCrashReport).toHaveBeenCalledWith(harness.app.getPath('logs'), expect.objectContaining({ source: 'renderer' }))
   })
 
   it('offers all recovery choices when resources fail before the Host starts', async () => {
@@ -2331,13 +2332,13 @@ describe('desktop main startup', () => {
     host.exited.resolve()
     await harness.dialogShown.promise
     const [directory, report] = vi.mocked(writeCrashReport).mock.calls[0]!
-    expect(directory).toBe('desktop-test-logs')
+    expect(directory).toBe(harness.app.getPath('logs'))
     expect(report.source).toBe('host')
     expect(report.phase).toBe('startup')
     expect(report.error).toBeInstanceOf(DesktopHostFatalError)
     expect(report.hostDiagnostic).toBe(diagnostic)
     expect(runOperationReportJob).toHaveBeenCalledWith({
-      reportPath: 'desktop-test-logs/crash-test.log', directory: join(harness.app.getPath('userData'), 'plugin-operations'),
+      reportPath: join(harness.app.getPath('logs'), 'crash-test.log'), directory: join(harness.app.getPath('userData'), 'plugin-operations'),
       limits: { bytes: 65536, recordBytes: 4096, records: 100, outputBytes: 65536 }, journal: null,
     }, { timeoutMs: 500, cancellationGraceMs: 100 }, expect.any(AbortSignal))
     expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).detail).toContain('profile has no cordis.yml')
@@ -2362,7 +2363,7 @@ describe('desktop main startup', () => {
     await host.stopping.promise
     expect(writeCrashReport).toHaveBeenCalledOnce()
     const [directory, report] = vi.mocked(writeCrashReport).mock.calls[0]!
-    expect(directory).toBe('desktop-test-logs')
+    expect(directory).toBe(harness.app.getPath('logs'))
     expect(report.source).toBe('host')
     expect(report.phase).toBe('running')
     expect(report.error).toBeInstanceOf(Error)

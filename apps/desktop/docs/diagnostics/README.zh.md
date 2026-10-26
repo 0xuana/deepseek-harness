@@ -1,5 +1,5 @@
 ---
-description: "Desktop failure recovery, diagnostic reports, and shutdown limits."
+description: "排查 Desktop 故障或收集报告时阅读，了解恢复操作、报告内容、操作历史和退出限制。"
 ---
 
 # Desktop 故障恢复与诊断
@@ -44,6 +44,8 @@ Host 设置可用前，恢复对话框使用本地缓存中最后确认的 Deskt
 ## 近期操作记录
 
 操作记录目录与应用单实例锁均按 `userData` 隔离；共享平台日志目录不用于保存操作记录。读取器只读取 `userData/plugin-operations` 下的两个操作记录文件。修复未写完的尾行时保留当前段的完整行与上一段。
+
+版本豁免变更复用 bundle 启停记录字段。豁免版本与安装版本相同时，记录无法区分豁免变更与 bundle 开关。
 
 Host 的 `transportDropped` 只表示最近一次成功发送时的计数下界；Desktop 拒绝的非法或运行 ID 不匹配记录不计入该值。
 

@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write apps/desktop/docs/diagnostics/README.md
 /:
-  en: ca7ea022a5be1df2
-  zh: ca7ea022a5be1df2
+  en: 29d76ee1849cd8fd
+  zh: a2b8cbabe79557f9
 /desktop-recovery-and-diagnostics:
   en: 4d4fd8a92047e5c6
   zh: 15ec51d703ccd70b
@@ -21,8 +21,8 @@
   en: 1a2eb71ac2dccf63
   zh: 5cf59639d3e49591
 /desktop-recovery-and-diagnostics/recent-operation-records:
-  en: 8f4db0caa4b329f6
-  zh: 952ae7d48896cb39
+  en: f1c19c1516a51ab6
+  zh: b350f7c18086d274
 /desktop-recovery-and-diagnostics/collection-and-shutdown:
   en: bac4a49f63d4aaf8
   zh: df1ae908ee2148e1
