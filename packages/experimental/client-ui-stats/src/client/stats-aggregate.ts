@@ -2,24 +2,24 @@
 
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {
-  PerfCall, PerfCompactionMetrics, PerfContribution, PerfEventMetrics, PerfStepMetrics, PerfToolCount,
-  PerfTurnMetrics,
-  PerfViewNode,
-} from './perf-contract.ts'
-import { CALL_LIMIT, isCodeMode, toolSpanUnion } from './perf-fold.ts'
-import { isNumber } from './perf-usage.ts'
+  StatsCall, StatsCompactionMetrics, StatsContribution, StatsEventMetrics, StatsStepMetrics, StatsToolCount,
+  StatsTurnMetrics,
+  StatsViewNode,
+} from './stats-contract.ts'
+import { CALL_LIMIT, isCodeMode, toolSpanUnion } from './stats-fold.ts'
+import { isNumber } from './stats-usage.ts'
 
 /** One Code-Mode root call's inner contribution, before merging into its step. */
-type InnerContribution = Extract<PerfContribution, { kind: 'inner' }>
+type InnerContribution = Extract<StatsContribution, { kind: 'inner' }>
 
 /** Empty image list shared by turns whose trigger attached no image. */
 const NO_IMAGES: readonly ImageAttachmentRef[] = []
 
 /** Empty compaction list shared by turns without one. */
-const NO_COMPACTIONS: readonly PerfCompactionMetrics[] = []
+const NO_COMPACTIONS: readonly StatsCompactionMetrics[] = []
 
 /** Empty event-row list shared by turns without one. */
-const NO_EVENTS: readonly PerfEventMetrics[] = []
+const NO_EVENTS: readonly StatsEventMetrics[] = []
 
 /** The trigger that opened one turn, kept from the highest-priority source. */
 interface TurnTrigger {
@@ -46,14 +46,14 @@ function triggerRank(source: string): number {
 }
 
 /** Context measured last in the turn: steps without usage keep the previous value. */
-function lastContext(steps: readonly PerfStepMetrics[]): number | null {
+function lastContext(steps: readonly StatsStepMetrics[]): number | null {
   let context: number | null = null
   for (const step of steps) if (isNumber(step.context)) context = step.context
   return context
 }
 
 /** Token-weighted cache level of the turn, over the steps that reported both read and prompt tokens. */
-function turnCache(steps: readonly PerfStepMetrics[]): {
+function turnCache(steps: readonly StatsStepMetrics[]): {
   rate: number | null
   read: number | null
   write: number | null
@@ -75,7 +75,7 @@ function turnCache(steps: readonly PerfStepMetrics[]): {
 }
 
 /** Tool tallies by descending count; ties keep call order. */
-function tallyCalls(calls: readonly PerfCall[]): PerfToolCount[] {
+function tallyCalls(calls: readonly StatsCall[]): StatsToolCount[] {
   const counts = new Map<string, number>()
   for (const call of calls) {
     if (call.name === null) continue
@@ -94,7 +94,7 @@ function tallyCalls(calls: readonly PerfCall[]): PerfToolCount[] {
  * @param inner - the step's Code-Mode contributions.
  * @returns the merged row, or the original when no dispatch was recorded.
  */
-function mergeInnerCalls(step: PerfStepMetrics, inner: readonly InnerContribution[]): PerfStepMetrics {
+function mergeInnerCalls(step: StatsStepMetrics, inner: readonly InnerContribution[]): StatsStepMetrics {
   if (inner.length === 0) return step
   const innerCalls = inner.flatMap(contribution => contribution.calls)
   const calls = [
@@ -120,7 +120,7 @@ function mergeInnerCalls(step: PerfStepMetrics, inner: readonly InnerContributio
  * @param steps - the turn's step metrics in step order.
  * @returns the turn row.
  */
-export function aggregateTurn(turn: number, steps: readonly PerfStepMetrics[]): PerfTurnMetrics {
+export function aggregateTurn(turn: number, steps: readonly StatsStepMetrics[]): StatsTurnMetrics {
   let ttftSum = 0
   let ttftUnknown = 0
   let modelSum = 0
@@ -176,7 +176,7 @@ export function aggregateTurn(turn: number, steps: readonly PerfStepMetrics[]): 
   }
   const cache = turnCache(steps)
   const all = steps.length
-  const toolCounts: PerfToolCount[] = [...tools.entries()]
+  const toolCounts: StatsToolCount[] = [...tools.entries()]
     .map(([name, count]) => ({ name, count }))
     .sort((left, right) => right.count - left.count)
   return {
@@ -219,7 +219,7 @@ export function aggregateTurn(turn: number, steps: readonly PerfStepMetrics[]): 
 }
 
 /** A step with no measurement at all: the empty step an interruption appends. */
-function isEmptyStep(step: PerfStepMetrics): boolean {
+function isEmptyStep(step: StatsStepMetrics): boolean {
   return step.context === null && step.ttft === null && step.model === null
     && step.tool === null && step.toolPending === 0
     && step.tools.length === 0
@@ -233,8 +233,8 @@ function isEmptyStep(step: PerfStepMetrics): boolean {
  * @param nodes - every node the target builder currently holds.
  * @returns turn rows ordered oldest first.
  */
-export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
-  const grouped = new Map<number, PerfStepMetrics[]>()
+export function buildTurns(nodes: Iterable<StatsViewNode>): StatsTurnMetrics[] {
+  const grouped = new Map<number, StatsStepMetrics[]>()
   // turn/end marker: turn → end time and reason, so an interrupted tail closes.
   const closedAt = new Map<number, number>()
   const closedKind = new Map<number, string>()
@@ -243,9 +243,9 @@ export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
   // Code-Mode dispatches per step, merged after the steps are ordered.
   const inner = new Map<string, InnerContribution[]>()
   // Compaction transactions per turn, ordered by start time after grouping.
-  const compactions = new Map<number, PerfCompactionMetrics[]>()
+  const compactions = new Map<number, StatsCompactionMetrics[]>()
   // Non-step event rows per turn, ordered by event time after grouping.
-  const events = new Map<number, PerfEventMetrics[]>()
+  const events = new Map<number, StatsEventMetrics[]>()
   for (const node of nodes) {
     const data = node.data
     if (data.kind === 'prompt') {
@@ -295,7 +295,7 @@ export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
     if (bucket === undefined) grouped.set(metrics.turn, [metrics])
     else bucket.push(metrics)
   }
-  const turns: PerfTurnMetrics[] = []
+  const turns: StatsTurnMetrics[] = []
   const order = [...grouped.keys()].sort((left, right) => left - right)
   order.forEach((turn, index) => {
     const bucket = grouped.get(turn)
@@ -354,7 +354,7 @@ export function buildTurns(nodes: Iterable<PerfViewNode>): PerfTurnMetrics[] {
 export type ContextMode = 'latest' | 'cumulative'
 
 /** Totals over the turns loaded in the current window. */
-export interface PerfTotals {
+export interface StatsTotals {
   readonly turnCount: number
   readonly stepCount: number
   readonly context: number | null
@@ -380,7 +380,7 @@ export interface PerfTotals {
  * @param mode - latest final prompt size, or the sum of its step prompt sizes.
  * @returns the context tokens, or null when no step measured one.
  */
-export function turnContext(turn: PerfTurnMetrics, mode: ContextMode): number | null {
+export function turnContext(turn: StatsTurnMetrics, mode: ContextMode): number | null {
   if (mode === 'latest') return turn.context
   let sum = 0
   let measured = false
@@ -397,7 +397,7 @@ export function turnContext(turn: PerfTurnMetrics, mode: ContextMode): number | 
  * @param turns - aggregated turns in display order.
  * @returns summed metrics; the context column is always the cumulative step context.
  */
-export function aggregateTotals(turns: readonly PerfTurnMetrics[]): PerfTotals {
+export function aggregateTotals(turns: readonly StatsTurnMetrics[]): StatsTotals {
   let stepCount = 0
   let outputSum = 0
   let outputMeasured = false

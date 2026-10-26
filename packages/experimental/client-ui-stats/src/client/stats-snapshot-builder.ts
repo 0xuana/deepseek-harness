@@ -4,34 +4,34 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {
   ConversationViewBuilder, ConversationViewDefinition,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { buildTurns } from './perf-aggregate.ts'
-import type { PerfSnapshot, PerfViewNode } from './perf-contract.ts'
-import { TARGET } from './perf-definition.ts'
+import { buildTurns } from './stats-aggregate.ts'
+import type { StatsSnapshot, StatsViewNode } from './stats-contract.ts'
+import { TARGET } from './stats-definition.ts'
 
 const EMPTY_LIST: readonly never[] = []
 
 /** Stable snapshot used before a Session assembled any performance node. */
-export const EMPTY_PERF_SNAPSHOT: PerfSnapshot = { turns: EMPTY_LIST, stepCount: 0 }
+export const EMPTY_STATS_SNAPSHOT: StatsSnapshot = { turns: EMPTY_LIST, stepCount: 0 }
 
 /** Incremental builder over the target's materialized nodes. */
-class PerfSnapshotBuilder implements ConversationViewBuilder<PerfViewNode, PerfSnapshot> {
-  private readonly nodes = new Map<string, PerfViewNode>()
-  private current: PerfSnapshot = EMPTY_PERF_SNAPSHOT
-  readonly empty: PerfSnapshot = EMPTY_PERF_SNAPSHOT
+class StatsSnapshotBuilder implements ConversationViewBuilder<StatsViewNode, StatsSnapshot> {
+  private readonly nodes = new Map<string, StatsViewNode>()
+  private current: StatsSnapshot = EMPTY_STATS_SNAPSHOT
+  readonly empty: StatsSnapshot = EMPTY_STATS_SNAPSHOT
 
-  replace(input: { readonly nodes: readonly PerfViewNode[] }): PerfSnapshot {
+  replace(input: { readonly nodes: readonly StatsViewNode[] }): StatsSnapshot {
     this.nodes.clear()
     for (const node of input.nodes) this.nodes.set(node.key, node)
     return this.snapshot()
   }
 
-  apply(input: { readonly upserts: readonly PerfViewNode[] }): PerfSnapshot {
+  apply(input: { readonly upserts: readonly StatsViewNode[] }): StatsSnapshot {
     if (input.upserts.length === 0) return this.current
     for (const node of input.upserts) this.nodes.set(node.key, node)
     return this.snapshot()
   }
 
-  private snapshot(): PerfSnapshot {
+  private snapshot(): StatsSnapshot {
     const turns = buildTurns(this.nodes.values())
     this.current = {
       turns,
@@ -41,10 +41,10 @@ class PerfSnapshotBuilder implements ConversationViewBuilder<PerfViewNode, PerfS
   }
 }
 
-/** The `perf` target every Definition publishes into. */
-export const perfViewDefinition: ConversationViewDefinition<PerfViewNode, PerfSnapshot> = {
+/** The `stats` target every Definition publishes into. */
+export const statsViewDefinition: ConversationViewDefinition<StatsViewNode, StatsSnapshot> = {
   target: TARGET,
-  create: () => new PerfSnapshotBuilder(),
+  create: () => new StatsSnapshotBuilder(),
 }
 
 /**
@@ -52,6 +52,6 @@ export const perfViewDefinition: ConversationViewDefinition<PerfViewNode, PerfSn
  * effect, so unloading the plugin drops the target with it.
  * @param ctx - client root context.
  */
-export function registerPerfConversationView(ctx: Context): void {
-  ctx.uiConversation.views.register(perfViewDefinition)
+export function registerStatsConversationView(ctx: Context): void {
+  ctx.uiConversation.views.register(statsViewDefinition)
 }

@@ -15,7 +15,7 @@ describe('Inspector profile bundle', () => {
     expect(manifest.publishConfig.access).toBe('public')
     expect(manifest.dsh.bundle.patch).toBe('./cordis.patch.yml')
     expect(manifest.dependencies).toEqual({
-      '@deepseek-ai/dsh-experimental-client-ui-perf': 'workspace:*',
+      '@deepseek-ai/dsh-experimental-client-ui-stats': 'workspace:*',
       '@deepseek-ai/dsh-experimental-inspector': 'workspace:*',
       '@deepseek-ai/dsh-experimental-session-inspector': 'workspace:*',
     })
@@ -27,7 +27,7 @@ describe('Inspector profile bundle', () => {
         disabled: false, config: { captureFetch: true },
       },
       { id: 'session-inspector', name: '@deepseek-ai/dsh-experimental-session-inspector' },
-      { id: 'client-ui-perf', name: '@deepseek-ai/dsh-experimental-client-ui-perf' },
+      { id: 'client-ui-stats', name: '@deepseek-ai/dsh-experimental-client-ui-stats' },
     ] }])
   })
 })

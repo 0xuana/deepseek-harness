@@ -21,11 +21,11 @@ import {
   connectFreshWorkspace, newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot,
 } from './support.ts'
 
-const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/client-ui-perf-panel', import.meta.url))
+const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/client-ui-stats-panel', import.meta.url))
 const PANEL_EXPECTED = join(SNAPSHOT_DIR, 'panel.expected.md')
-const OVERLAY = fileURLToPath(new URL('./client-ui-perf-panel.overlay.yml', import.meta.url))
+const OVERLAY = fileURLToPath(new URL('./client-ui-stats-panel.overlay.yml', import.meta.url))
 const INSTALL_ANCHORS = [
-  fileURLToPath(new URL('../../../packages/experimental/client-ui-perf/package.json', import.meta.url)),
+  fileURLToPath(new URL('../../../packages/experimental/client-ui-stats/package.json', import.meta.url)),
 ]
 const MODE = webSnapshotMode()
 
@@ -52,7 +52,7 @@ function stream(firstTokenAt: number): AssistantStreamRecord[] {
 describe('Statistics view overlay', () => {
   it('mounts the experimental client plugin over the shipped Web surface', () => {
     expect(profileEntries(OVERLAY)).toEqual([{
-      insert: [{ id: 'ui-client-ui-perf', name: '@deepseek-ai/dsh-experimental-client-ui-perf' }],
+      insert: [{ id: 'ui-client-ui-stats', name: '@deepseek-ai/dsh-experimental-client-ui-stats' }],
     }])
   })
 })
@@ -127,7 +127,7 @@ describe('web e2e: Statistics view', () => {
   })
 
   it('renders the measured context, timing, cache, and tool columns', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-client-ui-perf-panel'))
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-client-ui-stats-panel'))
     await page.getByRole('tab', { name: 'Statistics', exact: true }).click()
     const table = page.locator('table[aria-label="Statistics"]')
     await table.waitFor({ timeout: 10_000 })

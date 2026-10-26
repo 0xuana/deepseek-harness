@@ -2,7 +2,7 @@
 
 import type { SessionStatsProjection } from '@deepseek-ai/dsh-session-stats/types'
 import type { TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
-import type { PerfTotals } from './perf-aggregate.ts'
+import type { StatsTotals } from './stats-aggregate.ts'
 
 /**
  * Map the whole-session stats and token-usage projections onto the totals row.
@@ -13,7 +13,7 @@ import type { PerfTotals } from './perf-aggregate.ts'
 export function totalsFromProjections(
   stats: SessionStatsProjection | undefined,
   usage: TokenUsageProjection | undefined,
-): PerfTotals | null {
+): StatsTotals | null {
   if (stats === undefined || usage === undefined) return null
   const context = usage.uncachedInputTokens + usage.cacheReadTokens + usage.cacheWriteTokens
   const active = stats.steps === 0 ? null : stats.llmMs + stats.toolMs

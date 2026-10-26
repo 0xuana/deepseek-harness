@@ -14,52 +14,52 @@ import type {
   ConversationLocation, ConversationNodeContext, ConversationNodeDefinition,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
-  PerfCompactionState, PerfEventMetrics, PerfStepState, PerfViewNode,
-} from './perf-contract.ts'
+  StatsCompactionState, StatsEventMetrics, StatsStepState, StatsViewNode,
+} from './stats-contract.ts'
 import {
   CALL_LIMIT, fallbackState, foldEvent, isCodeMode, newState, promptOf, stepMetrics, triggerSenderOf,
-} from './perf-fold.ts'
+} from './stats-fold.ts'
 import {
   compactionEventId, compactionMetrics, foldCompaction, newCompactionState,
-} from './perf-compaction.ts'
-import { eventMetrics, locationTurnStep } from './perf-event.ts'
+} from './stats-compaction.ts'
+import { eventMetrics, locationTurnStep } from './stats-event.ts'
 
 /** Target name shared by every Definition and the view builder. */
-export const TARGET = 'perf'
+export const TARGET = 'stats'
 
 /** Definition kind of one measured step. */
-const STEP_KIND = 'perf-step'
+const STEP_KIND = 'stats-step'
 
 /** Definition kind of one user prompt. */
-const PROMPT_KIND = 'perf-prompt'
+const PROMPT_KIND = 'stats-prompt'
 
 /** Definition kind of a turn's end marker. */
-const END_KIND = 'perf-turn-end'
+const END_KIND = 'stats-turn-end'
 
 /** Definition kind of one Code-Mode root call's inner dispatches. */
-const CODE_MODE_KIND = 'perf-code-mode'
+const CODE_MODE_KIND = 'stats-code-mode'
 
 /** Definition kind of one compaction transaction. */
-const COMPACTION_KIND = 'perf-compaction'
+const COMPACTION_KIND = 'stats-compaction'
 
 /** Definition kind of one non-step event row. */
-const EVENT_KIND = 'perf-event'
+const EVENT_KIND = 'stats-event'
 
 /** Marker ids never collide with a step number. */
 const PROMPT_STEP = 0
 const END_STEP = 100_000
 
 /** Location a published node carries: the start match's, else the newest match's. */
-function nodeLocation(context: ConversationNodeContext<PerfStepState>): ConversationLocation {
+function nodeLocation(context: ConversationNodeContext<StatsStepState>): ConversationLocation {
   return context.start?.location ?? context.matches.at(-1)?.location ?? { kind: 'unresolved' }
 }
 
 /** Wrap one contribution in the target's node envelope. */
-function perfNode(
-  context: ConversationNodeContext<PerfStepState>,
+function statsNode(
+  context: ConversationNodeContext<StatsStepState>,
   anchorSeq: number,
-  data: PerfViewNode['data'],
-): PerfViewNode {
+  data: StatsViewNode['data'],
+): StatsViewNode {
   return {
     key: context.key,
     kind: context.kind,
@@ -72,12 +72,12 @@ function perfNode(
 }
 
 /** State a step-like Context folds from the matches a trimmed window still holds. */
-function stepState(context: ConversationNodeContext<PerfStepState>): PerfStepState | undefined {
+function stepState(context: ConversationNodeContext<StatsStepState>): StatsStepState | undefined {
   return context.state ?? fallbackState(context.matches)
 }
 
 /** One measured step per `step/start`, updated by its stream, tools, and end. */
-const stepDefinition: ConversationNodeDefinition<PerfStepState> = {
+const stepDefinition: ConversationNodeDefinition<StatsStepState> = {
   kind: STEP_KIND,
   target: TARGET,
   match: (event) => {
@@ -98,7 +98,7 @@ const stepDefinition: ConversationNodeDefinition<PerfStepState> = {
   },
   start: (_context, match) => {
     if (match.event.type !== 'step/start') {
-      throw new Error('perf-step start requires step/start')
+      throw new Error('stats-step start requires step/start')
     }
     return { ...newState(match.event.data.turn, match.event.data.step), startSeq: match.event.seq, startTime: match.event.time }
   },
@@ -113,7 +113,7 @@ const stepDefinition: ConversationNodeDefinition<PerfStepState> = {
   buildViewNode: (context) => {
     const state = stepState(context)
     if (state === undefined) return null
-    return perfNode(context, state.startSeq ?? context.start?.event.seq ?? 0, {
+    return statsNode(context, state.startSeq ?? context.start?.event.seq ?? 0, {
       kind: 'step',
       metrics: stepMetrics(state),
     })
@@ -121,7 +121,7 @@ const stepDefinition: ConversationNodeDefinition<PerfStepState> = {
 }
 
 /** The trigger of one turn: one Context per `user/message`, classified by source. */
-const promptDefinition: ConversationNodeDefinition<PerfStepState> = {
+const promptDefinition: ConversationNodeDefinition<StatsStepState> = {
   kind: PROMPT_KIND,
   target: TARGET,
   match: event => (event.type === 'user/message'
@@ -129,7 +129,7 @@ const promptDefinition: ConversationNodeDefinition<PerfStepState> = {
     : null),
   start: (_context, match) => {
     if (match.event.type !== 'user/message') {
-      throw new Error('perf-prompt start requires user/message')
+      throw new Error('stats-prompt start requires user/message')
     }
     const located = locationTurnStep(match.location)
     const prompt = promptOf(match.event.data)
@@ -147,7 +147,7 @@ const promptDefinition: ConversationNodeDefinition<PerfStepState> = {
     const state = context.state
     const located = locationTurnStep(nodeLocation(context))
     if (state === undefined || located === null) return null
-    return perfNode(context, context.start?.event.seq ?? 0, {
+    return statsNode(context, context.start?.event.seq ?? 0, {
       kind: 'prompt',
       turn: located.turn,
       prompt: state.prompt,
@@ -159,7 +159,7 @@ const promptDefinition: ConversationNodeDefinition<PerfStepState> = {
 }
 
 /** Closes a turn, including an interrupted tail whose last step never ended. */
-const endDefinition: ConversationNodeDefinition<PerfStepState> = {
+const endDefinition: ConversationNodeDefinition<StatsStepState> = {
   kind: END_KIND,
   target: TARGET,
   match: event => (event.type === 'turn/end'
@@ -167,7 +167,7 @@ const endDefinition: ConversationNodeDefinition<PerfStepState> = {
     : null),
   start: (_context, match) => {
     if (match.event.type !== 'turn/end') {
-      throw new Error('perf-turn-end start requires turn/end')
+      throw new Error('stats-turn-end start requires turn/end')
     }
     return {
       ...newState(match.event.data.turn, END_STEP, 'end'),
@@ -181,7 +181,7 @@ const endDefinition: ConversationNodeDefinition<PerfStepState> = {
   buildViewNode: (context) => {
     const state = context.state
     if (state === undefined) return null
-    return perfNode(context, context.start?.event.seq ?? 0, {
+    return statsNode(context, context.start?.event.seq ?? 0, {
       kind: 'end',
       turn: state.turn,
       closeKind: state.closeKind,
@@ -195,7 +195,7 @@ const endDefinition: ConversationNodeDefinition<PerfStepState> = {
  * merges them into the owning step by the root call id. The events carry no
  * turn or step, so the Context takes both from the engine's match location.
  */
-const codeModeDefinition: ConversationNodeDefinition<PerfStepState> = {
+const codeModeDefinition: ConversationNodeDefinition<StatsStepState> = {
   kind: CODE_MODE_KIND,
   target: TARGET,
   match: (event) => {
@@ -207,7 +207,7 @@ const codeModeDefinition: ConversationNodeDefinition<PerfStepState> = {
   },
   start: (_context, match) => {
     if (match.event.type !== 'tool/ptc-dispatch-start') {
-      throw new Error('perf-code-mode start requires tool/ptc-dispatch-start')
+      throw new Error('stats-code-mode start requires tool/ptc-dispatch-start')
     }
     const located = locationTurnStep(match.location)
     const base = located?.step === null || located === null
@@ -225,7 +225,7 @@ const codeModeDefinition: ConversationNodeDefinition<PerfStepState> = {
     const calls = stepMetrics(state).calls
       .filter(call => !isCodeMode(call.name))
       .slice(0, CALL_LIMIT)
-    return perfNode(context, context.start?.event.seq ?? 0, {
+    return statsNode(context, context.start?.event.seq ?? 0, {
       kind: 'inner',
       turn: located.turn,
       step: located.step,
@@ -235,7 +235,7 @@ const codeModeDefinition: ConversationNodeDefinition<PerfStepState> = {
 }
 
 /** One synthetic row per compaction transaction, including its summary model call. */
-const compactionDefinition: ConversationNodeDefinition<PerfCompactionState> = {
+const compactionDefinition: ConversationNodeDefinition<StatsCompactionState> = {
   kind: COMPACTION_KIND,
   target: TARGET,
   match: (event) => {
@@ -245,7 +245,7 @@ const compactionDefinition: ConversationNodeDefinition<PerfCompactionState> = {
   },
   start: (_context, match) => {
     if (match.event.type !== 'compaction/start') {
-      throw new Error('perf-compaction start requires compaction/start')
+      throw new Error('stats-compaction start requires compaction/start')
     }
     return newCompactionState(match.event)
   },
@@ -268,7 +268,7 @@ const compactionDefinition: ConversationNodeDefinition<PerfCompactionState> = {
 }
 
 /** One row per non-step event that explains request, prompt, tool, or prune changes. */
-const eventDefinition: ConversationNodeDefinition<PerfEventMetrics> = {
+const eventDefinition: ConversationNodeDefinition<StatsEventMetrics> = {
   kind: EVENT_KIND,
   target: TARGET,
   match: event => (eventMetrics(event, undefined) === null
@@ -277,7 +277,7 @@ const eventDefinition: ConversationNodeDefinition<PerfEventMetrics> = {
   start: (_context, match) => {
     const metrics = eventMetrics(match.event, match.location)
     /* v8 ignore next 2 -- match accepted only events this normalizer handles. */
-    if (metrics === null) throw new Error('perf-event start requires a supported event')
+    if (metrics === null) throw new Error('stats-event start requires a supported event')
     return metrics
   },
   /* v8 ignore next -- event rows are created by their start match and never updated. */
@@ -304,7 +304,7 @@ const eventDefinition: ConversationNodeDefinition<PerfEventMetrics> = {
  * effect, so unloading the plugin removes the nodes with it.
  * @param ctx - client root context.
  */
-export function registerPerfDefinitions(ctx: Context): void {
+export function registerStatsDefinitions(ctx: Context): void {
   ctx.uiConversation.events.register(stepDefinition)
   ctx.uiConversation.events.register(promptDefinition)
   ctx.uiConversation.events.register(endDefinition)

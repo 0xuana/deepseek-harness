@@ -1,5 +1,5 @@
 /**
- * Performance table for one conversation: per-turn aggregates, expandable step
+ * Statistics table for one conversation: per-turn aggregates, expandable step
  * rows, the time-composition bars, and the per-step tool-call accordion.
  */
 
@@ -14,20 +14,20 @@ import type { MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
-  PerfCall, PerfCompactionMetrics, PerfEventKind, PerfEventMetrics, PerfSnapshot, PerfStepMetrics,
-  LoadOlderResult, PerfToolCount, PerfTurnMetrics,
-} from './perf-contract.ts'
+  StatsCall, StatsCompactionMetrics, StatsEventKind, StatsEventMetrics, StatsSnapshot, StatsStepMetrics,
+  LoadOlderResult, StatsToolCount, StatsTurnMetrics,
+} from './stats-contract.ts'
 import {
   DASH, barShare, formatChars, formatClock, formatDateTime, formatDateTimeShort, formatDateTimeMs, formatMs,
   formatPercent, formatStepClock,
   formatTokens, formatTokensDelta, formatTokensShort, formatTps,
-} from './perf-format.ts'
-import { aggregateTotals, turnContext, type ContextMode, type PerfTotals } from './perf-aggregate.ts'
-import { isNumber } from './perf-usage.ts'
-import { CALL_LIMIT } from './perf-fold.ts'
-import type { PerfTranslate } from './locales.ts'
-import { totalsFromProjections } from './perf-totals.ts'
-import css from './perf.module.css'
+} from './stats-format.ts'
+import { aggregateTotals, turnContext, type ContextMode, type StatsTotals } from './stats-aggregate.ts'
+import { isNumber } from './stats-usage.ts'
+import { CALL_LIMIT } from './stats-fold.ts'
+import type { StatsTranslate } from './locales.ts'
+import { totalsFromProjections } from './stats-totals.ts'
+import css from './stats.module.css'
 // Type-only: merges sessionStats and tokenUsage into SessionProjectionMap for useProjection.
 import type {} from '@deepseek-ai/dsh-session-stats/client'
 import type {} from '@deepseek-ai/dsh-token-meter/client'
@@ -74,7 +74,7 @@ const TOOL_TONES: Readonly<Record<string, number>> = {
   subagent_fork: 5,
 }
 
-/** Tone classes, one per palette index; each sets `--perf-tool-color`. */
+/** Tone classes, one per palette index; each sets `--stats-tool-color`. */
 const TONE_CLASSES: readonly (string | undefined)[] = [
   css.tone0, css.tone1, css.tone2, css.tone3,
   css.tone4, css.tone5, css.tone6, css.tone7,
@@ -92,11 +92,11 @@ function cx(...names: readonly (string | undefined)[]): string {
 }
 
 /** Business face injected by the browser plugin. */
-export interface PerfViewInjected {
+export interface StatsViewInjected {
   /** Snapshot sources bound by InjectFace. */
   hooks: {
-    /** This target's snapshot; InjectFace exposes it as `usePerf`. */
-    perf: ObservableSnapshot<PerfSnapshot>
+    /** This target's snapshot; InjectFace exposes it as `useStats`. */
+    stats: ObservableSnapshot<StatsSnapshot>
   }
   /**
    * Load one older history page into the published window.
@@ -114,11 +114,11 @@ export interface PerfViewInjected {
 }
 
 /** Full props of the performance conversation View. */
-export type PerfViewProps =
-  ConvViewProps & InjectFace<PerfViewInjected> & PropsLocale<'perf'>
+export type StatsViewProps =
+  ConvViewProps & InjectFace<StatsViewInjected> & PropsLocale<'stats'>
 
 /** Resolve one durable prompt image to a browser URL. */
-type LoadImage = PerfViewInjected['loadImage']
+type LoadImage = StatsViewInjected['loadImage']
 
 /** Prompt image shown by the full-size lightbox. */
 interface LightboxImage {
@@ -222,13 +222,13 @@ interface CallGroup {
   readonly key: string
   readonly name: string | null
   readonly hint: string | null
-  readonly calls: readonly PerfCall[]
+  readonly calls: readonly StatsCall[]
 }
 
 /** Table state shared by one turn's rendered rows. */
 interface TurnRowsOptions {
-  readonly turn: PerfTurnMetrics
-  readonly t: PerfTranslate
+  readonly turn: StatsTurnMetrics
+  readonly t: StatsTranslate
   readonly loadImage: LoadImage
   readonly now: number
   readonly open: boolean
@@ -245,8 +245,8 @@ interface TurnRowsOptions {
 
 /** Row state of one turn's step rows (no turn header fields). */
 interface StepRowsOptions {
-  readonly turn: PerfTurnMetrics
-  readonly t: PerfTranslate
+  readonly turn: StatsTurnMetrics
+  readonly t: StatsTranslate
   readonly now: number
   readonly state: StepViewState
   readonly showEvents: boolean
@@ -257,8 +257,8 @@ interface StepRowsOptions {
 
 /** Props of one tool-call block inside the step accordion. */
 interface CallBlockProps {
-  readonly call: PerfCall
-  readonly t: PerfTranslate
+  readonly call: StatsCall
+  readonly t: StatsTranslate
   readonly wrap: boolean
   readonly raw: boolean
   readonly onToggleRaw: () => void
@@ -268,7 +268,7 @@ interface CallBlockProps {
 interface CopyButtonProps {
   readonly clipboard: Clipboard
   readonly clipboardValue: string
-  readonly t: PerfTranslate
+  readonly t: StatsTranslate
 }
 
 /** Props of one numeric cell group (context excluded by the caller). */
@@ -292,7 +292,7 @@ interface TimeCellProps {
   readonly className: string | undefined
   readonly trackClass: string | undefined
   readonly now: number
-  readonly t: PerfTranslate
+  readonly t: StatsTranslate
 }
 
 /** Props of the pagination/expand footer button. */
@@ -304,8 +304,8 @@ interface TableButtonProps {
 
 /** Props of the prompt column cell. */
 interface PromptCellProps {
-  readonly turn: PerfTurnMetrics
-  readonly t: PerfTranslate
+  readonly turn: StatsTurnMetrics
+  readonly t: StatsTranslate
   readonly className: string | undefined
   readonly loadImage: LoadImage
 }
@@ -316,7 +316,7 @@ interface PromptImageThumbProps {
   readonly index: number
   readonly count: number
   readonly loadImage: LoadImage
-  readonly t: PerfTranslate
+  readonly t: StatsTranslate
   readonly onOpen: (image: LightboxImage) => void
 }
 
@@ -325,7 +325,7 @@ interface ImagePromptPillProps {
   readonly first: ImageAttachmentRef
   readonly images: readonly ImageAttachmentRef[]
   readonly loadImage: LoadImage
-  readonly t: PerfTranslate
+  readonly t: StatsTranslate
 }
 
 /** Empty per-turn step state, shared so unexpanded turns allocate nothing. */
@@ -487,7 +487,7 @@ function lineClass(sign: CodeLine['sign']): string | undefined {
 }
 
 /** Code block: monospaced lines, capped at CODE_LINE_LIMIT rows. */
-function codeBlock(lines: readonly CodeLine[], t: PerfTranslate, wrap: boolean): ReactElement {
+function codeBlock(lines: readonly CodeLine[], t: StatsTranslate, wrap: boolean): ReactElement {
   const shown = lines.length > CODE_LINE_LIMIT ? lines.slice(0, CODE_LINE_LIMIT) : lines
   return (
     <pre className={wrap ? cx(css.code, css.codeWrap) : css.code}>
@@ -506,7 +506,7 @@ function codeBlock(lines: readonly CodeLine[], t: PerfTranslate, wrap: boolean):
 }
 
 /** Body of one tool call: raw arguments, a line diff, a file, or result text. */
-function callBody(call: PerfCall, t: PerfTranslate, wrap: boolean, raw: boolean): ReactNode {
+function callBody(call: StatsCall, t: StatsTranslate, wrap: boolean, raw: boolean): ReactNode {
   if (raw && call.args !== null) {
     return (
       <Fragment>
@@ -644,7 +644,7 @@ function CallBlock({ call, t, wrap, raw, onToggleRaw }: CallBlockProps): ReactEl
 }
 
 /** Scope markers: running/interrupted/unsettled, retries, and cache misses. */
-function scopeMarkers(value: ScopeState, t: PerfTranslate): ReactNode {
+function scopeMarkers(value: ScopeState, t: StatsTranslate): ReactNode {
   return (
     <Fragment>
       {value.running ? <span className={css.stateRunning}>{t('state.running')}</span> : null}
@@ -673,7 +673,7 @@ function scopeMarkers(value: ScopeState, t: PerfTranslate): ReactNode {
 }
 
 /** Tool pill with its tone dot and call count. */
-function ToolPill({ item, t }: { readonly item: PerfToolCount; readonly t: PerfTranslate }): ReactElement {
+function ToolPill({ item, t }: { readonly item: StatsToolCount; readonly t: StatsTranslate }): ReactElement {
   return (
     <span className={css.pill} title={t('did.title', { calls: item.count, tools: item.name })}>
       <span className={cx(css.dot, toneClass(item.name))} />
@@ -683,7 +683,7 @@ function ToolPill({ item, t }: { readonly item: PerfToolCount; readonly t: PerfT
 }
 
 /** Turn tool composition bar: one growing segment per tool, ordered by count. */
-function MixBar({ tools }: { readonly tools: readonly PerfToolCount[] }): ReactElement {
+function MixBar({ tools }: { readonly tools: readonly StatsToolCount[] }): ReactElement {
   return (
     <div className={css.mix}>
       {tools.map(item => (
@@ -698,7 +698,7 @@ function MixBar({ tools }: { readonly tools: readonly PerfToolCount[] }): ReactE
 }
 
 /** Tool output summary shown after a call group in the did column. */
-function toolStat(name: string, calls: readonly PerfCall[], t: PerfTranslate): ReactNode {
+function toolStat(name: string, calls: readonly StatsCall[], t: StatsTranslate): ReactNode {
   if (name === 'read') {
     const lines = calls.reduce((sum, call) => sum + (isNumber(call.lines) ? call.lines : 0), 0)
     if (lines <= 0) return null
@@ -732,8 +732,8 @@ function toolStat(name: string, calls: readonly PerfCall[], t: PerfTranslate): R
 }
 
 /** Group calls by tool name and target so `×2` means one target twice. */
-function callGroups(calls: readonly PerfCall[]): readonly CallGroup[] {
-  const groups = new Map<string, { key: string; name: string | null; hint: string | null; calls: PerfCall[] }>()
+function callGroups(calls: readonly StatsCall[]): readonly CallGroup[] {
+  const groups = new Map<string, { key: string; name: string | null; hint: string | null; calls: StatsCall[] }>()
   for (const call of calls) {
     const key = `${call.name ?? ''}\u0000${call.hint ?? ''}`
     const group = groups.get(key)
@@ -747,7 +747,7 @@ function callGroups(calls: readonly PerfCall[]): readonly CallGroup[] {
 }
 
 /** Gap between one step's start and the previous step's end. */
-function stepGaps(turn: PerfTurnMetrics): ReadonlyMap<number, number> {
+function stepGaps(turn: StatsTurnMetrics): ReadonlyMap<number, number> {
   const gaps = new Map<number, number>()
   let previousEnd: number | null = null
   for (const step of turn.steps) {
@@ -761,7 +761,7 @@ function stepGaps(turn: PerfTurnMetrics): ReadonlyMap<number, number> {
 }
 
 /** Context change of each step against the previous measured step in its turn. */
-function contextDeltas(turn: PerfTurnMetrics): ReadonlyMap<number, number> {
+function contextDeltas(turn: StatsTurnMetrics): ReadonlyMap<number, number> {
   const deltas = new Map<number, number>()
   let previous: number | null = null
   for (const step of turn.steps) {
@@ -774,9 +774,9 @@ function contextDeltas(turn: PerfTurnMetrics): ReadonlyMap<number, number> {
 
 /** Step slice shown for one turn: filtered pool, then the newest STEP_LIMIT. */
 function stepsOf(
-  turn: PerfTurnMetrics,
+  turn: StatsTurnMetrics,
   state: StepViewState,
-): { readonly pool: readonly PerfStepMetrics[]; readonly shown: readonly PerfStepMetrics[] } {
+): { readonly pool: readonly StatsStepMetrics[]; readonly shown: readonly StatsStepMetrics[] } {
   const filter = state.filter ?? null
   const pool = filter === null
     ? turn.steps
@@ -789,7 +789,7 @@ function stepsOf(
 function metricCell(
   value: number | null,
   format: (input: number | null) => string,
-  t: PerfTranslate,
+  t: StatsTranslate,
   pending: number | undefined,
 ): CellText {
   if (!isNumber(value)) return { text: DASH, title: t('unknown') }
@@ -831,7 +831,7 @@ const COLUMN_PARTIAL: Readonly<
 
 /** Source breakdown of a cell that has one, replacing the formula tooltip. */
 const COLUMN_DETAIL: Readonly<
-  Partial<Record<NumericColumn, (value: MetricsValues, t: PerfTranslate) => string>>
+  Partial<Record<NumericColumn, (value: MetricsValues, t: StatsTranslate) => string>>
 > = {
   cache: (value, t) => {
     if (!isNumber(value.cacheHit)) return ''
@@ -852,7 +852,7 @@ const COLUMN_DETAIL: Readonly<
 }
 
 /** All numeric cells of one row, in table order. */
-function metricsCells(value: MetricsValues, t: PerfTranslate): readonly MetricCell[] {
+function metricsCells(value: MetricsValues, t: StatsTranslate): readonly MetricCell[] {
   return COLUMNS.map((name) => {
     const partial = COLUMN_PARTIAL[name]
     const cell = metricCell(
@@ -959,9 +959,9 @@ function TimeCell({ value, scale, gap, className, trackClass, now, t }: TimeCell
 
 /** Props of the totals row. */
 interface TotalsRowProps {
-  readonly totals: PerfTotals
+  readonly totals: StatsTotals
   readonly full: boolean
-  readonly t: PerfTranslate
+  readonly t: StatsTranslate
   readonly now: number
 }
 
@@ -1000,7 +1000,7 @@ function TotalsRow({ totals, full, t, now }: TotalsRowProps): ReactElement {
 }
 
 /** Display name of one prompt image: its recorded name, otherwise its position. */
-function imageName(attachment: ImageAttachmentRef, index: number, count: number, t: PerfTranslate): string {
+function imageName(attachment: ImageAttachmentRef, index: number, count: number, t: StatsTranslate): string {
   return attachment.name ?? t('imagePreview.alt', { index, count })
 }
 
@@ -1180,7 +1180,7 @@ const AGENT_FRAME = /^Agent \S+ sent a message:/u
 const SUBAGENT_FRAME = /^Background subagent \S+ finished/u
 
 /** Label of the concrete wake frame, falling back to the producer source kind. */
-function triggerLabelOf(text: string, source: string, t: PerfTranslate): string {
+function triggerLabelOf(text: string, source: string, t: StatsTranslate): string {
   if (TEAM_FRAME.test(text)) return t('trigger.team-message')
   if (source === 'subagent-settled' && SUBAGENT_FRAME.test(text)) return t('trigger.subagent-settled')
   if (source === 'agent-message' && AGENT_FRAME.test(text)) return t('trigger.agent-message')
@@ -1196,7 +1196,7 @@ function triggerBodyOf(text: string): string {
 }
 
 /** Localized label for one automated turn trigger. */
-function triggerLabel(source: string, t: PerfTranslate): string {
+function triggerLabel(source: string, t: StatsTranslate): string {
   switch (source) {
     case 'agent-message': return t('trigger.agent-message')
     case 'team-message': return t('trigger.team-message')
@@ -1221,7 +1221,7 @@ function answerPreview(answer: string | null): ReactNode {
   return <span className={css.answerPreview} title={answer}>{` · ${line.trim()}`}</span>
 }
 
-function stepDidCell(step: PerfStepMetrics, t: PerfTranslate): ReactElement {
+function stepDidCell(step: StatsStepMetrics, t: StatsTranslate): ReactElement {
   const nodes: ReactNode[] = []
   if (step.toolErrors > 0) {
     nodes.push(
@@ -1277,7 +1277,7 @@ function stepDidCell(step: PerfStepMetrics, t: PerfTranslate): ReactElement {
 }
 
 /** Turn did column: tool pills, composition bar, and total tool output. */
-function turnDidCell(turn: PerfTurnMetrics, t: PerfTranslate): ReactElement {
+function turnDidCell(turn: StatsTurnMetrics, t: StatsTranslate): ReactElement {
   if (turn.tools.length === 0) {
     const label = turn.running ? t('did.working') : turn.aborted ? t('did.aborted') : t('did.answer')
     return (
@@ -1322,7 +1322,7 @@ function turnDidCell(turn: PerfTurnMetrics, t: PerfTranslate): ReactElement {
 
 /** One step's detail row: every listed call as an accordion block. */
 /** Full model answer rendered with the shared Chat Markdown primitive. */
-function AnswerBody({ text, t }: { readonly text: string; readonly t: PerfTranslate }): ReactElement {
+function AnswerBody({ text, t }: { readonly text: string; readonly t: StatsTranslate }): ReactElement {
   const labels = useMemo<MarkdownLabels>(() => ({
     code: {
       copyLabel: t('detail.copy'),
@@ -1339,8 +1339,8 @@ function AnswerBody({ text, t }: { readonly text: string; readonly t: PerfTransl
 }
 
 function stepDetailRow(
-  step: PerfStepMetrics,
-  t: PerfTranslate,
+  step: StatsStepMetrics,
+  t: StatsTranslate,
   state: StepViewState,
   onControl: (patch: Partial<StepViewState>) => void,
 ): ReactElement {
@@ -1416,8 +1416,8 @@ function stepDetailRow(
 
 /** Step-list controls of a long turn: tool filters and tail/all switching. */
 function moreRows(
-  turn: PerfTurnMetrics,
-  t: PerfTranslate,
+  turn: StatsTurnMetrics,
+  t: StatsTranslate,
   state: StepViewState,
   onControl: (patch: Partial<StepViewState>) => void,
 ): ReactNode {
@@ -1476,7 +1476,7 @@ function moreRows(
 }
 
 /** Localized label of one non-step event kind. */
-function eventLabel(kind: PerfEventKind, t: PerfTranslate): string {
+function eventLabel(kind: StatsEventKind, t: StatsTranslate): string {
   switch (kind) {
     case 'request-header': return t('event.request-header')
     case 'system-prompt': return t('event.system-prompt')
@@ -1487,13 +1487,13 @@ function eventLabel(kind: PerfEventKind, t: PerfTranslate): string {
     case 'model-attempt': return t('event.model-attempt')
     case 'context-refresh': return t('event.context-refresh')
     case 'approval': return t('event.approval')
-    /* v8 ignore next -- PerfEventKind is exhaustive. */
+    /* v8 ignore next -- StatsEventKind is exhaustive. */
     default: return ''
   }
 }
 
 /** Localized request-header reason. */
-function eventReason(reason: string | null, t: PerfTranslate): string {
+function eventReason(reason: string | null, t: StatsTranslate): string {
   switch (reason) {
     case 'initial': return t('event.reason.initial')
     case 'resume': return t('event.reason.resume')
@@ -1504,7 +1504,7 @@ function eventReason(reason: string | null, t: PerfTranslate): string {
 }
 
 /** Localized system-message operation. */
-function eventAction(action: PerfEventMetrics['surfaceOp'], t: PerfTranslate): string {
+function eventAction(action: StatsEventMetrics['surfaceOp'], t: StatsTranslate): string {
   switch (action) {
     case 'append': return t('event.system.append')
     case 'replace': return t('event.system.replace')
@@ -1515,7 +1515,7 @@ function eventAction(action: PerfEventMetrics['surfaceOp'], t: PerfTranslate): s
 }
 
 /** Localized Context refresh source. */
-function eventSource(source: string | null, t: PerfTranslate): string {
+function eventSource(source: string | null, t: StatsTranslate): string {
   switch (source) {
     case 'runtime-context': return t('event.source.runtime')
     case 'time-context': return t('event.source.time')
@@ -1524,7 +1524,7 @@ function eventSource(source: string | null, t: PerfTranslate): string {
 }
 
 /** Localized approval state or outcome. */
-function eventApproval(status: string | null, t: PerfTranslate): string {
+function eventApproval(status: string | null, t: StatsTranslate): string {
   switch (status) {
     case 'asked': return t('event.approval.asked')
     case 'allowed-once': return t('event.approval.allowed')
@@ -1536,7 +1536,7 @@ function eventApproval(status: string | null, t: PerfTranslate): string {
 }
 
 /** One-line explanation of a non-step event. */
-function eventDetail(event: PerfEventMetrics, t: PerfTranslate): string {
+function eventDetail(event: StatsEventMetrics, t: StatsTranslate): string {
   switch (event.kind) {
     case 'request-header': {
       const detail = t('event.header.detail', {
@@ -1585,7 +1585,7 @@ function eventDetail(event: PerfEventMetrics, t: PerfTranslate): string {
 }
 
 /** One synthetic non-step event row. */
-function eventRow(event: PerfEventMetrics, t: PerfTranslate): ReactElement {
+function eventRow(event: StatsEventMetrics, t: StatsTranslate): ReactElement {
   const metrics: MetricsValues = {
     context: null,
     output: null,
@@ -1635,8 +1635,8 @@ function eventRow(event: PerfEventMetrics, t: PerfTranslate): ReactElement {
  * @returns the row.
  */
 function compactionRow(
-  compaction: PerfCompactionMetrics,
-  t: PerfTranslate,
+  compaction: StatsCompactionMetrics,
+  t: StatsTranslate,
   now: number,
   scale: number,
 ): ReactElement {
@@ -1916,15 +1916,15 @@ interface PendingPrepend {
 }
 
 /**
- * Render the performance table of the current conversation view target. The
+ * Render the Statistics table of the current conversation view target. The
  * table owns the viewport scroll: reaching the top asks the injected loader
  * for one older page while the already published turns stay in place.
- * @param props - composed conversation View props: the perf snapshot hook, the older-page loader, and the locale seat.
+ * @param props - composed conversation View props: the stats snapshot hook, the older-page loader, and the locale seat.
  * @returns the scrolling table, its empty state, and the expand/collapse footer.
  */
-export function PerfView(props: PerfViewProps): ReactElement {
-  const { usePerf, t, loadOlder, loadImage, useProjection, cancel } = props
-  const snapshot = usePerf(value => value)
+export function StatsView(props: StatsViewProps): ReactElement {
+  const { useStats, t, loadOlder, loadImage, useProjection, cancel } = props
+  const snapshot = useStats(value => value)
   const [view, setView] = useState<ViewState>(createViewState)
   const [now, setNow] = useState(() => Date.now())
   const [loading, setLoading] = useState(false)
@@ -2029,7 +2029,7 @@ export function PerfView(props: PerfViewProps): ReactElement {
       pendingPrepend.current = null
       setExhausted(true)
     } else {
-      // Another view owns the in-flight page, or this page added no perf row.
+      // Another view owns the in-flight page, or this page added no stats row.
       // Keep the trigger retryable without claiming exhaustion.
       pendingPrepend.current = null
     }
@@ -2090,7 +2090,7 @@ export function PerfView(props: PerfViewProps): ReactElement {
         ref={scrollRef}
         className={css.scroll}
         role="region"
-        aria-label={t('view.perf')}
+        aria-label={t('view.stats')}
         tabIndex={0}
         onScroll={handleScroll}
       >
@@ -2114,7 +2114,7 @@ export function PerfView(props: PerfViewProps): ReactElement {
         {turns.length === 0 ? (
           <div className={css.empty}>{t('empty')}</div>
         ) : (
-          <table className={css.table} aria-label={t('view.perf')}>
+          <table className={css.table} aria-label={t('view.stats')}>
             <colgroup>
               <col /><col /><col />
               {COLUMNS.map(name => <col key={name} />)}
@@ -2185,7 +2185,7 @@ export function PerfView(props: PerfViewProps): ReactElement {
           />
           <span className={css.controlLabel}>{t('contextMode.label')}</span>
           <SegmentedControl
-            id="perf-context-mode"
+            id="stats-context-mode"
             value={view.contextMode}
             options={[
               { value: 'latest', label: t('contextMode.latest'), title: t('contextMode.latest.title') },

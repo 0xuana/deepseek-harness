@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * PerfView presentation behavior: the empty state and footer summary, the
+ * StatsView presentation behavior: the empty state and footer summary, the
  * scrolling table with its older-history trigger, turn and step rows with
  * their scope markers and tooltips, keyboard row controls, the copy control,
  * the step tool-call accordion, code-block caps, step filters, and the live
@@ -14,19 +14,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AttachmentId, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { PerfView } from '../src/client/PerfView.tsx'
+import { StatsView } from '../src/client/StatsView.tsx'
 import { zh } from '../src/client/locales.ts'
-import css from '../src/client/perf.module.css'
+import css from '../src/client/stats.module.css'
 import {
   barShare, formatChars, formatClock, formatDateTime, formatDateTimeMs, formatDateTimeShort, formatMs, formatPercent,
   formatStepClock, formatTokens, formatTokensDelta,
   formatTokensShort, formatTps,
-} from '../src/client/perf-format.ts'
+} from '../src/client/stats-format.ts'
 import type {
-  PerfCall, PerfCompactionMetrics, PerfEventMetrics, PerfSnapshot, PerfStepMetrics, PerfToolCount,
-  PerfTurnMetrics,
+  StatsCall, StatsCompactionMetrics, StatsEventMetrics, StatsSnapshot, StatsStepMetrics, StatsToolCount,
+  StatsTurnMetrics,
   LoadOlderResult,
-} from '../src/client/perf-contract.ts'
+} from '../src/client/stats-contract.ts'
 
 const t = makeTranslate(zh)
 
@@ -44,7 +44,7 @@ function button(name: string): HTMLButtonElement {
 const BASE = 1_767_000_000_000
 
 /** One recorded tool call; every field defaults to "nothing recorded". */
-function call(overrides: Partial<PerfCall> = {}): PerfCall {
+function call(overrides: Partial<StatsCall> = {}): StatsCall {
   return {
     callId: 'call-1',
     seq: 1,
@@ -69,12 +69,12 @@ function call(overrides: Partial<PerfCall> = {}): PerfCall {
 }
 
 /** One tool tally pill. */
-function tool(name: string, count: number): PerfToolCount {
+function tool(name: string, count: number): StatsToolCount {
   return { name, count }
 }
 
 /** One measured step; defaults describe a settled 1 s step. */
-function step(overrides: Partial<PerfStepMetrics> = {}): PerfStepMetrics {
+function step(overrides: Partial<StatsStepMetrics> = {}): StatsStepMetrics {
   return {
     turn: 1,
     step: 1,
@@ -109,7 +109,7 @@ function step(overrides: Partial<PerfStepMetrics> = {}): PerfStepMetrics {
 }
 
 /** One turn aggregate; defaults describe a settled turn with no steps. */
-function turn(overrides: Partial<PerfTurnMetrics> = {}): PerfTurnMetrics {
+function turn(overrides: Partial<StatsTurnMetrics> = {}): StatsTurnMetrics {
   return {
     turn: 1,
     steps: [],
@@ -150,7 +150,7 @@ function turn(overrides: Partial<PerfTurnMetrics> = {}): PerfTurnMetrics {
 }
 
 /** One non-step event row with blank fields. */
-function perfEvent(overrides: Partial<PerfEventMetrics> = {}): PerfEventMetrics {
+function statsEvent(overrides: Partial<StatsEventMetrics> = {}): StatsEventMetrics {
   return {
     kind: 'request-header',
     turn: 1,
@@ -176,7 +176,7 @@ function perfEvent(overrides: Partial<PerfEventMetrics> = {}): PerfEventMetrics 
 }
 
 /** One compaction row with every unmeasured field blank. */
-function compaction(overrides: Partial<PerfCompactionMetrics> = {}): PerfCompactionMetrics {
+function compaction(overrides: Partial<StatsCompactionMetrics> = {}): StatsCompactionMetrics {
   return {
     compactionId: 'cmp-1',
     turn: 1,
@@ -200,17 +200,17 @@ function compaction(overrides: Partial<PerfCompactionMetrics> = {}): PerfCompact
 
 /** A one-turn snapshot carrying the given steps. */
 function turnSnapshot(
-  steps: readonly PerfStepMetrics[],
-  overrides: Partial<PerfTurnMetrics> = {},
-): PerfSnapshot {
+  steps: readonly StatsStepMetrics[],
+  overrides: Partial<StatsTurnMetrics> = {},
+): StatsSnapshot {
   return { turns: [turn({ steps, ...overrides })], stepCount: steps.length }
 }
 
 /** A one-turn, one-step snapshot carrying the given calls. */
 function callSnapshot(
-  calls: readonly PerfCall[],
-  overrides: Partial<PerfStepMetrics> = {},
-): PerfSnapshot {
+  calls: readonly StatsCall[],
+  overrides: Partial<StatsStepMetrics> = {},
+): StatsSnapshot {
   return turnSnapshot([step({ calls, tools: [tool('read', calls.length)], ...overrides })])
 }
 
@@ -230,22 +230,22 @@ function imageRef(id = 'sha256:image'): ImageAttachmentRef {
 
 /** Render the view with every prop it consumes. */
 function mount(
-  snapshot: PerfSnapshot,
+  snapshot: StatsSnapshot,
   loadOlder: LoadOlder = async () => 'exhausted',
   loadImage: (attachment: ImageAttachmentRef) => Promise<string> = async () => 'blob:image',
   useProjection?: (key: string) => unknown,
   cancel: () => void = () => {},
-): ReturnType<typeof createSnapshotStore<PerfSnapshot>> {
-  const store = createSnapshotStore<PerfSnapshot>(snapshot)
-  const usePerf = bindSnapshotSelector(store)
+): ReturnType<typeof createSnapshotStore<StatsSnapshot>> {
+  const store = createSnapshotStore<StatsSnapshot>(snapshot)
+  const useStats = bindSnapshotSelector(store)
   const projection = useProjection ?? (() => undefined)
-  render(createElement(PerfView, { usePerf, t, loadOlder, loadImage, useProjection: projection, cancel } as never))
+  render(createElement(StatsView, { useStats, t, loadOlder, loadImage, useProjection: projection, cancel } as never))
   return store
 }
 
 /** The scrollport that owns the table's viewport. */
 function scrollRegion(): HTMLElement {
-  return screen.getByRole('region', { name: say('view.perf') })
+  return screen.getByRole('region', { name: say('view.stats') })
 }
 
 /** Mutable scroll metrics a test can move; jsdom performs no layout. */
@@ -403,7 +403,7 @@ describe('empty state and footer', () => {
 
 describe('older history', () => {
   /** Two settled turns, so one scroll can request an older page. */
-  function twoTurns(): PerfSnapshot {
+  function twoTurns(): StatsSnapshot {
     return { turns: [turn({ turn: 1 }), turn({ turn: 2 })], stepCount: 2 }
   }
 
@@ -965,35 +965,35 @@ describe('turn rows', () => {
   it('renders non-step event rows only when the event switch is on', () => {
     mount(turnSnapshot([step({ step: 1, startTime: BASE, endTime: BASE + 1_000 })], {
       events: [
-        perfEvent({ time: BASE + 100, reason: 'initial', provider: 'p', model: 'm', toolCount: 3 }),
-        perfEvent({ time: BASE + 200, reason: 'resume', series: true, provider: 'p', model: 'm', toolCount: 3 }),
-        perfEvent({ time: BASE + 300, reason: 'change' }),
-        perfEvent({ time: BASE + 400, reason: 'series' }),
-        perfEvent({ time: BASE + 450, reason: 'custom' }),
-        perfEvent({ time: BASE + 460, reason: null }),
-        perfEvent({ time: BASE + 500, kind: 'system-prompt', surfaceOp: 'append', chars: 120 }),
-        perfEvent({ time: BASE + 600, kind: 'system-prompt', surfaceOp: 'replace', chars: 200 }),
-        perfEvent({ time: BASE + 700, kind: 'system-prompt', surfaceOp: 'clear', chars: 0 }),
-        perfEvent({ time: BASE + 800, kind: 'tool-set', added: ['read'], removed: ['edit'] }),
-        perfEvent({ time: BASE + 850, kind: 'tool-set', added: ['read'], removed: [] }),
-        perfEvent({ time: BASE + 900, kind: 'tool-set', added: [], removed: ['edit'] }),
-        perfEvent({ time: BASE + 950, kind: 'request-context', provider: 'p', model: 'm', status: 'in-history', chars: 128_000 }),
-        perfEvent({ time: BASE + 960, kind: 'request-context', provider: 'p', model: 'm', status: null, chars: null }),
-        perfEvent({ time: BASE + 965, kind: 'request-context', provider: null, model: null, status: null, chars: null }),
-        perfEvent({ time: BASE + 970, kind: 'model-retry', provider: 'p', retry: 2, delayMs: 1_500, error: 'rate limited' }),
-        perfEvent({ time: BASE + 975, kind: 'model-retry', provider: null, retry: null, delayMs: null, error: null }),
-        perfEvent({ time: BASE + 980, kind: 'model-attempt' }),
-        perfEvent({ time: BASE + 990, kind: 'context-refresh', status: 'runtime-context', chars: 32 }),
-        perfEvent({ time: BASE + 995, kind: 'context-refresh', status: 'time-context', chars: 16 }),
-        perfEvent({ time: BASE + 997, kind: 'context-refresh', status: null, chars: null }),
-        perfEvent({ time: BASE + 1_000, kind: 'approval', status: 'asked', label: 'bash', error: 'needs approval' }),
-        perfEvent({ time: BASE + 1_010, kind: 'approval', status: 'allowed-once', label: 'bash' }),
-        perfEvent({ time: BASE + 1_020, kind: 'approval', status: 'rejected', label: 'bash' }),
-        perfEvent({ time: BASE + 1_030, kind: 'approval', status: 'cancelled', label: 'bash' }),
-        perfEvent({ time: BASE + 1_040, kind: 'approval', status: 'unavailable', label: 'bash' }),
-        perfEvent({ time: BASE + 1_050, kind: 'approval', status: null, label: null }),
-        perfEvent({ time: BASE + 1_055, kind: 'approval', status: 'asked', label: null, error: null }),
-        perfEvent({ time: BASE + 1_060, kind: 'context-prune', shadowedTokens: 4_000 }),
+        statsEvent({ time: BASE + 100, reason: 'initial', provider: 'p', model: 'm', toolCount: 3 }),
+        statsEvent({ time: BASE + 200, reason: 'resume', series: true, provider: 'p', model: 'm', toolCount: 3 }),
+        statsEvent({ time: BASE + 300, reason: 'change' }),
+        statsEvent({ time: BASE + 400, reason: 'series' }),
+        statsEvent({ time: BASE + 450, reason: 'custom' }),
+        statsEvent({ time: BASE + 460, reason: null }),
+        statsEvent({ time: BASE + 500, kind: 'system-prompt', surfaceOp: 'append', chars: 120 }),
+        statsEvent({ time: BASE + 600, kind: 'system-prompt', surfaceOp: 'replace', chars: 200 }),
+        statsEvent({ time: BASE + 700, kind: 'system-prompt', surfaceOp: 'clear', chars: 0 }),
+        statsEvent({ time: BASE + 800, kind: 'tool-set', added: ['read'], removed: ['edit'] }),
+        statsEvent({ time: BASE + 850, kind: 'tool-set', added: ['read'], removed: [] }),
+        statsEvent({ time: BASE + 900, kind: 'tool-set', added: [], removed: ['edit'] }),
+        statsEvent({ time: BASE + 950, kind: 'request-context', provider: 'p', model: 'm', status: 'in-history', chars: 128_000 }),
+        statsEvent({ time: BASE + 960, kind: 'request-context', provider: 'p', model: 'm', status: null, chars: null }),
+        statsEvent({ time: BASE + 965, kind: 'request-context', provider: null, model: null, status: null, chars: null }),
+        statsEvent({ time: BASE + 970, kind: 'model-retry', provider: 'p', retry: 2, delayMs: 1_500, error: 'rate limited' }),
+        statsEvent({ time: BASE + 975, kind: 'model-retry', provider: null, retry: null, delayMs: null, error: null }),
+        statsEvent({ time: BASE + 980, kind: 'model-attempt' }),
+        statsEvent({ time: BASE + 990, kind: 'context-refresh', status: 'runtime-context', chars: 32 }),
+        statsEvent({ time: BASE + 995, kind: 'context-refresh', status: 'time-context', chars: 16 }),
+        statsEvent({ time: BASE + 997, kind: 'context-refresh', status: null, chars: null }),
+        statsEvent({ time: BASE + 1_000, kind: 'approval', status: 'asked', label: 'bash', error: 'needs approval' }),
+        statsEvent({ time: BASE + 1_010, kind: 'approval', status: 'allowed-once', label: 'bash' }),
+        statsEvent({ time: BASE + 1_020, kind: 'approval', status: 'rejected', label: 'bash' }),
+        statsEvent({ time: BASE + 1_030, kind: 'approval', status: 'cancelled', label: 'bash' }),
+        statsEvent({ time: BASE + 1_040, kind: 'approval', status: 'unavailable', label: 'bash' }),
+        statsEvent({ time: BASE + 1_050, kind: 'approval', status: null, label: null }),
+        statsEvent({ time: BASE + 1_055, kind: 'approval', status: 'asked', label: null, error: null }),
+        statsEvent({ time: BASE + 1_060, kind: 'context-prune', shadowedTokens: 4_000 }),
       ],
     }))
     expect(screen.queryByText(say('event.request-header'))).toBeNull()
@@ -1483,7 +1483,7 @@ describe('time cell', () => {
 
 describe('step detail accordion', () => {
   /** Calls and tallies that exercise every detail arm. */
-  function accordionSnapshot(): PerfSnapshot {
+  function accordionSnapshot(): StatsSnapshot {
     return callSnapshot(
       [
         call({
@@ -1807,7 +1807,7 @@ describe('call bodies', () => {
 
 describe('step filters', () => {
   /** One turn with 25 steps; two steps used read, all 25 used bash. */
-  function longTurn(): PerfSnapshot {
+  function longTurn(): StatsSnapshot {
     const steps = Array.from({ length: 25 }, (_, index) => step({
       step: index + 1,
       startTime: BASE + index * 1_000,

@@ -26,7 +26,7 @@ Enable this optional bundle to inspect Session data in the Sidebar, open NodeJS 
 
 Open **Plugins**, select **More** beside **Experimental plugins**, and enable **Developer tools**; once on, it also appears on the main list. This selects `@deepseek-ai/dsh-experimental-inspector-profile` for the current Web profile.
 
-The **Statistics** tab beside Chat and Trajectory shows per-turn and per-step context, timing, cache, and tool cost; see the [performance view package](../client-ui-perf/README.md). Open **Session log** from the Sidebar's new-tab menu or guide. [Session Inspector](../session-inspector/README.md) provides one view with selectable Raw log and Chat group presentations; Raw log is selected initially.
+The **Statistics** tab beside Chat and Trajectory shows per-turn and per-step context, timing, cache, and tool cost; see the [performance view package](../client-ui-stats/README.md). Open **Session log** from the Sidebar's new-tab menu or guide. [Session Inspector](../session-inspector/README.md) provides one view with selectable Raw log and Chat group presentations; Raw log is selected initially.
 
 Press **Ctrl/Cmd+Shift+.** to open or collapse **NodeJS inspector** in the bottom panel with the packaged DevTools frontend. Enabling this bundle starts the local debugging backend and unredacted Host fetch capture; no user override or debugging argument is required.
 

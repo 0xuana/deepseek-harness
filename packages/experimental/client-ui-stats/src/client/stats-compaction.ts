@@ -2,10 +2,10 @@
 
 import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-compaction/types'
-import type { PerfCompactionMetrics, PerfCompactionState } from './perf-contract.ts'
+import type { StatsCompactionMetrics, StatsCompactionState } from './stats-contract.ts'
 import {
   cacheHitRate, cacheReadTokens, cacheWriteTokens, contextTokens, isNumber, outputTokens,
-} from './perf-usage.ts'
+} from './stats-usage.ts'
 
 /** Event shape a Conversation Definition receives. */
 type MatchEvent = Parameters<ConversationNodeDefinition['match']>[0]
@@ -37,10 +37,10 @@ function textChars(blocks: readonly { readonly type: string; readonly text?: str
  * @param event - the start event.
  * @returns state that later summary and end events refine.
  */
-export function newCompactionState(event: MatchEvent): PerfCompactionState {
+export function newCompactionState(event: MatchEvent): StatsCompactionState {
   /* v8 ignore next 3 -- the Definition only calls start for a compaction/start match. */
   if (event.type !== 'compaction/start') {
-    throw new Error('perf-compaction start requires compaction/start')
+    throw new Error('stats-compaction start requires compaction/start')
   }
   return {
     compactionId: event.data.compactionId,
@@ -66,7 +66,7 @@ export function newCompactionState(event: MatchEvent): PerfCompactionState {
  * @param event - a matching compaction event.
  * @returns state after the event, or the same state for unrelated events.
  */
-export function foldCompaction(state: PerfCompactionState, event: MatchEvent): PerfCompactionState {
+export function foldCompaction(state: StatsCompactionState, event: MatchEvent): StatsCompactionState {
   if (event.type === 'compaction/summary') {
     return {
       ...state,
@@ -97,7 +97,7 @@ export function foldCompaction(state: PerfCompactionState, event: MatchEvent): P
  * @param state - folded compaction state.
  * @returns the row values; unavailable measurements stay null.
  */
-export function compactionMetrics(state: PerfCompactionState): PerfCompactionMetrics {
+export function compactionMetrics(state: StatsCompactionState): StatsCompactionMetrics {
   const usage = state.usage
   const endTime = state.endTime
   return {

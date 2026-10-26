@@ -9,7 +9,7 @@ import type {
 export type LoadOlderResult = 'grew' | 'exhausted' | 'retry'
 
 /** Token usage counts one assistant message reported. */
-export interface PerfUsage {
+export interface StatsUsage {
   readonly inputTokens?: number
   readonly outputTokens?: number
   readonly cacheReadTokens?: number
@@ -17,7 +17,7 @@ export interface PerfUsage {
 }
 
 /** One recorded tool call of a step, including its result size and preview. */
-export interface PerfCall {
+export interface StatsCall {
   readonly callId: string
   readonly seq: number
   readonly name: string | null
@@ -44,13 +44,13 @@ export interface PerfCall {
 }
 
 /** Tool call tally shown as one pill. */
-export interface PerfToolCount {
+export interface StatsToolCount {
   readonly name: string
   readonly count: number
 }
 
 /** Per-step state folded from the event stream. */
-export interface PerfStepState {
+export interface StatsStepState {
   readonly turn: number
   readonly step: number
   readonly startSeq: number | null
@@ -59,7 +59,7 @@ export interface PerfStepState {
   readonly ended: boolean
   readonly firstTokenTime: number | null
   readonly messageTime: number | null
-  readonly usage: PerfUsage | null
+  readonly usage: StatsUsage | null
   readonly interrupted: boolean
   readonly toolPairs: number
   readonly toolMs: number
@@ -67,7 +67,7 @@ export interface PerfStepState {
   readonly toolMissing: number
   readonly pending: Readonly<Record<string, number>> | null
   readonly tools: Readonly<Record<string, number>> | null
-  readonly calls: Readonly<Record<string, PerfCall>> | null
+  readonly calls: Readonly<Record<string, StatsCall>> | null
   readonly starts: Readonly<Record<string, number>> | null
   readonly retries: number
   readonly toolErrors: number
@@ -91,7 +91,7 @@ export interface PerfStepState {
 }
 
 /** Measured metrics of one step. */
-export interface PerfStepMetrics {
+export interface StatsStepMetrics {
   readonly turn: number
   readonly step: number
   readonly startTime: number | null
@@ -105,8 +105,8 @@ export interface PerfStepMetrics {
   readonly tool: number | null
   /** Union of the paired calls' wall intervals; tool calls may run in parallel. */
   readonly toolWall: number | null
-  readonly tools: readonly PerfToolCount[]
-  readonly calls: readonly PerfCall[]
+  readonly tools: readonly StatsToolCount[]
+  readonly calls: readonly StatsCall[]
   readonly toolOutput: number | null
   readonly retries: number
   readonly toolErrors: number
@@ -133,9 +133,9 @@ export interface PerfStepMetrics {
 }
 
 /** Aggregate of one turn. */
-export interface PerfTurnMetrics {
+export interface StatsTurnMetrics {
   readonly turn: number
-  readonly steps: readonly PerfStepMetrics[]
+  readonly steps: readonly StatsStepMetrics[]
   readonly startTime: number | null
   readonly context: number | null
   readonly ttft: number | null
@@ -149,7 +149,7 @@ export interface PerfTurnMetrics {
   /** Union of the turn's step tool spans; steps never overlap. */
   readonly toolWall: number | null
   readonly toolPending: number
-  readonly tools: readonly PerfToolCount[]
+  readonly tools: readonly StatsToolCount[]
   /** Token-weighted cache-read share across the steps that reported usage. */
   readonly cacheHit: number | null
   /** Cache-read tokens summed across the steps that reported usage. */
@@ -167,9 +167,9 @@ export interface PerfTurnMetrics {
   readonly aborted: boolean
   readonly wall: number | null
   /** Compaction transactions recorded in this turn, in start order. */
-  readonly compactions: readonly PerfCompactionMetrics[]
+  readonly compactions: readonly StatsCompactionMetrics[]
   /** Non-step event rows recorded in this turn, in event order. */
-  readonly events: readonly PerfEventMetrics[]
+  readonly events: readonly StatsEventMetrics[]
   readonly prompt: string | null
   /** Durable image references the prompt attached, in message order. */
   readonly promptImages: readonly ImageAttachmentRef[]
@@ -181,8 +181,8 @@ export interface PerfTurnMetrics {
   readonly answer: string | null
 }
 
-/** Non-step event kinds the performance table can explain. */
-export type PerfEventKind =
+/** Non-step event kinds the Statistics table can explain. */
+export type StatsEventKind =
   | 'request-header'
   | 'system-prompt'
   | 'tool-set'
@@ -194,8 +194,8 @@ export type PerfEventKind =
   | 'approval'
 
 /** One synthetic event row: request admission, prompt/tool changes, or a model-free prune. */
-export interface PerfEventMetrics {
-  readonly kind: PerfEventKind
+export interface StatsEventMetrics {
+  readonly kind: StatsEventKind
   readonly turn: number | null
   readonly step: number | null
   readonly time: number
@@ -217,7 +217,7 @@ export interface PerfEventMetrics {
 }
 
 /** One completed or running compaction transaction with its model-call facts. */
-export interface PerfCompactionMetrics {
+export interface StatsCompactionMetrics {
   readonly compactionId: string
   readonly turn: number | null
   readonly startTime: number
@@ -237,7 +237,7 @@ export interface PerfCompactionMetrics {
 }
 
 /** Per-turn compaction rows shown between the step rows. */
-export interface PerfCompactionState {
+export interface StatsCompactionState {
   readonly compactionId: string
   readonly turn: number | null
   readonly startSeq: number
@@ -248,21 +248,21 @@ export interface PerfCompactionState {
   readonly error: string | null
   readonly provider: string | null
   readonly model: string | null
-  readonly usage: PerfUsage | null
+  readonly usage: StatsUsage | null
   readonly shadowedTokens: number | null
   readonly summaryChars: number | null
   readonly checkpointSeq: number | null
 }
 
 /** One published node: a step's metrics or a turn-level marker. */
-export type PerfContribution =
-  | { readonly kind: 'step'; readonly metrics: PerfStepMetrics }
+export type StatsContribution =
+  | { readonly kind: 'step'; readonly metrics: StatsStepMetrics }
   | {
     /** Inner tool calls one Code-Mode root call dispatched; merged into its step. */
     readonly kind: 'inner'
     readonly turn: number
     readonly step: number
-    readonly calls: readonly PerfCall[]
+    readonly calls: readonly StatsCall[]
   }
   | {
     readonly kind: 'prompt'
@@ -277,11 +277,11 @@ export type PerfContribution =
   }
   | {
     readonly kind: 'compaction'
-    readonly metrics: PerfCompactionMetrics
+    readonly metrics: StatsCompactionMetrics
   }
   | {
     readonly kind: 'event'
-    readonly metrics: PerfEventMetrics
+    readonly metrics: StatsEventMetrics
   }
   | {
     readonly kind: 'end'
@@ -291,21 +291,21 @@ export type PerfContribution =
   }
 
 /** View node carried from the Definitions into the target builder. */
-export interface PerfViewNode extends ConversationViewNode {
+export interface StatsViewNode extends ConversationViewNode {
   readonly anchorSeq: number
   readonly location: ConversationLocation
-  readonly data: PerfContribution
+  readonly data: StatsContribution
 }
 
 /** Snapshot published to the view component. */
-export interface PerfSnapshot {
-  readonly turns: readonly PerfTurnMetrics[]
+export interface StatsSnapshot {
+  readonly turns: readonly StatsTurnMetrics[]
   readonly stepCount: number
 }
 
 declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
   interface ConversationViewSnapshotMap {
     /** Turn and step metrics this target assembles. */
-    perf: PerfSnapshot
+    stats: StatsSnapshot
   }
 }

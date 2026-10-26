@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { AttachmentId, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { aggregateTotals, aggregateTurn, buildTurns, turnContext } from '../src/client/perf-aggregate.ts'
-import type { PerfCall, PerfStepMetrics, PerfViewNode } from '../src/client/perf-contract.ts'
-import { CALL_LIMIT } from '../src/client/perf-fold.ts'
+import { aggregateTotals, aggregateTurn, buildTurns, turnContext } from '../src/client/stats-aggregate.ts'
+import type { StatsCall, StatsStepMetrics, StatsViewNode } from '../src/client/stats-contract.ts'
+import { CALL_LIMIT } from '../src/client/stats-fold.ts'
 
 /** One step row with every unmeasured column blank. */
-function metricsOf(overrides: Partial<PerfStepMetrics> = {}): PerfStepMetrics {
+function metricsOf(overrides: Partial<StatsStepMetrics> = {}): StatsStepMetrics {
   return {
     turn: 1,
     step: 1,
@@ -39,7 +39,7 @@ function metricsOf(overrides: Partial<PerfStepMetrics> = {}): PerfStepMetrics {
   }
 }
 
-function perfCall(callId: string, seqAt: number, overrides: Partial<PerfCall> = {}): PerfCall {
+function statsCall(callId: string, seqAt: number, overrides: Partial<StatsCall> = {}): StatsCall {
   return {
     callId,
     seq: seqAt,
@@ -63,12 +63,12 @@ function perfCall(callId: string, seqAt: number, overrides: Partial<PerfCall> = 
   }
 }
 
-function stepNode(value: PerfStepMetrics): PerfViewNode {
+function stepNode(value: StatsStepMetrics): StatsViewNode {
   return {
     key: `${value.turn}:${value.step}`,
-    kind: 'perf-step',
+    kind: 'stats-step',
     id: `${value.turn}:${value.step}`,
-    target: 'perf',
+    target: 'stats',
     anchorSeq: value.startTime ?? 0,
     location: { kind: 'unresolved' },
     data: { kind: 'step', metrics: value },
@@ -90,24 +90,24 @@ function promptNode(
   prompt: string | null,
   images: readonly ImageAttachmentRef[] = [],
   source = 'user',
-): PerfViewNode {
+): StatsViewNode {
   return {
     key: `${turn}:prompt:${prompt ?? 'null'}`,
-    kind: 'perf-prompt',
+    kind: 'stats-prompt',
     id: `${turn}:prompt`,
-    target: 'perf',
+    target: 'stats',
     anchorSeq: 1,
     location: { kind: 'unresolved' },
     data: { kind: 'prompt', turn, prompt, images, source, sender: null },
   }
 }
 
-function endNode(turn: number, endTime: number | null, closeKind: string | null): PerfViewNode {
+function endNode(turn: number, endTime: number | null, closeKind: string | null): StatsViewNode {
   return {
     key: `${turn}:end`,
-    kind: 'perf-turn-end',
+    kind: 'stats-turn-end',
     id: `${turn}:end`,
-    target: 'perf',
+    target: 'stats',
     anchorSeq: 2,
     location: { kind: 'unresolved' },
     data: { kind: 'end', turn, closeKind, endTime },
@@ -117,13 +117,13 @@ function endNode(turn: number, endTime: number | null, closeKind: string | null)
 function innerNode(
   turn: number,
   step: number,
-  calls: readonly PerfCall[],
-): PerfViewNode {
+  calls: readonly StatsCall[],
+): StatsViewNode {
   return {
     key: `${turn}:${step}:code:${calls.map(call => call.callId).join(',')}`,
-    kind: 'perf-code-mode',
+    kind: 'stats-code-mode',
     id: `${turn}:${step}:code`,
-    target: 'perf',
+    target: 'stats',
     anchorSeq: 3,
     location: { kind: 'unresolved' },
     data: { kind: 'inner', turn, step, calls },
@@ -557,7 +557,7 @@ describe('turn grouping', () => {
   })
 
   it('keeps a tail step that still measured something', () => {
-    const variants: readonly PerfStepMetrics[] = [
+    const variants: readonly StatsStepMetrics[] = [
       metricsOf({ turn: 12, step: 2, context: 5 }),
       metricsOf({ turn: 12, step: 2, ttft: 5 }),
       metricsOf({ turn: 12, step: 2, model: 5 }),
@@ -617,7 +617,7 @@ describe('turn grouping', () => {
 
 describe('Code-Mode contribution merging', () => {
   it('replaces the runner with the real tools and recomputes the totals', () => {
-    const runner = perfCall('root', 1, { name: 'run_code', chars: 500 })
+    const runner = statsCall('root', 1, { name: 'run_code', chars: 500 })
     const step = metricsOf({
       turn: 2,
       step: 1,
@@ -629,13 +629,13 @@ describe('Code-Mode contribution merging', () => {
       tool: 200,
     })
     const inner = innerNode(2, 1, [
-      perfCall('sub-1', 2, {
+      statsCall('sub-1', 2, {
         name: 'grep', chars: 20, inner: true, startedAt: 1_100, endedAt: 1_150,
       }),
-      perfCall('sub-2', 3, {
+      statsCall('sub-2', 3, {
         name: 'read', chars: 5, inner: true, error: true, startedAt: 1_200, endedAt: 1_300,
       }),
-      perfCall('sub-3', 4, { name: null, inner: true, chars: null }),
+      statsCall('sub-3', 4, { name: null, inner: true, chars: null }),
     ])
     const turns = buildTurns([stepNode(step), promptNode(2, 'q'), inner])
     const merged = turns[0]?.steps[0]
@@ -655,8 +655,8 @@ describe('Code-Mode contribution merging', () => {
     const turns = buildTurns([
       stepNode(step),
       promptNode(3, 'q'),
-      innerNode(3, 1, [perfCall('late', 5, { name: 'write', inner: true, chars: 2 })]),
-      innerNode(3, 1, [perfCall('early', 2, { name: 'grep', inner: true, chars: 3 })]),
+      innerNode(3, 1, [statsCall('late', 5, { name: 'write', inner: true, chars: 2 })]),
+      innerNode(3, 1, [statsCall('early', 2, { name: 'grep', inner: true, chars: 3 })]),
     ])
     expect(turns[0]?.steps[0]?.calls.map(call => call.callId)).toEqual(['early', 'late'])
     expect(turns[0]?.steps[0]?.toolOutput).toBe(5)
@@ -664,7 +664,7 @@ describe('Code-Mode contribution merging', () => {
 
   it('caps the merged call list at the table limit', () => {
     const step = metricsOf({ turn: 4, step: 1 })
-    const calls = Array.from({ length: CALL_LIMIT + 3 }, (_, index) => perfCall(
+    const calls = Array.from({ length: CALL_LIMIT + 3 }, (_, index) => statsCall(
       `inner-${index}`,
       index + 1,
       { inner: true, name: 'read', chars: index + 1 },
@@ -679,7 +679,7 @@ describe('Code-Mode contribution merging', () => {
   })
 
   it('keeps the runner when no inner contribution arrived', () => {
-    const runner = perfCall('root', 1, { name: 'run_code', chars: 500 })
+    const runner = statsCall('root', 1, { name: 'run_code', chars: 500 })
     const turns = buildTurns([stepNode(metricsOf({
       turn: 5,
       step: 1,
@@ -693,7 +693,7 @@ describe('Code-Mode contribution merging', () => {
 
   it('ignores inner contributions for steps the window no longer holds', () => {
     const step = metricsOf({ turn: 6, step: 1, toolOutput: 7 })
-    const turns = buildTurns([stepNode(step), promptNode(6, 'q'), innerNode(6, 2, [perfCall('sub', 2, {
+    const turns = buildTurns([stepNode(step), promptNode(6, 'q'), innerNode(6, 2, [statsCall('sub', 2, {
       name: 'grep', chars: 9, inner: true,
     })])])
     expect(turns[0]?.steps).toHaveLength(1)

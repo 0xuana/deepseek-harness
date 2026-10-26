@@ -1,4 +1,4 @@
-/** Event folding and per-step metric derivation for the performance table. */
+/** Event folding and per-step metric derivation for the Statistics table. */
 
 import type { SessionEventLike } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
@@ -7,12 +7,12 @@ import { assistantStreamFirstTokenTime } from '@deepseek-ai/dsh-llm/assistant-st
 // Type-only: the PTC event members this fold reads.
 import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 import type {
-  PerfCall, PerfStepMetrics, PerfStepState, PerfToolCount,
-} from './perf-contract.ts'
+  StatsCall, StatsStepMetrics, StatsStepState, StatsToolCount,
+} from './stats-contract.ts'
 import {
   cacheHitRate, cacheReadTokens, cacheWriteTokens, contextTokens, isNumber,
   outputTokens,
-} from './perf-usage.ts'
+} from './stats-usage.ts'
 
 /** Result text kept per call for the accordion panel. */
 const TEXT_LIMIT = 16_000
@@ -226,11 +226,11 @@ export function isCodeMode(name: string | null): boolean {
   return name !== null && /^run_?code$/i.test(name)
 }
 
-/** Arguments-derived PerfCall fields shared by a native call and one Code-Mode dispatch. */
+/** Arguments-derived StatsCall fields shared by a native call and one Code-Mode dispatch. */
 function callArguments(
   name: string,
   raw: unknown,
-): Pick<PerfCall, 'hint' | 'added' | 'removed' | 'before' | 'after' | 'args'> {
+): Pick<StatsCall, 'hint' | 'added' | 'removed' | 'before' | 'after' | 'args'> {
   const delta = editDelta(name, raw)
   return {
     hint: toolHint(name, raw),
@@ -314,8 +314,8 @@ function answerOf(message: AssistantMessage): {
 export function newState(
   turn: number,
   step: number,
-  mark: PerfStepState['mark'] = null,
-): PerfStepState {
+  mark: StatsStepState['mark'] = null,
+): StatsStepState {
   return {
     turn,
     step,
@@ -408,9 +408,9 @@ function bumpTool(tools: Readonly<Record<string, number>> | null, name: string):
  * @returns the next state, or undefined when the event needs a start it lacks.
  */
 export function foldEvent(
-  state: PerfStepState | undefined,
+  state: StatsStepState | undefined,
   event: SessionEventLike,
-): PerfStepState | undefined {
+): StatsStepState | undefined {
   switch (event.type) {
     case 'step/start':
       return { ...newState(event.data.turn, event.data.step), startSeq: event.seq, startTime: event.time }
@@ -454,7 +454,7 @@ export function foldEvent(
       const known = Object.hasOwn(pending, callId)
       pending[callId] = event.time
       const name = event.data.name
-      const calls: Record<string, PerfCall> = { ...(next.calls ?? {}) }
+      const calls: Record<string, StatsCall> = { ...(next.calls ?? {}) }
       if (!Object.hasOwn(calls, callId)) {
         calls[callId] = {
           callId,
@@ -502,7 +502,7 @@ export function foldEvent(
       const info = resultInfo(event.data.content)
       const callKey = event.data.subCallId
       const startedAt = ownValue(next.starts, callKey)
-      const calls: Record<string, PerfCall> = { ...(next.calls ?? {}) }
+      const calls: Record<string, StatsCall> = { ...(next.calls ?? {}) }
       calls[callKey] = {
         callId: callKey,
         seq: event.seq,
@@ -532,7 +532,7 @@ export function foldEvent(
       const callId: string = message.source.callId
       const failed = message.isError === true
       const before = ownValue(next.calls, callId)
-      const calls: Record<string, PerfCall> = { ...(next.calls ?? {}) }
+      const calls: Record<string, StatsCall> = { ...(next.calls ?? {}) }
       if (before !== undefined) {
         calls[callId] = {
           ...before,
@@ -572,7 +572,7 @@ export function foldEvent(
 }
 
 /** Calls of one step in call order, bounded per call and per step. */
-function callList(calls: Readonly<Record<string, PerfCall>> | null): PerfCall[] {
+function callList(calls: Readonly<Record<string, StatsCall>> | null): StatsCall[] {
   if (calls === null) return []
   const list = Object.values(calls)
     .sort((left, right) => left.seq - right.seq)
@@ -590,7 +590,7 @@ function callList(calls: Readonly<Record<string, PerfCall>> | null): PerfCall[] 
 }
 
 /** Tool tallies by descending count; ties keep first-call order. */
-function sortedTools(tools: Readonly<Record<string, number>> | null): PerfToolCount[] {
+function sortedTools(tools: Readonly<Record<string, number>> | null): StatsToolCount[] {
   if (tools === null) return []
   return Object.entries(tools)
     .map(([name, count]) => ({ name, count }))
@@ -602,9 +602,9 @@ function sortedTools(tools: Readonly<Record<string, number>> | null): PerfToolCo
  * @param calls - calls with their paired start and end times.
  * @returns the span in milliseconds, or null when no call is paired.
  */
-export function toolSpanUnion(calls: readonly PerfCall[]): number | null {
+export function toolSpanUnion(calls: readonly StatsCall[]): number | null {
   const intervals = calls
-    .filter((call): call is PerfCall & { startedAt: number; endedAt: number } =>
+    .filter((call): call is StatsCall & { startedAt: number; endedAt: number } =>
       isNumber(call.startedAt) && isNumber(call.endedAt))
     .map(call => [call.startedAt, call.endedAt] as const)
     .sort((left, right) => left[0] - right[0])
@@ -624,7 +624,7 @@ export function toolSpanUnion(calls: readonly PerfCall[]): number | null {
 }
 
 /** Tool result characters one step pushed into the next prompt. */
-function outputChars(calls: readonly PerfCall[]): number {
+function outputChars(calls: readonly StatsCall[]): number {
   let total = 0
   for (const call of calls) {
     if (isNumber(call.chars)) total += call.chars
@@ -637,7 +637,7 @@ function outputChars(calls: readonly PerfCall[]): number {
  * @param state - folded step state.
  * @returns the row values the table renders.
  */
-export function stepMetrics(state: PerfStepState): PerfStepMetrics {
+export function stepMetrics(state: StatsStepState): StatsStepMetrics {
   const start = state.startTime
   const first = state.firstTokenTime
   const message = state.messageTime
@@ -699,8 +699,8 @@ export function stepMetrics(state: PerfStepState): PerfStepMetrics {
  */
 export function fallbackState(
   matches: readonly { readonly event: SessionEventLike }[],
-): PerfStepState | undefined {
-  let state: PerfStepState | undefined
+): StatsStepState | undefined {
+  let state: StatsStepState | undefined
   for (const match of matches) state = foldEvent(state, match.event)
   return state
 }

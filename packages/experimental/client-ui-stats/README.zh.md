@@ -3,7 +3,7 @@ description: "实验性会话视图：按轮次与步骤展示上下文大小、
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-experimental-client-ui-perf
+# @deepseek-ai/dsh-experimental-client-ui-stats
 
 [English](README.md) | 中文
 
@@ -34,8 +34,8 @@ kind: "package-reference"
 ### 最小配置
 
 ```yaml
-- id: ui-perf
-  name: '@deepseek-ai/dsh-experimental-client-ui-perf'
+- id: ui-stats
+  name: '@deepseek-ai/dsh-experimental-client-ui-stats'
 ```
 
 -----
@@ -46,20 +46,20 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-六个 Conversation Definition 把事件窗口折叠成名为 `perf` 的视图目标节点。`perf-step` 每个 `step/start` 一个上下文；`perf-prompt` 每条唤醒该轮的用户消息（人写提示或自动触发）一个上下文；`perf-turn-end` 记录轮次边界，让被中断的尾部也能收尾；`perf-code-mode` 每个 Code-Mode 根调用一个上下文，收纳它实际派发的内层调用；`perf-compaction` 每个压缩事务一个上下文；`perf-event` 负责请求、提示词、重试、审批和裁剪等非步骤事件行。轮次与步骤身份取自引擎给出的 match Location，而不是模块级状态，因此历史分页和多个 Session 都不会串归属。内部标识保留 `perf` 前缀，因为这里展示的是性能测量数据；产品名是「统计」。
+六个 Conversation Definition 把事件窗口折叠成名为 `stats` 的视图目标节点。`stats-step` 每个 `step/start` 一个上下文；`stats-prompt` 每条唤醒该轮的用户消息（人写提示或自动触发）一个上下文；`stats-turn-end` 记录轮次边界，让被中断的尾部也能收尾；`stats-code-mode` 每个 Code-Mode 根调用一个上下文，收纳它实际派发的内层调用；`stats-compaction` 每个压缩事务一个上下文；`stats-event` 负责请求、提示词、重试、审批和裁剪等非步骤事件行。轮次与步骤身份取自引擎给出的 match Location，而不是模块级状态，因此历史分页和多个 Session 都不会串归属。
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/client/perf-definition.ts` | 六个 Definition：匹配规则、发布节奏与节点信封 |
-| `src/client/perf-fold.ts` | 事件折叠、工具配对、Code-Mode 内层调用归属、单步指标 |
-| `src/client/perf-aggregate.ts` | 轮次汇总与排序，含被中断尾部的收尾 |
-| `src/client/perf-compaction.ts` | 压缩事务状态与合成摘要行 |
-| `src/client/perf-event.ts` | 非步骤事件行的归一化 |
-| `src/client/perf-format.ts` | 时间、耗时、token、百分比的显示格式化 |
-| `src/client/perf-usage.ts` | 步骤、压缩与合计共用的 token 用量推导 |
-| `src/client/perf-totals.ts` | 从宿主 stats 与 tokenUsage projection 生成全量合计 |
-| `src/client/perf-snapshot-builder.ts` | `perf` 视图目标的增量 builder |
-| `src/client/PerfView.tsx` | 表格、合计/事件行、时间条、步骤/工具/回答详情、复制按钮，以及提问图片标签、预览与看图器 |
+| `src/client/stats-definition.ts` | 六个 Definition：匹配规则、发布节奏与节点信封 |
+| `src/client/stats-fold.ts` | 事件折叠、工具配对、Code-Mode 内层调用归属、单步指标 |
+| `src/client/stats-aggregate.ts` | 轮次汇总与排序，含被中断尾部的收尾 |
+| `src/client/stats-compaction.ts` | 压缩事务状态与合成摘要行 |
+| `src/client/stats-event.ts` | 非步骤事件行的归一化 |
+| `src/client/stats-format.ts` | 时间、耗时、token、百分比的显示格式化 |
+| `src/client/stats-usage.ts` | 步骤、压缩与合计共用的 token 用量推导 |
+| `src/client/stats-totals.ts` | 从宿主 stats 与 tokenUsage projection 生成全量合计 |
+| `src/client/stats-snapshot-builder.ts` | `stats` 视图目标的增量 builder |
+| `src/client/StatsView.tsx` | 表格、合计/事件行、时间条、步骤/工具/回答详情、复制按钮，以及提问图片标签、预览与看图器 |
 | `src/client/locales.ts` | 全部可见文案，覆盖 8 种 shipped 语言 |
 
 页脚的开关控制合计行、事件行与上下文口径，滚表格时页脚钉在输入框上方。「显示上下文增量」默认关闭；打开后每轮/每步显示相对同范围内上一个已测值的提示词大小变化，负增量（例如压缩后）用错误色显示。展开的步骤行在「触发」列显示该步开始时间戳（`MM-DD HH:MM:SS.mmm`，tooltip 为完整的 `YYYY-MM-DD HH:MM:SS.mmm`），以及距上一步至少一秒的空闲；亚秒级调度噪声不显示。带模型回答的步骤也可以展开：点击该行会打开详情行，通过共享的 Chat Markdown 原语渲染回答，最多保留 16,000 字符并提示截断。
@@ -103,7 +103,7 @@ kind: "package-reference"
 - **Code-Mode 内层调用按根调用上下文并回步骤。** 内层调用不带 turn/step，因此每个根调用各自开一个以 root call id 为键的上下文，由 builder 把它的派发并回持有 runner 的那一步。窗口里丢了派发起点时仍会合并调用，但无法给出它们各自的实测耗时。
 - **更早历史的加载结果显式区分重试。** 页面请求只返回 `grew`、`exhausted` 或 `retry`；如果 Chat 或轨迹视图正在加载同一个 Session 的页，统计视图会保留加载按钮，而不是误报历史已耗尽或抛出错误。
 - **已知限制：没有整段墙钟 projection。** 合计行的总用时用模型用时 + 工具用时替代，因为宿主 projection 没有整段墙钟；工具段是逐调用求和，并行调用会让这段显得比非重叠墙钟更长。这里作为已知限制记录，插件不为此改动宿主逻辑。
-- **本实验 PR 的 recorded-session 覆盖已获豁免。** 包测试覆盖折叠、聚合、格式化、分页与 jsdom 表格；`apps/web/tests/client-ui-perf-panel.e2e.ts` 通过仅测试用的 overlay 挂载 shipped Web 表面并比较已提交的 ARIA golden。经 owner 决定，本实验 PR 不新增 keyless recorded-session 场景；后续 profile 或 bundle 转正时必须补充。
+- **本实验 PR 的 recorded-session 覆盖已获豁免。** 包测试覆盖折叠、聚合、格式化、分页与 jsdom 表格；`apps/web/tests/client-ui-stats-panel.e2e.ts` 通过仅测试用的 overlay 挂载 shipped Web 表面并比较已提交的 ARIA golden。经 owner 决定，本实验 PR 不新增 keyless recorded-session 场景；后续 profile 或 bundle 转正时必须补充。
 - **迟到重投不是轮次。** 压缩可能把被裁剪的工具结果按原来的轮次/步骤在之后重新投递；窗口里既没有加载到的起点、也没有问题或结束标记的轮次会被丢弃，不再显示成空的幽灵行。
 - **计时是推导值。** 总用时取最后一步结束减第一步开始；排队和调度等待落在「其余」段里。总用时条把工具调用画成配对区间之并，并行调用只算一次；工具列仍显示逐次求和。轮次时间条以当前屏幕内可见的轮次为刻度，滚出屏幕的超大轮次不会把本屏的行压扁。
 - **提问图片走共用图片缓存。** 标签与预览用 `uiConversation.imageUrl` 解析持久附件，浏览器 URL 由缓存按 Session binding 持有并释放，视图不自己创建 URL。读取失败时显示本地化失败状态并可重试。触屏不打开悬停预览，点击标签会直接加载第一张图。

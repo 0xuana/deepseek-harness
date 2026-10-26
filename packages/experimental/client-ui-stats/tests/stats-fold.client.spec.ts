@@ -27,16 +27,16 @@ import { SessionSeq, type SessionEventMap, type SessionEventType } from '@deepse
 import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 import {
   CALL_LIMIT, fallbackState, foldEvent, isCodeMode, newState, promptOf, stepMetrics, toolSpanUnion, triggerSenderOf,
-} from '../src/client/perf-fold.ts'
+} from '../src/client/stats-fold.ts'
 import {
   DASH, barShare, formatChars, formatClock, formatDateTime, formatDateTimeMs, formatDateTimeShort,
   formatMs, formatPercent, formatStepClock,
   formatTokens, formatTokensDelta, formatTokensShort, formatTps,
-} from '../src/client/perf-format.ts'
-import type { PerfCall, PerfStepMetrics, PerfStepState } from '../src/client/perf-contract.ts'
+} from '../src/client/stats-format.ts'
+import type { StatsCall, StatsStepMetrics, StatsStepState } from '../src/client/stats-contract.ts'
 import {
   cacheHitRate, cacheReadTokens, cacheWriteTokens, contextTokens, isNumber, outputTokens,
-} from '../src/client/perf-usage.ts'
+} from '../src/client/stats-usage.ts'
 
 let seq = 0
 let clock = 0
@@ -210,40 +210,40 @@ function streamAt(firstTokenAt: number): AssistantStreamRecord[] {
 }
 
 /** Fold a whole event list, asserting that it produced a state. */
-function folded(events: readonly SessionEventLike[]): PerfStepState {
-  let state: PerfStepState | undefined
+function folded(events: readonly SessionEventLike[]): StatsStepState {
+  let state: StatsStepState | undefined
   for (const item of events) state = foldEvent(state, item)
   return defined(state)
 }
 
 /** One step carrying a single recorded tool call. */
-function callState(name: string, args: string): PerfStepState {
+function callState(name: string, args: string): StatsStepState {
   let state = foldEvent(undefined, stepStart(1, 1, 1_000))
   state = foldEvent(state, toolCall(1, 1, 'call-1', name, args, 1_010))
   return defined(state)
 }
 
-function callMetrics(name: string, args: string): PerfStepMetrics {
+function callMetrics(name: string, args: string): StatsStepMetrics {
   return stepMetrics(callState(name, args))
 }
 
-function listedCall(metrics: PerfStepMetrics, at = 0): PerfCall {
+function listedCall(metrics: StatsStepMetrics, at = 0): StatsCall {
   const call = metrics.calls[at]
   if (call === undefined) throw new Error('expected a listed call')
   return call
 }
 
-function recordedCall(state: PerfStepState, callId: string): PerfCall {
+function recordedCall(state: StatsStepState, callId: string): StatsCall {
   const call = state.calls?.[callId]
   if (call === undefined) throw new Error(`expected call ${callId}`)
   return call
 }
 
-function stateOf(overrides: Partial<PerfStepState> = {}): PerfStepState {
+function stateOf(overrides: Partial<StatsStepState> = {}): StatsStepState {
   return { ...newState(1, 1), ...overrides }
 }
 
-function perfCall(callId: string, seqAt: number, overrides: Partial<PerfCall> = {}): PerfCall {
+function statsCall(callId: string, seqAt: number, overrides: Partial<StatsCall> = {}): StatsCall {
   return {
     callId,
     seq: seqAt,
@@ -267,7 +267,7 @@ function perfCall(callId: string, seqAt: number, overrides: Partial<PerfCall> = 
   }
 }
 
-function callsRecord(calls: readonly PerfCall[]): Record<string, PerfCall> {
+function callsRecord(calls: readonly StatsCall[]): Record<string, StatsCall> {
   return Object.fromEntries(calls.map(call => [call.callId, call]))
 }
 
@@ -946,7 +946,7 @@ describe('tool result pairing', () => {
 
 describe('Code-Mode dispatch', () => {
   /** One step with a settled `run_code` root call. */
-  function codeStep(): PerfStepState {
+  function codeStep(): StatsStepState {
     return folded([
       stepStart(2, 1, 5_000),
       toolCall(2, 1, 'root', 'run_code', '{}', 5_010),
@@ -1316,7 +1316,7 @@ describe('step metric derivation', () => {
   })
 
   it('lists calls in call order and caps the list', () => {
-    const calls = Array.from({ length: CALL_LIMIT + 2 }, (_, index) => perfCall(
+    const calls = Array.from({ length: CALL_LIMIT + 2 }, (_, index) => statsCall(
       `call-${index}`,
       CALL_LIMIT + 2 - index,
     ))
@@ -1327,7 +1327,7 @@ describe('step metric derivation', () => {
   })
 
   it('bounds result text across the listed calls of one step', () => {
-    const calls = Array.from({ length: 5 }, (_, index) => perfCall(`call-${index}`, index, {
+    const calls = Array.from({ length: 5 }, (_, index) => statsCall(`call-${index}`, index, {
       text: 'x'.repeat(16_000),
     }))
     const metrics = stepMetrics(stateOf({ calls: callsRecord(calls) }))
@@ -1337,8 +1337,8 @@ describe('step metric derivation', () => {
 
   it('keeps calls without result text regardless of the step text budget', () => {
     const calls = [
-      perfCall('pending', 1),
-      perfCall('long', 2, { text: 'x'.repeat(16_000) }),
+      statsCall('pending', 1),
+      statsCall('long', 2, { text: 'x'.repeat(16_000) }),
     ]
     const metrics = stepMetrics(stateOf({ calls: callsRecord(calls) }))
     expect(metrics.calls[0]?.text).toBeNull()
@@ -1359,9 +1359,9 @@ describe('step metric derivation', () => {
 
   it('keeps the Code-Mode runner until the builder merges inner dispatches', () => {
     const calls = callsRecord([
-      perfCall('run', 1, { name: 'run_code', chars: 1_000 }),
-      perfCall('inner', 2, { name: 'read', chars: 5, inner: true }),
-      perfCall('plain', 3, { name: 'write', chars: 20 }),
+      statsCall('run', 1, { name: 'run_code', chars: 1_000 }),
+      statsCall('inner', 2, { name: 'read', chars: 5, inner: true }),
+      statsCall('plain', 3, { name: 'write', chars: 20 }),
     ])
     const metrics = stepMetrics(stateOf({
       calls,
@@ -1378,8 +1378,8 @@ describe('step metric derivation', () => {
 
   it('counts every result when no inner call is present', () => {
     const calls = callsRecord([
-      perfCall('read', 1, { name: 'read', chars: 12 }),
-      perfCall('pending', 2, { name: 'grep' }),
+      statsCall('read', 1, { name: 'read', chars: 12 }),
+      statsCall('pending', 2, { name: 'grep' }),
     ])
     const metrics = stepMetrics(stateOf({ calls, tools: { read: 1, grep: 1 } }))
     expect(metrics.toolOutput).toBe(12)
@@ -1388,8 +1388,8 @@ describe('step metric derivation', () => {
 
   it('measures tool wall time as the union of overlapping call spans', () => {
     const calls = callsRecord([
-      perfCall('c1', 1, { startedAt: 1_000, endedAt: 1_200 }),
-      perfCall('c2', 2, { startedAt: 1_100, endedAt: 1_300 }),
+      statsCall('c1', 1, { startedAt: 1_000, endedAt: 1_200 }),
+      statsCall('c2', 2, { startedAt: 1_100, endedAt: 1_300 }),
     ])
     const metrics = stepMetrics(stateOf({ calls, toolPairs: 2, toolMs: 400 }))
     expect(metrics.tool).toBe(400)
@@ -1401,34 +1401,34 @@ describe('tool span union', () => {
   it('reports no span when no call settled with both ends', () => {
     expect(toolSpanUnion([])).toBeNull()
     expect(toolSpanUnion([
-      perfCall('a', 1, { startedAt: 1_000 }),
-      perfCall('b', 2, { endedAt: 2_000 }),
+      statsCall('a', 1, { startedAt: 1_000 }),
+      statsCall('b', 2, { endedAt: 2_000 }),
     ])).toBeNull()
   })
 
   it('adds disjoint spans and counts overlaps once', () => {
     expect(toolSpanUnion([
-      perfCall('a', 1, { startedAt: 1_000, endedAt: 1_200 }),
-      perfCall('b', 2, { startedAt: 1_500, endedAt: 1_700 }),
+      statsCall('a', 1, { startedAt: 1_000, endedAt: 1_200 }),
+      statsCall('b', 2, { startedAt: 1_500, endedAt: 1_700 }),
     ])).toBe(400)
     expect(toolSpanUnion([
-      perfCall('a', 1, { startedAt: 1_000, endedAt: 1_500 }),
-      perfCall('b', 2, { startedAt: 1_200, endedAt: 1_300 }),
+      statsCall('a', 1, { startedAt: 1_000, endedAt: 1_500 }),
+      statsCall('b', 2, { startedAt: 1_200, endedAt: 1_300 }),
     ])).toBe(500)
     expect(toolSpanUnion([
-      perfCall('a', 1, { startedAt: 1_000, endedAt: 1_200 }),
-      perfCall('b', 2, { startedAt: 1_100, endedAt: 1_400 }),
+      statsCall('a', 1, { startedAt: 1_000, endedAt: 1_200 }),
+      statsCall('b', 2, { startedAt: 1_100, endedAt: 1_400 }),
     ])).toBe(400)
   })
 
   it('sorts input spans and joins touching ones', () => {
     expect(toolSpanUnion([
-      perfCall('late', 1, { startedAt: 2_000, endedAt: 2_100 }),
-      perfCall('early', 2, { startedAt: 1_000, endedAt: 1_100 }),
+      statsCall('late', 1, { startedAt: 2_000, endedAt: 2_100 }),
+      statsCall('early', 2, { startedAt: 1_000, endedAt: 1_100 }),
     ])).toBe(200)
     expect(toolSpanUnion([
-      perfCall('first', 1, { startedAt: 1_000, endedAt: 1_200 }),
-      perfCall('second', 2, { startedAt: 1_200, endedAt: 1_500 }),
+      statsCall('first', 1, { startedAt: 1_000, endedAt: 1_200 }),
+      statsCall('second', 2, { startedAt: 1_200, endedAt: 1_500 }),
     ])).toBe(500)
   })
 })

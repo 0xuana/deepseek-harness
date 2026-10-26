@@ -17,13 +17,13 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: the standard Session props the slot component receives.
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { de, en, es, fr, ja, NS, pt, ru, zh } from './locales.ts'
-import type { LoadOlderResult, PerfSnapshot } from './perf-contract.ts'
-import { registerPerfDefinitions } from './perf-definition.ts'
-import { EMPTY_PERF_SNAPSHOT, registerPerfConversationView } from './perf-snapshot-builder.ts'
-import { PerfView, type PerfViewInjected } from './PerfView.tsx'
+import type { LoadOlderResult, StatsSnapshot } from './stats-contract.ts'
+import { registerStatsDefinitions } from './stats-definition.ts'
+import { EMPTY_STATS_SNAPSHOT, registerStatsConversationView } from './stats-snapshot-builder.ts'
+import { StatsView, type StatsViewInjected } from './StatsView.tsx'
 
-export type { PerfKey } from './locales.ts'
-export type { PerfCall, PerfSnapshot, PerfStepMetrics, PerfTurnMetrics } from './perf-contract.ts'
+export type { StatsKey } from './locales.ts'
+export type { StatsCall, StatsSnapshot, StatsStepMetrics, StatsTurnMetrics } from './stats-contract.ts'
 
 /** Required services: the conversation slot and view registries, Session paging, and the locale service. */
 export const inject = ['slots', 'sessions', 'uiConversation', 'locale']
@@ -51,8 +51,8 @@ async function whenOpened(session: SessionFace, signal: AbortSignal): Promise<vo
   })
 }
 
-/** Snapshot hook name; `InjectFace` turns it into the component's `usePerf` prop. */
-const HOOK = 'perf'
+/** Snapshot hook name; `InjectFace` turns it into the component's `useStats` prop. */
+const HOOK = 'stats'
 
 /**
  * Client plugin body: register the locale dictionaries, the event Definitions,
@@ -62,55 +62,55 @@ const HOOK = 'perf'
  */
 export function apply(ctx: Context): void {
   // Per-plugin-instance source cache; unloading the plugin drops the map with it.
-  const sources = new WeakMap<SessionBinding, ObservableSnapshot<PerfSnapshot>>()
+  const sources = new WeakMap<SessionBinding, ObservableSnapshot<StatsSnapshot>>()
   // One page request per Session binding; Chat/Trajectory may still own the
   // Session's in-flight page, which loadOlder observes through loadingOlder.
   const pages = new WeakMap<SessionBinding, Promise<LoadOlderResult>>()
-  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, de, es, fr, pt, ru }), 'client-ui-perf: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, de, es, fr, pt, ru }), 'client-ui-stats: dictionaries')
   // Registration-time text (the tab label) reads through the bound translate as
   // a thunk, so it follows the active locale without re-registration.
   const t = ctx.locale.bind(NS)
-  registerPerfDefinitions(ctx)
-  registerPerfConversationView(ctx)
+  registerStatsDefinitions(ctx)
+  registerStatsConversationView(ctx)
   ctx.slots.inject('conversation.view', () => ctx.slots.register({
     name: 'conversation.view',
-    id: 'perf',
+    id: 'stats',
     order: 40,
     locale: NS,
-    label: () => t('view.perf'),
-    inject: (sessionId: SessionId): PerfViewInjected => {
+    label: () => t('view.stats'),
+    inject: (sessionId: SessionId): StatsViewInjected => {
       const binding = ctx.sessions.binding(sessionId)
       const session = binding?.session
       if (binding === undefined || session === undefined) {
-        throw new Error(`client-ui-perf: session "${sessionId}" is unavailable`)
+        throw new Error(`client-ui-stats: session "${sessionId}" is unavailable`)
       }
-      const target = ctx.uiConversation.binding(sessionId).target('perf')
+      const target = ctx.uiConversation.binding(sessionId).target('stats')
       const lifecycle = new AbortController()
-      let perf = sources.get(binding)
-      if (perf === undefined) {
-        perf = {
-          getSnapshot: () => target.getSnapshot() ?? EMPTY_PERF_SNAPSHOT,
+      let source = sources.get(binding)
+      if (source === undefined) {
+        source = {
+          getSnapshot: () => target.getSnapshot() ?? EMPTY_STATS_SNAPSHOT,
           subscribe: listener => target.subscribe(listener),
         }
-        sources.set(binding, perf)
+        sources.set(binding, source)
       }
       return {
-        hooks: { [HOOK]: perf },
+        hooks: { [HOOK]: source },
         cancel: () => { lifecycle.abort() },
         loadOlder: (): Promise<LoadOlderResult> => {
           const pending = pages.get(binding)
           if (pending !== undefined) return pending
           const task = (async (): Promise<LoadOlderResult> => {
-            const before = perf.getSnapshot()
+            const before = source.getSnapshot()
             // A view can mount before the Session finishes opening; paging before
             // that is a no-op, so wait for open unless the view is gone.
             await whenOpened(session, lifecycle.signal)
             if (lifecycle.signal.aborted) return 'retry'
             if (session.getSnapshot().loadingOlder) return 'retry'
             await session.loadOlder()
-            if (perf.getSnapshot() !== before) return 'grew'
+            if (source.getSnapshot() !== before) return 'grew'
             const after = session.getSnapshot()
-            // A page can grow the Session window without adding a perf node. Only
+            // A page can grow the Session window without adding a stats node. Only
             // an exhausted Session may hide the trigger; otherwise keep it retryable.
             return after.hasMore ? 'retry' : 'exhausted'
           })()
@@ -123,5 +123,5 @@ export function apply(ctx: Context): void {
         loadImage: (attachment: ImageAttachmentRef) => ctx.uiConversation.imageUrl(sessionId, attachment),
       }
     },
-  }, PerfView))
+  }, StatsView))
 }

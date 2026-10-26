@@ -1,11 +1,11 @@
-/** `perf` namespace dictionaries for the performance table. */
+/** `stats` namespace dictionaries for the Statistics table. */
 
 /** Dictionary namespace owned by this plugin. */
-export const NS = 'perf'
+export const NS = 'stats'
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
-  'view.perf': '统计',
+  'view.stats': '统计',
   'column.scope': '轮次 / 步骤',
   'column.scope.title': '轮次行是该轮的合计；点一行展开或折叠它的每一步',
   'column.prompt': '触发',
@@ -188,21 +188,21 @@ export const zh = {
 } as const
 
 /** The performance dictionary key union. */
-export type PerfKey = keyof typeof zh
+export type StatsKey = keyof typeof zh
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** Turn and step performance table copy. */
-    perf: PerfKey
+    /** Turn and step Statistics table copy. */
+    stats: StatsKey
   }
 }
 
-/** Namespace-bound translator threaded through the performance table. */
-export type PerfTranslate = import('@deepseek-ai/dsh-client-ui-slots').TranslateNS<typeof NS>
+/** Namespace-bound translator threaded through the Statistics table. */
+export type StatsTranslate = import('@deepseek-ai/dsh-client-ui-slots').TranslateNS<typeof NS>
 
 /** English dictionary, checked complete against the Chinese source of truth. */
-export const en: Record<PerfKey, string> = {
-  'view.perf': 'Statistics',
+export const en: Record<StatsKey, string> = {
+  'view.stats': 'Statistics',
   'column.scope': 'Turn / step',
   'column.scope.title': 'A turn row holds the turn total; click a row to expand or collapse its steps',
   'column.prompt': 'Trigger',
@@ -385,8 +385,8 @@ export const en: Record<PerfKey, string> = {
 }
 
 /** Japanese dictionary, checked complete against the Chinese source of truth. */
-export const ja: Record<PerfKey, string> = {
-  'view.perf': '統計',
+export const ja: Record<StatsKey, string> = {
+  'view.stats': '統計',
   'column.scope': 'ターン / ステップ',
   'column.scope.title': 'ターン行はそのターンの合計です。行をクリックすると各ステップを展開または折りたたみます',
   'column.prompt': 'トリガー',
@@ -569,8 +569,8 @@ export const ja: Record<PerfKey, string> = {
 }
 
 /** Spanish dictionary. */
-export const es: Record<PerfKey, string> = {
-  'view.perf': 'Estadísticas',
+export const es: Record<StatsKey, string> = {
+  'view.stats': 'Estadísticas',
   'column.scope': 'Turno / paso',
   'column.scope.title': 'La fila de un turno contiene su total; haz clic en una fila para expandir o contraer sus pasos',
   'column.prompt': 'Disparador',
@@ -750,8 +750,8 @@ export const es: Record<PerfKey, string> = {
 }
 
 /** French dictionary. */
-export const fr: Record<PerfKey, string> = {
-  'view.perf': 'Statistiques',
+export const fr: Record<StatsKey, string> = {
+  'view.stats': 'Statistiques',
   'column.scope': 'Tour / étape',
   'column.scope.title': 'Une ligne de tour contient le total du tour ; cliquez sur une ligne pour développer ou réduire ses étapes',
   'column.prompt': 'Déclencheur',
@@ -931,8 +931,8 @@ export const fr: Record<PerfKey, string> = {
 }
 
 /** German dictionary. */
-export const de: Record<PerfKey, string> = {
-  'view.perf': 'Statistik',
+export const de: Record<StatsKey, string> = {
+  'view.stats': 'Statistik',
   'column.scope': 'Runde / Schritt',
   'column.scope.title': 'Eine Rundenzeile enthält die Summe der Runde; Zeile anklicken, um ihre Schritte ein- oder auszuklappen',
   'column.prompt': 'Auslöser',
@@ -1112,8 +1112,8 @@ export const de: Record<PerfKey, string> = {
 }
 
 /** Russian dictionary. */
-export const ru: Record<PerfKey, string> = {
-  'view.perf': 'Статистика',
+export const ru: Record<StatsKey, string> = {
+  'view.stats': 'Статистика',
   'column.scope': 'Ход / шаг',
   'column.scope.title': 'В строке хода — итог по этому ходу; нажмите на строку, чтобы развернуть или свернуть шаги',
   'column.prompt': 'Триггер',
@@ -1293,8 +1293,8 @@ export const ru: Record<PerfKey, string> = {
 }
 
 /** Portuguese dictionary. */
-export const pt: Record<PerfKey, string> = {
-  'view.perf': 'Estatísticas',
+export const pt: Record<StatsKey, string> = {
+  'view.stats': 'Estatísticas',
   'column.scope': 'Turno / etapa',
   'column.scope.title': 'A linha do turno mostra o total do turno; clique em uma linha para expandir ou recolher suas etapas',
   'column.prompt': 'Gatilho',

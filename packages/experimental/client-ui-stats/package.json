@@ -1,5 +1,5 @@
 {
-  "name": "@deepseek-ai/dsh-experimental-client-ui-perf",
+  "name": "@deepseek-ai/dsh-experimental-client-ui-stats",
   "description": "Per-turn and per-step context, timing, cache, and tool-cost table contributed as an experimental conversation View",
   "version": "0.2.1-rc.3",
   "publishConfig": {
@@ -8,7 +8,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
-    "directory": "packages/experimental/client-ui-perf"
+    "directory": "packages/experimental/client-ui-stats"
   },
   "type": "module",
   "main": "lib/index.js",

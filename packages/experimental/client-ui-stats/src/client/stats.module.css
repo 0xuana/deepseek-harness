@@ -1,4 +1,4 @@
-/* Performance table: turn totals, expandable step rows, time bars, tool accordion. */
+/* Statistics table: turn totals, expandable step rows, time bars, tool accordion. */
 
 /* Full-height host: the table owns the viewport scroll and the composer
    overlays its bottom edge, so the content reserves the published height. */
@@ -458,7 +458,7 @@
 }
 
 .toolName {
-  color: var(--perf-tool-color, var(--dsw-alias-label-secondary));
+  color: var(--stats-tool-color, var(--dsw-alias-label-secondary));
   font-weight: 500;
 }
 
@@ -547,7 +547,7 @@
   height: 6px;
   border-radius: 50%;
   corner-shape: round;
-  background: var(--perf-tool-color, var(--dsw-alias-label-secondary));
+  background: var(--stats-tool-color, var(--dsw-alias-label-secondary));
 }
 
 .mix {
@@ -562,40 +562,40 @@
 
 .mixSegment {
   display: block;
-  background: var(--perf-tool-color, var(--dsw-alias-label-secondary));
+  background: var(--stats-tool-color, var(--dsw-alias-label-secondary));
 }
 
 /* Tool tone classes only set the shared custom property. */
 .tone0 {
-  --perf-tool-color: var(--dsw-alias-state-business-primary);
+  --stats-tool-color: var(--dsw-alias-state-business-primary);
 }
 
 .tone1 {
-  --perf-tool-color: var(--dsw-alias-state-success-primary);
+  --stats-tool-color: var(--dsw-alias-state-success-primary);
 }
 
 .tone2 {
-  --perf-tool-color: var(--dsw-alias-state-warn-primary);
+  --stats-tool-color: var(--dsw-alias-state-warn-primary);
 }
 
 .tone3 {
-  --perf-tool-color: var(--dsw-alias-state-error-secondary);
+  --stats-tool-color: var(--dsw-alias-state-error-secondary);
 }
 
 .tone4 {
-  --perf-tool-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+  --stats-tool-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
 }
 
 .tone5 {
-  --perf-tool-color: var(--dsw-alias-state-success-secondary);
+  --stats-tool-color: var(--dsw-alias-state-success-secondary);
 }
 
 .tone6 {
-  --perf-tool-color: var(--dsw-alias-state-warn-label);
+  --stats-tool-color: var(--dsw-alias-state-warn-label);
 }
 
 .tone7 {
-  --perf-tool-color: var(--dsw-alias-label-caption);
+  --stats-tool-color: var(--dsw-alias-label-caption);
 }
 
 /* Numeric columns: a fixed-width number with the context delta beside it. */

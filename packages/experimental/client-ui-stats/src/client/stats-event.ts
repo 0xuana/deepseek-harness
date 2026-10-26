@@ -8,7 +8,7 @@ import type {} from '@deepseek-ai/dsh-tools'
 
 import type {} from '@deepseek-ai/dsh-user-approval/types'
 import type { SessionEventMap } from '@deepseek-ai/dsh-session/types'
-import type { PerfEventMetrics } from './perf-contract.ts'
+import type { StatsEventMetrics } from './stats-contract.ts'
 
 /** Event shape a Conversation Definition receives. */
 type MatchEvent = Parameters<ConversationNodeDefinition['match']>[0]
@@ -67,7 +67,7 @@ function toolChanges(
  * @param location - engine Location of the event, for turn and step.
  * @returns row metrics, or null for events the table does not explain.
  */
-export function eventMetrics(event: MatchEvent, location: ConversationLocation | undefined): PerfEventMetrics | null {
+export function eventMetrics(event: MatchEvent, location: ConversationLocation | undefined): StatsEventMetrics | null {
   const located = locationTurnStep(location)
   const base = {
     turn: located?.turn ?? null,
@@ -88,7 +88,7 @@ export function eventMetrics(event: MatchEvent, location: ConversationLocation |
     delayMs: null,
     error: null,
     label: null,
-  } satisfies Omit<PerfEventMetrics, 'kind'>
+  } satisfies Omit<StatsEventMetrics, 'kind'>
   if (event.type === 'request/header') {
     const header = event.data.header
     return {

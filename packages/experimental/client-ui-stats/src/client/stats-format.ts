@@ -1,4 +1,4 @@
-/** Display formatting for the performance table. */
+/** Display formatting for the Statistics table. */
 
 /** Placeholder for a value the event stream did not record. */
 export const DASH = '—'
