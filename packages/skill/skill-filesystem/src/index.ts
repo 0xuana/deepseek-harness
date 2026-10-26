@@ -201,7 +201,7 @@ export class FileSystemSkillProvider implements SkillProvider {
       } catch (error) {
         options.signal?.throwIfAborted()
         complete = false
-        this.ctx.logger.warn(`skill root "${root.path}" skipped: ${errorMessage(error)}. Other roots remain available; check this directory's access before retrying.`)
+        this.ctx.logger.warn(`skill root "${root.path}" skipped: ${errorMessage(error)}. Other roots remain available; check this directory's permissions and symlinks. Discovery retries on the next lookup.`)
       }
     }
     return complete ? candidates : { candidates, complete }

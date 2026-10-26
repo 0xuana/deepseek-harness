@@ -261,14 +261,18 @@ function renderCatalogMessage(entries: SkillCatalogSource['entries'], incomplete
       type: 'text',
       text: [
         '<system-reminder>',
-        'A skill is a reusable set of task-specific instructions. The following skills are available in this session:',
+        entries.length === 0
+          ? 'No skills could be confirmed in this discovery attempt.'
+          : 'A skill is a reusable set of task-specific instructions. The following skills are available in this session:',
         '',
         '<available_skills>',
         ...renderCatalogEntries(entries),
         '</available_skills>',
         '',
         ...incomplete ? [incompleteCatalogNotice(), ''] : [],
-        "If the user names a skill, or the task clearly matches a skill's description, call the `skill` tool with the exact skill name before taking task actions. Load all applicable skills, then follow their full instructions. This catalog contains summaries only; do not infer or follow a skill's instructions until it has been loaded.",
+        entries.length === 0
+          ? 'Wait for an updated catalog before calling the `skill` tool. Do not infer skill instructions from an empty catalog.'
+          : "If the user names a skill, or the task clearly matches a skill's description, call the `skill` tool with the exact skill name before taking task actions. Load all applicable skills, then follow their full instructions. This catalog contains summaries only; do not infer or follow a skill's instructions until it has been loaded.",
         'A user may also invoke a skill directly; its <skill_content> block then appears in this conversation. Follow it, and do not call the `skill` tool again for that skill.',
         '</system-reminder>',
       ].join('\n'),
@@ -285,7 +289,9 @@ function renderCatalogMessage(entries: SkillCatalogSource['entries'], incomplete
 function renderCatalogUpdate(entries: SkillCatalogSource['entries'], incomplete: boolean): UserMessage {
   const availability = entries.length === 0
     ? [
-      'No skills are currently available through the `skill` tool. Do not use names from earlier skill catalogs.',
+      incomplete
+        ? 'No skills could be confirmed in this discovery attempt. Do not use names from earlier skill catalogs.'
+        : 'No skills are currently available through the `skill` tool. Do not use names from earlier skill catalogs.',
       'A user may still invoke a skill directly; its <skill_content> block then appears in this conversation. Follow it, and do not call the `skill` tool for it.',
     ]
     : [
@@ -321,7 +327,7 @@ function renderCatalogUpdate(entries: SkillCatalogSource['entries'], incomplete:
 }
 
 function incompleteCatalogNotice(): string {
-  return 'Some skills could not be checked. Listed skills remain available; missing names may be temporarily unavailable. Discovery will be retried on the next request.'
+  return 'Some skills could not be checked. Only confirmed skills are listed; a lower-priority definition of the same name may be selected when a preferred source is unavailable. Discovery will be retried on the next request.'
 }
 
 /**
