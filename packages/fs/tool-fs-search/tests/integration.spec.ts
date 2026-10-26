@@ -114,7 +114,7 @@ describe('search tools over the real subprocess service + the packaged rg', () =
       },
     )
 
-    it.each(['missing/*.ts', 'notes.md/*.ts', 'src/alpha.ts/*.ts'])('does not admit a missing or file prefix for %s', async (pattern) => {
+    it.each(['missing/*.ts', 'notes.md/*.ts', 'src/alpha.ts/*.ts'])('reports no matches when a literal prefix names a missing directory or file: %s', async (pattern) => {
       const result = await call('glob', { pattern }, agent())
       expect(result.isError).toBe(false)
       expect(text(result)).toBe('No files found')
@@ -143,7 +143,7 @@ describe('search tools over the real subprocess service + the packaged rg', () =
       expect(spawn.mock.calls[0]?.[0].argv).toContain('--glob={SRC}/')
     })
 
-    it('does not follow a directory link when narrowing a literal prefix', async () => {
+    it('prunes without adding a search root or following a directory link', async () => {
       await mkdir(join(dir, 'src', 'nested'))
       await writeFile(join(dir, 'src', 'nested', 'file.ts'), '')
       await symlink(join(dir, 'src'), join(dir, 'linked'), 'junction')

@@ -83,8 +83,9 @@ export function parseGlobArgs(args: { pattern: string; path?: string }): GlobInp
  * --hidden` searches ignored and hidden files, and
  * {@link GLOB_VCS_EXCLUDES} keeps VCS metadata out. Simple directory prefixes
  * prune unrelated subtrees through directory-name globs without changing the
- * search root, path separators, or symlink handling. Added pruning arguments
- * over 8 KiB retain the original traversal to bound command-line growth.
+ * search root, path separators, or symlink handling. The last matching glob
+ * wins. A fixed 8 KiB budget bounds added argv bytes; larger additions retain
+ * the original traversal, since even linear growth can exceed command-line limits.
  *
  * @param input - the validated arguments.
  * @returns the complete ripgrep argument vector (excluding the binary itself).
