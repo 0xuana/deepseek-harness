@@ -45,7 +45,7 @@ describe('pre-merge check', () => {
   it('checks the versions before it installs, and installs before the builds', () => {
     const steps = preMergeSteps('/repo')
     expect(steps.map(step => step.name)).toEqual(['versions', 'install', 'host contracts', 'client'])
-    expect(steps[0]).toEqual({ name: 'versions', command: process.execPath, args: ['/repo/scripts/verify-version-sync.ts', '/repo'] })
+    expect(steps[0]).toEqual({ name: 'versions', command: process.execPath, args: [join('/repo', 'scripts', 'verify-version-sync.ts'), '/repo'] })
     expect(steps[1]).toEqual({ name: 'install', command: 'pnpm', args: ['install', '--frozen-lockfile'] })
     expect(steps[3]?.args).toEqual(['exec', 'tsx', 'scripts/compile-referenced-projects.ts', 'client'])
   })
