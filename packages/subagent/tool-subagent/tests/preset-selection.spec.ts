@@ -288,7 +288,8 @@ describe('spawn preset selection', () => {
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Reply with Ready.' }], source: { kind: 'user' } }))
     await agent.whenIdle()
     for (const { preset, names } of views) expect(names, `tools after selecting ${preset}`).toContain('switch_delegate')
-    const request = adapter.requests[0]
+    const request = adapter.requests.find(request => request.purpose === undefined)
+    expect(request).toBeDefined()
     expect(request?.tools?.map(tool => tool.name)).toContain('switch_delegate')
     const header = agent.session.snapshotEvents().find(event => event.type === 'request/header')
     expect(header?.data.header.tools).toEqual(request?.tools)

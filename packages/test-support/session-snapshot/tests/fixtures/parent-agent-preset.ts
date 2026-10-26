@@ -8,7 +8,7 @@ export const name = 'parent-agent-preset'
 export const inject = ['agentPresets']
 
 /**
- * Select the root Session's presets before publication checks.
+ * Select the root Session's presets before its first model request.
  * @param ctx - Snapshot composition context with the preset roster.
  * @param config - Ordered preset selections; omission selects the parent preset once.
  */
