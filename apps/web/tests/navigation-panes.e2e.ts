@@ -36,6 +36,7 @@ const CODE_CARD_DIR = fileURLToPath(new URL('./expected/navigation-panes', impor
 const COMMAND_WRAP_EXPECTED = join(CODE_CARD_DIR, 'command-wrap.expected.md')
 const CODE_CARD_EXPECTED = join(CODE_CARD_DIR, 'code-card.expected.md')
 const COPY_MARKDOWN_EXPECTED = join(CODE_CARD_DIR, 'copy-markdown.expected.md')
+const EVICTED_RESULT_EXPECTED = join(CODE_CARD_DIR, 'live-result-evicted.expected.md')
 const MODE = webSnapshotMode()
 const SEED_ID = 'navigation-panes-web-e2e'
 const EXPORTED_LOG_FILE = `session.v${SESSION_FORMAT_VERSION}.jsonl`
@@ -630,6 +631,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
   it.skipIf(MODE === 'record')('keeps the recorded fixture inventory exact', async () => {
     await assertFixtureInventory(CODE_CARD_DIR, [
       'code-card.expected.md', 'command-wrap.expected.md', 'copy-markdown.expected.md',
+      'live-result-evicted.expected.md',
     ])
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'session.v3.jsonl', 'search-id-results.expected.md', 'search-results.expected.md', 'trajectory.expected.md',
@@ -676,6 +678,22 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     await expect.poll(() => details.getByRole('tabpanel').textContent()).toContain('answer:')
     expect(await details.getByRole('tabpanel').textContent()).toContain('42')
     expect(await details.getByText('Raw results are only available for live tool calls').count()).toBe(0)
+    const newer = await scaffold.ctx.tools.execute({
+      agent, signal: new AbortController().signal,
+      calls: Array.from({ length: 1000 }, (_, index) => ({
+        type: 'tool-call' as const, id: ToolCallId(`newer-result-${index}`), name: 'live_result_probe', arguments: '{}',
+      })),
+    })
+    expect(newer.results).toHaveLength(1000)
+    expect(newer.results.every(entry => !entry.result.isError)).toBe(true)
+    await details.getByText('Raw results are only available for live tool calls', { exact: true }).waitFor()
+    expect(await details.getByRole('button', { name: 'Raw result', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    // Keep hover and focus tooltips out of the recorded result panel.
+    await details.getByText('Raw results are only available for live tool calls', { exact: true }).click()
+    await details.getByRole('tooltip').waitFor({ state: 'hidden' })
+    await compareOrRefreshGolden(
+      EVICTED_RESULT_EXPECTED, await captureStableAria(page, '#trajectory-detail-panel', scaffold.workspaceCwd), MODE,
+    )
     await details.getByRole('button', { name: 'Raw result', exact: true }).click()
     await details.getByText('LIVE_RESULT_RENDERED', { exact: true }).waitFor()
   })

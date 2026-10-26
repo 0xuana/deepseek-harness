@@ -8,14 +8,14 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import SessionToolResults from '../src/index.ts'
+import SessionToolResults, { type Config } from '../src/index.ts'
 
-async function setup(value: JsonValue = { answer: 42 }) {
+async function setup(value: JsonValue = { answer: 42 }, config: Partial<Config> = {}) {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(TypertRegistry)
-  const feature = ctx.plugin(SessionToolResults)
+  const feature = ctx.plugin(SessionToolResults, config)
   await feature
   const results = ctx.sessionToolResults
   ctx.effect(() => ctx.tools.register(defineTool({
@@ -31,18 +31,19 @@ async function setup(value: JsonValue = { answer: 42 }) {
   await owner
   const events: SessionEvent[] = []
   ctx.on('session/event', (session, event) => { if (session === agent.session) events.push(event) }, { global: true })
+  let call = 0
   async function execute() {
     await ctx.tools.execute({
       agent, signal: new AbortController().signal, log: { turn: 1, step: 1 },
-      calls: [{ type: 'tool-call', id: ToolCallId('value-call'), name: 'value', arguments: '{}' }],
+      calls: [{ type: 'tool-call', id: ToolCallId(`value-call-${call++}`), name: 'value', arguments: '{}' }],
     })
     const event = events.findLast(event => event.type === 'tool/result')
     if (event === undefined) throw new Error('tool result missing')
     return event
   }
-  function watch(seq: number) {
+  function watch(seq: number, sessionId = agent.session.id) {
     const abort = new AbortController()
-    const iterator = results.watch({ sessionId: agent.session.id, seq }, abort.signal)[Symbol.asyncIterator]()
+    const iterator = results.watch({ sessionId, seq }, abort.signal)[Symbol.asyncIterator]()
     onTestFinished(async () => { abort.abort(); await iterator.return?.() })
     return iterator
   }
@@ -54,6 +55,67 @@ it.each([null, false, 0, '', { answer: 42 }])('retains final live value %j witho
   const event = await execute()
   expect(event.data).not.toHaveProperty('value')
   expect((await watch(event.seq).next()).value).toEqual({ available: true, value })
+})
+
+it('defaults to 1000 results and rejects invalid count limits', () => {
+  expect(SessionToolResults.Config({}).maxResultsPerSession).toBe(1000)
+  for (const maxResultsPerSession of [0, -1, 1.5, Infinity]) {
+    expect(() => SessionToolResults.Config({ maxResultsPerSession })).toThrow()
+  }
+})
+
+it('retains the latest 1000 results and invalidates an inspector when its result is evicted', async () => {
+  const { execute, watch } = await setup()
+  const first = await execute()
+  const second = await execute()
+  for (let i = 2; i < 1000; i++) await execute()
+  const observer = watch(first.seq)
+  expect((await observer.next()).value).toEqual({ available: true, value: { answer: 42 } })
+  const evicted = observer.next()
+  const latest = await execute()
+  expect((await evicted).value).toEqual({ available: false })
+  expect((await watch(first.seq).next()).value).toEqual({ available: false })
+  expect((await watch(second.seq).next()).value).toEqual({ available: true, value: { answer: 42 } })
+  expect((await watch(latest.seq).next()).value).toEqual({ available: true, value: { answer: 42 } })
+})
+
+it('keeps one result per Session with a limit of one, independently of other Sessions', async () => {
+  const { ctx, execute, watch } = await setup(null, { maxResultsPerSession: 1 })
+  const first = await execute()
+  const other = await ctx.agentLoop.create(SessionId('other-values'))
+  await ctx.tools.execute({
+    agent: other, signal: new AbortController().signal, log: { turn: 1, step: 1 },
+    calls: [{ type: 'tool-call', id: ToolCallId('other-call'), name: 'value', arguments: '{}' }],
+  })
+  expect((await watch(first.seq).next()).value).toEqual({ available: true, value: null })
+  const latest = await execute()
+  expect((await watch(first.seq).next()).value).toEqual({ available: false })
+  expect((await watch(latest.seq).next()).value).toEqual({ available: true, value: null })
+  expect((await watch(other.session.seq - 1, other.id).next()).value).toEqual({ available: true, value: null })
+})
+
+it('counts pending PTC results toward the same limit and cannot restore an evicted value on commit', async () => {
+  const { ctx, agent, execute, watch } = await setup(false, { maxResultsPerSession: 2 })
+  const first = await execute()
+  const firstObserver = watch(first.seq)
+  expect((await firstObserver.next()).value).toEqual({ available: true, value: false })
+  const evicted = firstObserver.next()
+  const callIds = ['pending-1', 'pending-2', 'pending-3'].map(ToolCallId)
+  for (const id of callIds) {
+    await ctx.tools.execute({
+      agent, signal: new AbortController().signal,
+      calls: [{ type: 'tool-call', id, name: 'value', arguments: '{}' }],
+    })
+  }
+  expect((await evicted).value).toEqual({ available: false })
+  for (const [index, subCallId] of callIds.entries()) {
+    const event = agent.session.append('tool/ptc-dispatch', {
+      rootCallId: ToolCallId('pending'), parentCallId: ToolCallId('pending'), subCallId,
+      name: 'value', arguments: {}, content: [{ type: 'text', text: 'rendered' }], isError: false,
+    })
+    expect((await watch(event.seq).next()).value).toEqual(index === 0
+      ? { available: false } : { available: true, value: false })
+  }
 })
 
 it('releases values on Session unload and never restores them for a same-id instance', async () => {

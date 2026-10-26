@@ -1,6 +1,7 @@
 /** Trajectory Host inspector retaining tool values only for live Session instances. */
 import { addAbortListener } from 'node:events'
 import { Context } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-tools'
@@ -19,37 +20,55 @@ declare module '@deepseek-ai/cordis' {
 }
 
 interface LiveResults {
-  readonly pending: Map<ToolCallId, JsonValue>
-  readonly values: Map<number, JsonValue>
+  readonly values: Map<ToolCallId | number, JsonValue>
   readonly listeners: Set<(seq?: number) => void>
 }
 
 function emptyResults(): LiveResults {
-  return { pending: new Map(), values: new Map(), listeners: new Set() }
+  return { values: new Map(), listeners: new Set() }
+}
+
+/** Count limit for each live Session's transient tool results. */
+export interface Config {
+  /** Maximum retained results per Session, including values awaiting a result event. */
+  maxResultsPerSession: number
 }
 
 /** Read-only Remote inspection of tool values produced in this Session lifetime. */
 export default class SessionToolResults extends TypertRemoteService {
   static inject = ['sessions', 'typert']
+  static Config: z<Partial<Config>, Config> = z.object({
+    maxResultsPerSession: z.natural().min(1).default(1000),
+  })
   private readonly results = new Map<Session, LiveResults>()
   private readonly lifetime = new AbortController()
 
-  /** @param ctx - Owner of the live Session registry and tool result notifications. */
-  constructor(ctx: Context) {
+  /**
+   * @param ctx - Owner of the live Session registry and tool result notifications.
+   * @param config - Validated per-Session retention limit.
+   */
+  constructor(ctx: Context, config: Config) {
     super(ctx, 'sessionToolResults', { namespace: 'toolResults' })
     ctx.on('tools/result', (exec, result) => {
       const session = exec.agent?.session
       if (result.isError || session === undefined || ctx.sessions.get(session.id) !== session) return
-      this.forSession(session).pending.set(exec.callId, result.value)
+      const state = this.forSession(session)
+      state.values.set(exec.callId, result.value)
+      if (state.values.size <= config.maxResultsPerSession) return
+      for (const oldest of state.values.keys()) {
+        state.values.delete(oldest)
+        if (typeof oldest === 'number') for (const listener of state.listeners) listener(oldest)
+        break
+      }
     }, { global: true })
     ctx.on('session/event', (session, event) => {
       const callId = event.type === 'tool/result' ? event.data.message.toolCallId
         : event.type === 'tool/ptc-dispatch' ? event.data.subCallId : undefined
       if (callId === undefined) return
       const state = this.results.get(session)
-      const value = state?.pending.get(callId)
+      const value = state?.values.get(callId)
       if (state === undefined || value === undefined) return
-      state.pending.delete(callId)
+      state.values.delete(callId)
       state.values.set(event.seq, value)
       for (const listener of state.listeners) listener(event.seq)
     }, { global: true })
@@ -57,13 +76,12 @@ export default class SessionToolResults extends TypertRemoteService {
       const state = this.results.get(session)
       if (state === undefined) return
       this.results.delete(session)
-      state.pending.clear()
       state.values.clear()
       for (const listener of state.listeners) listener()
     }, { global: true })
     ctx.effect(() => () => {
       this.lifetime.abort()
-      for (const state of this.results.values()) { state.pending.clear(); state.values.clear() }
+      for (const state of this.results.values()) state.values.clear()
       this.results.clear()
     }, 'tool-results: live values and followers')
   }
@@ -84,8 +102,9 @@ export default class SessionToolResults extends TypertRemoteService {
 
   /**
    * Observe one committed result without loading a Session or reading its history.
-   * Values disappear when the exact Session instance leaves the registry. A cold
-   * read stays unavailable; opening a new stream observes the current instance.
+   * Values disappear on count eviction or when the exact Session instance leaves
+   * the registry. A cold read stays unavailable; opening a new stream observes
+   * the current instance. Inspection does not extend a result's retention.
    * @param request - Authorized Session identity and durable result event sequence.
    * @param signal - Remote consumer lifetime.
    * @returns Current availability and changes until cancellation or service disposal.

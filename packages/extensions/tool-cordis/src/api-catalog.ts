@@ -2840,7 +2840,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: '@Remote({ mode: \'stream\' }) async *watch(request: SessionToolResultRequest, signal: AbortSignal): AsyncIterable<SessionToolResultValue>',
-        description: 'Observe one committed result without loading a Session or reading its history. Values disappear when the exact Session instance leaves the registry. A cold read stays unavailable; opening a new stream observes the current instance.',
+        description: 'Observe one committed result without loading a Session or reading its history. Values disappear on count eviction or when the exact Session instance leaves the registry. A cold read stays unavailable; opening a new stream observes the current instance. Inspection does not extend a result\'s retention.',
         parameters: [{ name: 'request', description: 'Authorized Session identity and durable result event sequence.' }, { name: 'signal', description: 'Remote consumer lifetime.' }],
         returns: 'Current availability and changes until cancellation or service disposal.',
       },
