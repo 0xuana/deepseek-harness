@@ -1,17 +1,16 @@
 /**
- * Validate the tree a pull request produces once merged with its base branch: the install, the
- * version synchronization of the released manifests, and the Host and Client builds.
+ * Validate the tree a pull request produces once merged with its base branch: the version
+ * synchronization of the released manifests, the install, and the Host and Client builds.
  *
  * The `Policy / Pre-Merge Check` job runs this file with `node`, and knows nothing else about the
  * merged tree, so what that tree needs changes here without touching the check. The file runs under
- * plain Node and spawns pnpm itself, so no dependency is installed before it starts.
+ * plain Node and spawns its steps itself, so no dependency is installed before it starts.
  */
 
 import { spawn } from 'node:child_process'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { describeVersions, readVersions, versionsSynchronized, type VersionReport } from './verify-version-sync.ts'
 
 /** One command of the check. */
 export interface PreMergeStep {
@@ -21,21 +20,19 @@ export interface PreMergeStep {
   readonly args: readonly string[]
 }
 
-/** No step can run before the others without the install, so it opens the list. */
-export function preMergeSteps(): PreMergeStep[] {
+/**
+ * The steps that check the merged tree, in order. The versions come first because reading the
+ * manifests needs no install, so a mistyped release stops the check before anything is built.
+ * @param root - Repository root.
+ * @returns Steps in run order.
+ */
+export function preMergeSteps(root: string): PreMergeStep[] {
   return [
+    { name: 'versions', command: process.execPath, args: [join(root, 'scripts', 'verify-version-sync.ts')] },
     { name: 'install', command: 'pnpm', args: ['install', '--frozen-lockfile'] },
     { name: 'host contracts', command: 'pnpm', args: ['exec', 'tsx', 'scripts/compile-referenced-projects.ts', 'host-contracts'] },
     { name: 'client', command: 'pnpm', args: ['exec', 'tsx', 'scripts/compile-referenced-projects.ts', 'client'] },
   ]
-}
-
-/** Options of the check. */
-export interface PreMergeOptions {
-  /** Sink for the check's own lines. */
-  readonly report?: (line: string) => void
-  /** Steps to run; the repository's own steps when absent. */
-  readonly steps?: readonly PreMergeStep[]
 }
 
 /** How the job that runs this file reacts to a failure. */
@@ -69,6 +66,14 @@ export function failureDecision(mode: CheckMode, reason: string): FailureDecisio
   return { line: `pre-merge-check: ${summary}`, exitCode: 0 }
 }
 
+/** Options of the check. */
+export interface PreMergeOptions {
+  /** Sink for the check's own lines. */
+  readonly report?: (line: string) => void
+  /** Steps to run; the repository's own steps when absent. */
+  readonly steps?: readonly PreMergeStep[]
+}
+
 /** What the check decided. */
 export interface PreMergeOutcome {
   readonly ok: boolean
@@ -95,7 +100,7 @@ function run(step: PreMergeStep, root: string): Promise<string | undefined> {
 }
 
 /**
- * Check the merged tree, reporting why it failed.
+ * Run every step of the merged tree in order, stopping at the first failure.
  * @param root - Repository root.
  * @param options - Sink for the check's own lines, and the steps to run.
  * @returns Whether the tree passed, with the reason when it did not.
@@ -104,23 +109,11 @@ export async function preMergeCheck(root: string, options: PreMergeOptions = {})
   const report = options.report ?? ((line: string): void => {
     process.stdout.write(`${line}\n`)
   })
-  // The manifests are read before the steps, so the version check needs no installed dependency.
-  let versions: VersionReport | undefined
-  let versionsError = 'unknown error'
-  try {
-    versions = readVersions(root)
-    for (const line of describeVersions(versions)) report(`verify-version-sync: ${line}`)
-  } catch (error) {
-    versionsError = error instanceof Error ? error.message : String(error)
-    report(`verify-version-sync: cannot read the released manifests: ${versionsError}`)
-  }
-  for (const step of options.steps ?? preMergeSteps()) {
+  for (const step of options.steps ?? preMergeSteps(root)) {
     report(`pre-merge-check: running ${step.name}`)
     const failure = await run(step, root)
     if (failure !== undefined) return { ok: false, reason: failure }
   }
-  if (versions === undefined) return { ok: false, reason: `cannot read the released manifests: ${versionsError}` }
-  if (!versionsSynchronized(versions)) return { ok: false, reason: 'the released manifests do not carry the root version' }
   return { ok: true }
 }
 
