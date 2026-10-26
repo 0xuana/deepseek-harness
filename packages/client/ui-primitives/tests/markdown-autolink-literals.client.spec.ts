@@ -28,11 +28,11 @@ describe.each([parseGfm, parseGfmWithMath])('autolink literals in %o', (parse) =
       ['[x ', { link: 'https://example.com/docs/Kit?s=K' }, '。后'])
     for (const prefix of ['', '[x ']) {
       expect(phrasing(parse(`${prefix}https://example.com/a😀下一句`))).toEqual(
-        [`${prefix}`, { link: 'https://example.com/a' }, '😀下一句'].filter(part => part !== ''))
+        [prefix, { link: 'https://example.com/a' }, '😀下一句'].filter(part => part !== ''))
       expect(phrasing(parse(`${prefix}https://example.com/a\u3000下一句`))).toEqual(
-        [`${prefix}`, { link: 'https://example.com/a' }, '\u3000下一句'].filter(part => part !== ''))
+        [prefix, { link: 'https://example.com/a' }, '\u3000下一句'].filter(part => part !== ''))
       expect(phrasing(parse(`${prefix}https://example.com/a𝒳b ok`))).toEqual(
-        [`${prefix}`, { link: 'https://example.com/a𝒳b' }, ' ok'].filter(part => part !== ''))
+        [prefix, { link: 'https://example.com/a𝒳b' }, ' ok'].filter(part => part !== ''))
     }
     // Unencoded non-ASCII punctuation inside a URL also ends it.
     expect(phrasing(parse('https://zh.wikipedia.org/wiki/中文（消歧义）'))).toEqual(
