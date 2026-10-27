@@ -800,7 +800,10 @@ export class Session implements SessionFace {
         }
       }
       this.observeSubmissionInsertions(target, inserted, start, event.seq)
-      for (const message of inserted) this.observeSubmissionMessage(message, false)
+      // A queued echo waits for the inbox projection the queue dock renders, which can arrive after this
+      // event; retiring it here would empty the dock for a frame. A claim in the same projection notification
+      // still retires it through the durable user message.
+      for (const message of inserted) this.observeSubmissionMessage(message, false, false)
       return
     }
     if (event.type === 'request/context' || event.type === 'turn/end') {
@@ -818,21 +821,29 @@ export class Session implements SessionFace {
       const source = message.source
       if (source.kind !== 'user' || !('rpcId' in source)) continue
       const settlement = this.submissionSettlements.get(source.rpcId)
-      if (settlement === undefined || settlement.placement === 'queued'
-        || settlement.retiring || (settlement.receipt?.seq ?? -1) > seq) continue
+      if (settlement === undefined || settlement.retiring) continue
+      // Either proof accepts a prompt; an Inbox row can reach the Client before the prompt receipt. A queued
+      // prompt's row is the queue dock's own row, so its acceptance there lets the composer clear the draft in
+      // the frame that shows the row; its retirement follows the Inbox projection, not a receipt position.
+      if (settlement.placement === 'queued') {
+        this.acceptPrompt(source.rpcId)
+        continue
+      }
+      if ((settlement.receipt?.seq ?? -1) > seq) continue
       settlement.receipt = { target, seq, index: start + index, attachments: attachmentRefsIn(message.content) }
-      // An Inbox row can reach the Client before the prompt receipt.
       this.acceptPrompt(source.rpcId)
     }
   }
 
-  private observeSubmissionMessage(message: UserMessage, admitted: boolean): void {
+  private observeSubmissionMessage(message: UserMessage, admitted: boolean, retireQueued = true): void {
     const source = message.source
     if (source.kind !== 'user' || !('rpcId' in source)) return
     const settlement = this.submissionSettlements.get(source.rpcId)
     if (settlement === undefined || settlement.retiring) return
     if (!admitted) {
-      if (settlement.placement === 'queued') this.scheduleObservedRetirement(source.rpcId, attachmentRefsIn(message.content))
+      if (settlement.placement === 'queued' && retireQueued) {
+        this.scheduleObservedRetirement(source.rpcId, attachmentRefsIn(message.content))
+      }
       return
     }
     settlement.admitted = attachmentRefsIn(message.content)
