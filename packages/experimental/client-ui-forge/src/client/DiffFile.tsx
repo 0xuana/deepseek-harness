@@ -32,6 +32,8 @@ export type DiffFileText = readonly string[] | 'loading' | undefined
 
 /** Props of one file section. */
 export interface DiffFileProps {
+  /** Whether the owning tab is visible and may show temporary menus. */
+  readonly visible: boolean
   /** The file and its hunks. */
   readonly file: ForgeDiffFile
   /** Whether the section shows its lines. */
@@ -197,6 +199,49 @@ function Body(props: DiffFileProps): ReactNode {
   return <Lines {...props} />
 }
 
+/** File actions live only while their owning tab is visible. */
+function FileMenu({ name, actions, t }: {
+  readonly name: string
+  readonly actions: readonly DiffFileAction[]
+  readonly t: Translate
+}): ReactNode {
+  const [menuOpen, setMenuOpen] = useState(false)
+  return (
+    <Menu
+      open={menuOpen}
+      portal
+      align="end"
+      dense
+      autoFocus
+      onClose={() => { setMenuOpen(false) }}
+      anchor={(
+        <button
+          type="button"
+          className={css.tool}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          aria-label={t('diff.moreActions', { name })}
+          onClick={() => { setMenuOpen(value => !value) }}
+        >
+          <IconEllipsisOutlineRegular />
+        </button>
+      )}
+    >
+      {actions.map(action => (
+        <MenuItemButton
+          key={action.label}
+          onSelect={() => {
+            setMenuOpen(false)
+            action.run()
+          }}
+        >
+          {t(action.label)}
+        </MenuItemButton>
+      ))}
+    </Menu>
+  )
+}
+
 /**
  * Render one file of a diff.
  * @param props - the file, its section and gap state, layout choices, menu actions, and copy.
@@ -204,7 +249,6 @@ function Body(props: DiffFileProps): ReactNode {
  */
 export function DiffFile(props: DiffFileProps): ReactNode {
   const { file, expanded, onToggle, badge, tooltip, actions, onCopyPath, sectionRef, t } = props
-  const [menuOpen, setMenuOpen] = useState(false)
   const name = file.path.slice(file.path.lastIndexOf('/') + 1)
   return (
     <section ref={sectionRef} className={css.file} data-forge-diff-file={file.path} data-expanded={expanded ? '' : undefined}>
@@ -219,43 +263,13 @@ export function DiffFile(props: DiffFileProps): ReactNode {
           <IconChevronDownOutlineRegular size={14} className={css.chevron} />
         </button>
         <FileTypeIcon path={file.path} size={16} className={css.fileIcon} />
-        <button type="button" className={css.filePath} aria-label={t('diff.copyPath')} onClick={onCopyPath}>
+        <button type="button" className={css.filePath} aria-label={`${t('diff.copyPath')}: ${file.path}`} onClick={onCopyPath}>
           <FileLabel path={file.path} tooltip={tooltip} />
         </button>
+        <span className={css.fileSpacer} data-forge-path-spacer="" />
         {badge !== '' && <span className={css.badge}>{badge}</span>}
         {!file.binary && <Counts file={file} t={t} />}
-        <Menu
-          open={menuOpen}
-          portal
-          align="end"
-          dense
-          autoFocus
-          onClose={() => { setMenuOpen(false) }}
-          anchor={(
-            <button
-              type="button"
-              className={css.tool}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              aria-label={t('diff.moreActions', { name })}
-              onClick={() => { setMenuOpen(value => !value) }}
-            >
-              <IconEllipsisOutlineRegular />
-            </button>
-          )}
-        >
-          {actions.map(action => (
-            <MenuItemButton
-              key={action.label}
-              onSelect={() => {
-                setMenuOpen(false)
-                action.run()
-              }}
-            >
-              {t(action.label)}
-            </MenuItemButton>
-          ))}
-        </Menu>
+        {props.visible && <FileMenu name={name} actions={actions} t={t} />}
       </div>
       {expanded && <Body {...props} />}
     </section>

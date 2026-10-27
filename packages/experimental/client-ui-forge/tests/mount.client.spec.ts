@@ -691,7 +691,8 @@ describe('mountForgePanel changes view', () => {
   it('reads the changes of the Session through the Remote and shares its panel stream', async () => {
     const f = await fixture()
     const view = f.changes(S1)
-    expect(view.hooks.panel).toBe(f.tab(S1).hooks.panel)
+    expect(view.keyedHooks.panel('visible')).toBe(f.tab(S1).hooks.panel)
+    expect(view.keyedHooks.panel('inactive')).toBeUndefined()
     const signal = new AbortController().signal
     expect(await view.localDiff({ kind: 'staged' }, signal)).toEqual({ ok: true, value: LOCAL })
     expect(await view.localText({ kind: 'staged' }, 'src/a.ts')).toEqual({ ok: true, value: 'a\n' })

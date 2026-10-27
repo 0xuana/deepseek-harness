@@ -179,7 +179,7 @@ function registerUi(ctx: Context): void {
   const changesFace = (sessionId: SessionId): ChangesTabInjected => {
     const store = storesOf(sessionId)
     return {
-      hooks: { panel: store.panel.hooks.panel },
+      keyedHooks: { panel: visibility => visibility === 'visible' ? store.panel.hooks.panel : undefined },
       reconnect: store.panel.reconnect,
       localDiff: (scope, signal) => ctx.remote.forgePanel.localDiff(sessionId, scope, signal),
       localText: (scope, path) => ctx.remote.forgePanel.localText(sessionId, scope, path),

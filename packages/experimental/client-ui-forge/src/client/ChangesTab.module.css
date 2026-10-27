@@ -231,7 +231,6 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  overflow-anchor: none;
 }
 
 /* The actions of a failed read, side by side. */
@@ -305,7 +304,7 @@
 
 .filePath {
   display: flex;
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -314,6 +313,11 @@
   cursor: pointer;
   font: inherit;
   text-align: left;
+}
+
+.fileSpacer {
+  flex: 1;
+  align-self: stretch;
 }
 
 .chevron {
