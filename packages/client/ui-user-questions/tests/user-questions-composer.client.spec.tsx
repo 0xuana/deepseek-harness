@@ -240,6 +240,36 @@ describe('QuestionComposer', () => {
     }
   })
 
+  it('starts every recommended choice of a multi-select question selected', () => {
+    const { carrier, answer } = wait([{
+      id: 'checks', question: 'Which checks?', multiSelect: true,
+      options: [{ label: 'Unit (Recommended)' }, { label: 'Lint' }, { label: 'Types（推荐）' }],
+    }])
+    render(<QuestionComposer matched={carrier} {...kit} />)
+    expect(screen.getByRole('checkbox', { name: /Unit/ }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('checkbox', { name: /Lint/ }).getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByRole('checkbox', { name: /Types/ }).getAttribute('aria-checked')).toBe('true')
+
+    fireEvent.keyDown(screen.getByRole('checkbox', { name: /Lint/ }), { key: 'Enter' })
+    expect(answer).toHaveBeenCalledWith(answerBatch([
+      { id: 'checks', selected: ['Unit (Recommended)', 'Types（推荐）'] },
+    ]))
+  })
+
+  it('starts only a recommended first choice of a single-select question selected', () => {
+    const { carrier } = wait([
+      { id: 'first', question: 'First?', options: [{ label: 'A (Recommended)' }, { label: 'B (Recommended)' }] },
+      { id: 'later', question: 'Later?', options: [{ label: 'C' }, { label: 'D (Recommended)' }] },
+    ])
+    render(<QuestionComposer matched={carrier} {...kit} />)
+    expect(screen.getByRole('radio', { name: /A/ }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('radio', { name: /B/ }).getAttribute('aria-checked')).toBe('false')
+
+    fireEvent.click(screen.getByLabelText('下一题'))
+    expect(screen.getByRole('radio', { name: /C/ }).getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByRole('radio', { name: /D/ }).getAttribute('aria-checked')).toBe('false')
+  })
+
   it('treats Enter on an unselected option as submit, without selecting it', () => {
     const { carrier, answer } = wait([{
       id: 'mode', question: 'Which mode?', options: [{ label: 'Alpha' }, { label: 'Beta' }],
