@@ -5,7 +5,7 @@ import type { LlmModelBadge } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import {
-  catalogModelInfo, ModelListingCache, refuseListedModel, registerDeepSeekProvider, requestModelListing, resolveListedCatalog,
+  catalogModelInfo, createModelListingCache, refuseListedModel, registerDeepSeekProvider, requestModelListing, resolveListedCatalog,
 } from '@deepseek-ai/dsh-llm-deepseek'
 import type { CatalogRefusal, DeepSeekCatalogModel, ListingView, ModelListing } from '@deepseek-ai/dsh-llm-deepseek'
 import { Config, plainOptions, resolveAdapterOptions } from './config.ts'
@@ -57,15 +57,10 @@ export function apply(ctx: Context, config: Config): void {
       throw error
     }
   }
-  const listings = new ModelListingCache({
+  const listings = createModelListingCache(ctx, name, PROVIDER, {
     settings: () => options().listing,
     credential: async () => presentApiKey(options()),
     load: (url, apiKey, signal) => requestModelListing(url, { 'x-api-key': apiKey }, signal),
-    now: () => Date.now(),
-    // ACP reserves stdout for protocol messages, including during successful catalog loads.
-    info: (message) => { console.error(LOG_TAG, message) },
-    warn: (message) => { console.warn(LOG_TAG, message) },
-    changed: () => { ctx.emit('llm/models-updated', PROVIDER) },
   })
   let reportedListing: ModelListing | undefined
   /** Resolve the catalog, reporting each listing's hidden entries and dropped badges once. */
@@ -131,5 +126,4 @@ export function apply(ctx: Context, config: Config): void {
     if (next !== following) listings.invalidate()
     following = next
   })
-  ctx.effect(() => () => listings.dispose(), 'llm-deepseek-api-key: model listing')
 }
