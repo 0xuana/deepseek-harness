@@ -28,7 +28,7 @@ export interface ListingCacheDependencies {
 export interface ListingView {
   /** Whether a credential is available for the listing endpoint. */
   readonly authenticated: boolean
-  /** Last successful listing for this scope, without badges after refresh failure; `undefined` until one succeeds. */
+  /** Last successful listing for this scope; `undefined` until one succeeds. */
   readonly listing: ModelListing | undefined
 }
 
@@ -74,7 +74,7 @@ export class ModelListingCache {
    * Resolve the view for the current credential. The first access of a scope
    * waits for its load, which the request deadline bounds; later accesses
    * return at once and refresh a stale listing in the background. After a load settles,
-   * automatic refresh uses the latest route settings; failures remove badges but retain capabilities.
+   * automatic refresh uses the latest route settings; failures retain the last successful listing, including badges.
    * @param settings - endpoint and timing of the caller's configuration generation.
    * @param signal - abandons this wait only; the shared load continues.
    * @returns the view after any first load of the scope settles.
@@ -140,12 +140,11 @@ export class ModelListingCache {
       }, (error: unknown) => {
         if (generation !== this.generation) return
         if (!this.failing) {
-          const fallback = this.listing === undefined ? 'using the bundled catalog' : 'keeping the previous catalog without badges'
+          const fallback = this.listing === undefined ? 'using the bundled catalog' : 'keeping the previous catalog'
           this.dependencies.warn(`model listing from ${settings.url} failed (${String(error)}); ${fallback}`)
         }
         this.settledAt = this.dependencies.now()
         this.failing = true
-        this.clearBadges()
       })
       .finally(() => {
         limit[Symbol.dispose]()
@@ -156,15 +155,6 @@ export class ModelListingCache {
     this.inflight = run
     this.pending.add(run)
     return run
-  }
-
-  private clearBadges(): void {
-    if (!this.listing?.entries.some(entry => entry.badge !== undefined)) return
-    this.listing = {
-      ...this.listing,
-      entries: this.listing.entries.map(({ badge: _badge, ...entry }) => entry),
-    }
-    this.notify()
   }
 
   private notify(): void {
@@ -201,8 +191,9 @@ export class ModelListingCache {
       if (wasAuthenticated && !this.current().authenticated) this.notify()
     } catch (error) {
       if (this.closed) return
-      this.clearBadges()
-      if (!this.failing) this.dependencies.warn(`model listing refresh failed (${String(error)}); keeping model capabilities without badges; check listing configuration and credentials`)
+      if (!this.failing) {
+        this.dependencies.warn(`model listing refresh failed (${String(error)}); keeping the previous catalog; check listing configuration and credentials`)
+      }
       this.failing = true
       this.settledAt = this.dependencies.now()
     }

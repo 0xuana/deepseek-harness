@@ -16,7 +16,7 @@ Web 模型选择器通过一个专门的客户端包在 `DeepSeek-V4.1-Flash` �
 - `LlmModelInfo.badge` 与 `ModelCatalogModel.badge` 把角标从模型发现经 Host 模型目录送到浏览器。`resolveModelInfo` 不返回它，模型请求、Session 事件和面向模型的工具都不读取它。
 - [`ui-model-selection`](../../../../packages/client/ui-model-selection/README.zh.md) 在触发按钮中把角标放在目录名称之前，在根菜单当前值和各选项中仍放在名称之后，并用 `ctx.locale.resolveText` 解析其文字。`conversation.input.model.label` 的扩展会同时替换名称与角标，并从 owner props 收到角标。
 - 本版本不内置任何角标：路由加载到第一份列表之前、自定义目录以及非官方端点都不显示角标。写死的 `ui-deepseek-model-label-1017` 包及其 Web bundle 条目已移除。
-- 按凭据区分的缓存首次使用后按 `modelsMaxAgeMs`（默认十分钟）自动刷新，通过 `llm/models-updated` 发布目录变化。成功加载会替换所有角标元数据，因此省略或 `null` 都会清除旧角标。刷新失败时保留模型能力与版本门控事实，但移除角标：可用性规则需要在故障期间保留，过期的推广文字则不需要。这样也避免了每个浏览器独立轮询。间隔为零时仍只在访问时刷新。
+- 按凭据区分的缓存首次使用后按 `modelsMaxAgeMs`（默认十分钟）自动刷新，通过 `llm/models-updated` 发布目录变化。成功加载会替换所有角标元数据，因此省略或 `null` 都会清除旧角标。刷新失败时保留上次成功加载的列表及其角标：请求失败并不能证明服务端撤下了角标。这样也避免了每个浏览器独立轮询。间隔为零时仍只在访问时刷新。
 
 ## 考虑过的替代方案
 

@@ -8,7 +8,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-DeepSeek account and API-key routes refresh their model listing automatically after first use, including while idle. `modelsMaxAgeMs` keeps its ten-minute default and now schedules background requests instead of waiting for another access. Failed refreshes retain model capabilities and version requirements but remove badges. Successful refreshes replace badge metadata, including omission or `null`, and notify open Web selectors.
+DeepSeek account and API-key routes refresh their model listing automatically after first use, including while idle. `modelsMaxAgeMs` keeps its ten-minute default and now schedules background requests instead of waiting for another access. Failed refreshes retain the last successful listing, including badges. Successful refreshes replace badge metadata, including omission or `null`, and notify open Web selectors.
 
 `ModelListingCache` consumers must supply `settings` and `changed` callbacks. Its `dispose()` now returns a promise that settles after active loads and automatic credential lookups finish.
 

@@ -224,25 +224,37 @@ it('automatically publishes replacement badges and their removal without another
   expect(changed).toHaveBeenCalledTimes(3)
 })
 
-it('drops badges on a failed refresh, retains model capabilities, and recovers automatically', async () => {
+it.each(['failure', 'timeout'] as const)('retains badges after refresh %s and replaces them after recovery', async (failure) => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-  const { catalog, loads, changed, warn, flush, advance } = harness()
+  const { catalog, loads, changed, warn, flush, advance } = harness(50)
   const first = catalog.view()
   await flush()
   loads[0]!.settle.resolve(badgedListing('New'))
   await first
   advance(100)
   await vi.advanceTimersByTimeAsync(100)
-  loads[1]!.settle.reject(new Error('offline'))
+  if (failure === 'timeout') {
+    advance(50)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(loads[1]!.signal.aborted).toBe(true)
+  } else {
+    loads[1]!.settle.reject(new Error('offline'))
+  }
   await flush()
-  expect(catalog.current().listing).toEqual(listing('a'))
-  expect(warn).toHaveBeenCalledWith(expect.stringContaining('without badges'))
+  expect(catalog.current().listing).toEqual(badgedListing('New'))
+  expect(warn).toHaveBeenCalledWith(expect.stringContaining('keeping the previous catalog'))
+  expect(changed).toHaveBeenCalledTimes(1)
+  advance(100)
+  await vi.advanceTimersByTimeAsync(100)
+  loads[2]!.settle.resolve(badgedListing('Updated'))
+  await flush()
+  expect(catalog.current().listing).toEqual(badgedListing('Updated'))
   expect(changed).toHaveBeenCalledTimes(2)
   advance(100)
   await vi.advanceTimersByTimeAsync(100)
-  loads[2]!.settle.resolve(badgedListing('Back'))
+  loads[3]!.settle.resolve(listing('a'))
   await flush()
-  expect(catalog.current().listing).toEqual(badgedListing('Back'))
+  expect(catalog.current().listing).toEqual(listing('a'))
   expect(changed).toHaveBeenCalledTimes(3)
 })
 
@@ -346,7 +358,7 @@ it('removes a signed-out listing and discovers a replacement credential automati
   expect(catalog.current().listing).toEqual(listing('b'))
 })
 
-it('removes badges on credential lookup failures, reports the streak once, and retries', async () => {
+it('retains badges on credential lookup failures, reports the streak once, and retries', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   const { catalog, loads, changed, warn, flush, advance, resolveCredential } = harness()
   const first = catalog.view()
@@ -358,8 +370,8 @@ it('removes badges on credential lookup failures, reports the streak once, and r
     advance(100)
     await vi.advanceTimersByTimeAsync(100)
   }
-  expect(catalog.current().listing).toEqual(listing('a'))
-  expect(changed).toHaveBeenCalledTimes(2)
+  expect(catalog.current().listing).toEqual(badgedListing('New'))
+  expect(changed).toHaveBeenCalledTimes(1)
   expect(warn).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('check listing configuration and credentials'))
   resolveCredential.mockResolvedValue('token-a')
   advance(100)
@@ -367,6 +379,7 @@ it('removes badges on credential lookup failures, reports the streak once, and r
   loads[1]!.settle.resolve(badgedListing('Back'))
   await flush()
   expect(catalog.current().listing).toEqual(badgedListing('Back'))
+  expect(changed).toHaveBeenCalledTimes(2)
 })
 
 it.each(['resolve', 'reject'] as const)('awaits a pending automatic credential lookup on disposal (%s)', async (outcome) => {
