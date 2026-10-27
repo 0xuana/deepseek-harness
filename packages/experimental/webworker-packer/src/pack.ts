@@ -580,10 +580,10 @@ function materialize(
 }
 
 /**
- * Request form the dynamic Client build emits for a package-local chunk: a
- * literal `require.async("./client.<name>.js")`, served by the Host on demand.
+ * Dynamic Client factories request package-local chunks through `.async` with
+ * a literal path. Minification can rename `require` and change the quote style.
  */
-const CHUNK_REQUEST = /\brequire\.async\(\s*(["'])(\.\/client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js)\1\s*\)/g
+const CHUNK_REQUEST = /[A-Za-z_$][\w$]*\.async\(\s*(["'`])(\.\/client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js)\1\s*\)/g
 
 /**
  * Image paths every materialized package's `./client` export names, under any

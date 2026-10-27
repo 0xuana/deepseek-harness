@@ -58,6 +58,8 @@ The shell seeds a frozen module table ([`PLATFORM_MODULES`](../web/README.md#the
 
 The host serves built client bundles, so `pnpm run build` must have produced each `lib/client.js` before launch; a missing bundle fails activation loudly with one build instruction and a package/path list. Source launch maps host imports to TypeScript source but still consumes the built client export. The package accepts no plugin config of its own.
 
+The shared Client preset minifies browser factories and lazy chunks unless `NODE_ENV=development`. Minification preserves the function and class names produced by bundling, legal comments, full package license banners, and source maps with original source content. Development output remains unminified; Host and Node Client output use separate presets.
+
 -----
 
 <a id="understand-the-implementation"></a>

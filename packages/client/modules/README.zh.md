@@ -59,6 +59,8 @@ application combo 脚本只携带每个插件的 `client.js` 入口，并在启�
 
 宿主提供的是已构建的客户端 bundle，因此启动前 `pnpm run build` 必须已产出每个 `lib/client.js`；缺失 bundle 会明确导致激活失败，并给出一条构建说明及包／路径列表。源码启动会把宿主侧导入映射到 TypeScript 源码，但仍消费这一构建后的客户端导出。本包自身不接受任何插件配置。
 
+除 `NODE_ENV=development` 外，共享 Client 预设会压缩浏览器 factory 和懒加载 chunk。压缩会保留打包生成的函数名和类名、法律声明注释、完整的包许可证声明，以及包含原始源码内容的 source map。开发产物保持未压缩；Host 和 Node Client 产物使用各自的预设。
+
 -----
 
 <a id="understand-the-implementation"></a>
