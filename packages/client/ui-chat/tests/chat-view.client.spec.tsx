@@ -4589,7 +4589,13 @@ describe('ChatView', () => {
     expect(icon?.querySelectorAll('path')).toHaveLength(1)
     expect(icon?.getAttribute('style')).toBeNull()
     expect(status?.querySelector('animate')).toBeNull()
+    // The running bit clears before the Turn closes: the status keeps its slot unseen and unannounced.
     act(() => { h.setSession({ running: false }) })
+    const held = column.querySelector<HTMLElement>('[data-chat-running]')
+    expect(held?.hasAttribute('data-holding')).toBe(true)
+    expect(held?.getAttribute('aria-hidden')).toBe('true')
+    expect(within(held!).queryByRole('status')).toBeNull()
+    act(() => { h.setChat({ turnEnds: new Map([[1, 2]]) }) })
     expect(column.querySelector('[data-chat-running]')).toBeNull()
   })
 
