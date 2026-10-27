@@ -205,7 +205,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-gateway`
 
 - `inject`: `typert` · `remoteAccess`
-- `source`: [`packages/api/gateway/src/index.ts:156`](../packages/api/gateway/src/index.ts)
+- `source`: [`packages/api/gateway/src/index.ts:158`](../packages/api/gateway/src/index.ts)
 
 ```ts config-catalog
 /** Gateway transport configuration. */
@@ -244,8 +244,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-api-session-controller`
 
-- `inject`: `agentDefaultModel` · `agents` · `attachments` · `fileUploads` · `fs` · `llm` · `remoteAccess` · `sessions` · `sessionProjections` · `sessionQuery` · `typert` · `workspaceRegistry`
-- `source`: [`packages/api/session-controller/src/index.ts:109`](../packages/api/session-controller/src/index.ts)
+- `inject`: `agentDefaultModel` · `agents` · `attachments` · `fileUploads` · `fs` · `llm` · `remoteAccess` · `sessions` · `sessionProjections` · `sessionQuery` · `typert` · `typertGateway` · `workspaceRegistry`
+- `source`: [`packages/api/session-controller/src/index.ts:110`](../packages/api/session-controller/src/index.ts)
 
 ```ts config-catalog
 /** Session Controller deployment policy. */
@@ -1046,6 +1046,44 @@ export interface CotTranslationPreferences {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-client-ui-cot-translation -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-client-ui-forge -->
+<a id="deepseek-aidsh-experimental-client-ui-forge"></a>
+
+## `@deepseek-ai/dsh-experimental-client-ui-forge`
+
+- `inject`: `forge` · `forgeSession` · `sessionProjections` · `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `agents`
+- `source`: [`packages/experimental/client-ui-forge/src/types.ts:318`](../packages/experimental/client-ui-forge/src/types.ts)
+
+```ts config-catalog
+/** Host settings of the forge panel Remote. */
+export interface Config {
+  /** Git executable name or absolute path in the Session's execution world. */
+  gitCommand?: string
+  /** Deadline in milliseconds for one Git command, including confinement. */
+  gitTimeoutMs?: number
+  /** Termination grace period in milliseconds for each Git process. */
+  graceMs?: number
+  /** Maximum captured bytes per Git output stream. */
+  maxOutputBytes?: number
+  /** Deadline in milliseconds for one provider sign-in probe. */
+  readinessTimeoutMs?: number
+  /** Most local branches listed as worktree bases. */
+  maxBranches?: number
+  /**
+   * Prefix of the branch and checkout directory created for a Session worktree; the first eight
+   * hexadecimal digits of the Session id's UUID, a hyphen, and four random hexadecimal digits follow it.
+   */
+  worktreePrefix?: string
+  /** Largest diff, or file read to show unchanged lines, in bytes. */
+  maxDiffBytes?: number
+  /** Most untracked files a local diff or the local changes card includes. */
+  maxUntrackedFiles?: number
+  /** Most UTF-8 bytes of change request diffs kept in memory for later reads at the same head commit and base branch. */
+  maxCachedDiffBytes?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-client-ui-forge -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-computer-use-cua-driver-mcp -->
 <a id="deepseek-aidsh-experimental-computer-use-cua-driver-mcp"></a>
 
@@ -1084,6 +1122,68 @@ export interface Config {
 export type Config = CuaConfig
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-cua-macos -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-forge -->
+<a id="deepseek-aidsh-experimental-forge"></a>
+
+## `@deepseek-ai/dsh-experimental-forge`
+
+- `source`: [`packages/experimental/forge/src/types.ts:205`](../packages/experimental/forge/src/types.ts)
+
+```ts config-catalog
+/** Poll cadence and fetch deadline for watched change requests. */
+export interface Config {
+  /** Poll interval in milliseconds while checks run or mergeability is unknown. */
+  activeIntervalMs?: number
+  /** Poll interval in milliseconds for a closed request or an open request whose checks have settled. */
+  idleIntervalMs?: number
+  /** Largest delay in milliseconds between polls after consecutive failures. */
+  maxBackoffMs?: number
+  /** Deadline in milliseconds for one provider fetch. */
+  fetchTimeoutMs?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-forge -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-forge-github -->
+<a id="deepseek-aidsh-experimental-forge-github"></a>
+
+## `@deepseek-ai/dsh-experimental-forge-github`
+
+- `inject`: `forge`
+- `source`: [`packages/experimental/forge-github/src/index.ts:14`](../packages/experimental/forge-github/src/index.ts)
+
+```ts config-catalog
+/** GitHub CLI executable, served hosts, and invocation limits. */
+export interface Config {
+  /** GitHub CLI executable name or absolute host path. */
+  ghCommand?: string
+  /** Host names this provider serves; list GitHub Enterprise hosts explicitly. */
+  hosts?: string[]
+  /** Deadline in milliseconds for one `gh` invocation. */
+  timeoutMs?: number
+  /** Maximum captured bytes per `gh` output stream. */
+  maxOutputBytes?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-forge-github -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-forge-session -->
+<a id="deepseek-aidsh-experimental-forge-session"></a>
+
+## `@deepseek-ai/dsh-experimental-forge-session`
+
+- `inject`: `forge` · `sessions` · `sessionProjections`
+- `source`: [`packages/experimental/forge-session/src/types.ts:91`](../packages/experimental/forge-session/src/types.ts)
+
+```ts config-catalog
+/** Deployment settings of `forgeSession`. */
+export interface Config {
+  /** Deadline in milliseconds for one change request lookup after a push. */
+  discoveryTimeoutMs?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-forge-session -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-inspector -->
 <a id="deepseek-aidsh-experimental-inspector"></a>
@@ -1417,7 +1517,7 @@ export type PaidTranslationProvider = 'deepseek-account' | 'deepseek-official'
 ## `@deepseek-ai/dsh-experimental-worktree`
 
 - `inject`: `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy`
-- `source`: [`packages/experimental/worktree/src/index.ts:19`](../packages/experimental/worktree/src/index.ts)
+- `source`: [`packages/experimental/worktree/src/index.ts:21`](../packages/experimental/worktree/src/index.ts)
 
 ```ts config-catalog
 /** Worktree location, generated names, executables, and subprocess resource limits. */
@@ -2509,7 +2609,7 @@ export interface PlanModeConfig {
 
 - `inject`: `loader` · `profileContext`
 - `refs`: [`NpmFileSource`](subsystems/boot.zh.md)
-- `source`: [`packages/boot/plugin-manager/src/index.ts:52`](../packages/boot/plugin-manager/src/index.ts)
+- `source`: [`packages/boot/plugin-manager/src/index.ts:54`](../packages/boot/plugin-manager/src/index.ts)
 
 ```ts config-catalog
 /** The pnpm executable, registries, and limits for diagnostics, lookups and connection checks. */
@@ -2622,8 +2722,10 @@ export interface Config {
 export interface Config {
   /** Worker invocation in the subprocess world; omitted selects the local carrier. */
   launch?: LaunchConfig
-  /** per-call starts fresh processes; persistent-in-memory retains a REPL per owner under the same file policy. */
-  executionMode?: 'per-call' | 'persistent-in-memory'
+  /** per-call uses fresh async function bodies; vm-script uses VM contexts; persistent-in-memory retains a REPL per owner. */
+  executionMode?: 'per-call' | 'persistent-in-memory' | 'vm-script'
+  /** Retain a Script process and context per stateOwner; only supported with executionMode: vm-script. */
+  scriptPersistence?: boolean
   /** Default elapsed deadline, including nested tool and approval waits. */
   timeoutMs?: number
   /** Maximum numeric elapsed budget accepted by resolve. */
@@ -4161,7 +4263,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-skill`
 
 - `inject`: `agents` · `tools` · `skills` · `workingDirectory`
-- `source`: [`packages/skill/tool-skill/src/index.ts:62`](../packages/skill/tool-skill/src/index.ts)
+- `source`: [`packages/skill/tool-skill/src/index.ts:64`](../packages/skill/tool-skill/src/index.ts)
 
 ```ts config-catalog
 /** Model-facing skill catalog configuration. */
@@ -4791,6 +4893,7 @@ export interface Config {
 | `@deepseek-ai/dsh-experimental-auto-review` | `approval` · `llm` · `permissionPresets` · `sessions` · `tools` · `workingDirectory` | [`packages/experimental/auto-review/src/index.ts`](../packages/experimental/auto-review/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-client-ui-agent-team` | — | [`packages/experimental/client-ui-agent-team/src/index.ts`](../packages/experimental/client-ui-agent-team/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-client-ui-claude-code-mods` | — | [`packages/experimental/client-ui-claude-code-mods/src/index.ts`](../packages/experimental/client-ui-claude-code-mods/src/index.ts) |
+| `@deepseek-ai/dsh-experimental-client-ui-stats` | — | [`packages/experimental/client-ui-stats/src/index.ts`](../packages/experimental/client-ui-stats/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-client-ui-voice-input` | — | [`packages/experimental/client-ui-voice-input/src/index.ts`](../packages/experimental/client-ui-voice-input/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-computer-use-cua-driver-native` | `computerUse` · `tools` · `systemPrompt` | [`packages/experimental/computer-use-cua-driver-native/src/index.ts`](../packages/experimental/computer-use-cua-driver-native/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-session-inspector` | — | [`packages/experimental/session-inspector/src/index.ts`](../packages/experimental/session-inspector/src/index.ts) |
@@ -4884,6 +4987,7 @@ export interface Config {
 | `@deepseek-ai/dsh-experimental-badge-skill-bundle` | — | [`packages/experimental/badge-skill-bundle/src/index.ts`](../packages/experimental/badge-skill-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-browser-use-runtime` | — | [`packages/experimental/browser-use-runtime/src/index.ts`](../packages/experimental/browser-use-runtime/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-cot-translation-bundle` | — | [`packages/experimental/cot-translation-bundle/src/index.ts`](../packages/experimental/cot-translation-bundle/src/index.ts) |
+| `@deepseek-ai/dsh-experimental-forge-bundle` | — | [`packages/experimental/forge-bundle/src/index.ts`](../packages/experimental/forge-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-inspector-profile` | — | [`packages/experimental/inspector-profile/src/index.ts`](../packages/experimental/inspector-profile/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-liveshare-protocol` | — | [`packages/experimental/liveshare-protocol/src/index.ts`](../packages/experimental/liveshare-protocol/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-plugin-market-bundle` | — | [`packages/experimental/plugin-market-bundle/src/index.ts`](../packages/experimental/plugin-market-bundle/src/index.ts) |

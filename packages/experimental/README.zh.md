@@ -71,6 +71,7 @@ kind: "package-group"
 | [`agent-team-profile`](agent-team-profile/README.zh.md) | Agent Teams 协作、工具与 Web UI 组合包 | — |
 | [`agent-team`](agent-team/README.zh.md) | 具名 teammate，成员之间直接消息与持久共享任务板 | `ctx.agentTeams` |
 | [`client-ui-agent-team`](client-ui-agent-team/README.zh.md) | Web Team roster、任务板与 teammate 导航 | — |
+| [`client-ui-stats`](client-ui-stats/README.zh.md) | Web 端按轮次与步骤展示上下文、耗时、缓存与工具成本 | — |
 | [`auto-review`](auto-review/README.zh.md) | 显式 Web 层，在每个原生或 PTC inner 工具调用前使用同一模型审查 | — |
 | [`subagent-oar`](subagent-oar/README.zh.md) | 通过 OAR 执行外部编程智能体的独立任务 | `ctx.subagents` |
 | [`tool-subagent-oar`](tool-subagent-oar/README.zh.md) | 为每项委派任务选择配置的外部代理 | `ctx.tools` |
@@ -94,6 +95,11 @@ kind: "package-group"
 | [`webworker-packer`](webworker-packer/README.zh.md) | 构建浏览器 worker 预览所消费的 gzip 压缩虚拟文件系统（VFS）镜像 | 库与 CLI（命令行界面），不使用 ctx key |
 | [`webworker-runtime`](webworker-runtime/README.zh.md) | 在专用浏览器 worker 中运行 harness 插件树 | 库与 worker 入口，不使用 ctx key |
 | [`worktree`](worktree/README.zh.md) | 创建具名 Git 工作树并改变调用 Session 的当前目录 | `ctx.worktrees` |
+| [`forge`](forge/README.zh.md) | 代码托管提供方注册表，共享变更请求轮询 | `ctx.forge` |
+| [`forge-github`](forge-github/README.zh.md) | 通过宿主 GitHub CLI 读取 pull request 的 GitHub 提供方 | 在 `ctx.forge` 上注册提供方 |
+| [`forge-session`](forge-session/README.zh.md) | 把变更请求绑定到创建、推送或跟踪它们的 Session | `ctx.forgeSession` |
+| [`client-ui-forge`](client-ui-forge/README.zh.md) | 展示 Session 的 Git 检出、worktree 与已绑定 pull request 的 GUI 面板 | `ctx.forgePanel` |
+| [`forge-bundle`](forge-bundle/README.zh.md) | 默认禁用的 pull request 与 worktree 面板组合 | — |
 
 -----
 
@@ -102,6 +108,7 @@ kind: "package-group"
 
 - [实验包发布说明](../../scripts/experimental-package-policy.ts)——默认公开与私有例外。
 - [工作树](../../docs/subsystems/worktrees.zh.md)——显式创建分支与检出目录。
+- [Forges](../../docs/subsystems/forge.zh.md)——变更请求提供方、状态轮询、Session 绑定与面板。
 - [计算机操作](../../docs/subsystems/computer-use.zh.md)——桌面提供方选择。
 - [浏览器操作](../../docs/subsystems/browser-use.zh.md)——浏览器提供方选择与 Session 所有权。
 - [Agent Teams 子系统](../../docs/subsystems/agent-team.zh.md)——持久 Team 类型与 `ctx.agentTeams` 服务 API。
