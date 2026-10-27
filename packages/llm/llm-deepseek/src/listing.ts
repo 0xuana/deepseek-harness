@@ -6,7 +6,8 @@ import { timeoutOf } from '@deepseek-ai/dsh-timeout'
 const LISTED_MODALITIES = ['text', 'image'] as const satisfies readonly ModelModality[]
 const BADGE_TONES = ['neutral', 'info', 'success', 'warning'] as const satisfies readonly LlmModelBadgeTone[]
 const LANGUAGE_ID = /^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$/u
-const CONTROL_CHARACTER = /\p{Cc}/u
+const UNREADABLE_BADGE_CHARACTER = /[\p{Cc}\p{Zl}\p{Zp}\p{Bidi_Control}]/u
+const VISIBLE_BADGE_CHARACTER = /[^\p{White_Space}\p{Default_Ignorable_Code_Point}]/u
 const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 
 /** Longest badge text this build displays, in user-perceived characters, for every translation. */
@@ -113,12 +114,13 @@ function requirementOf(entry: Fields): ClientRequirement {
     : { kind: 'invalid' }
 }
 
-/** One trimmed badge text, or `undefined` unless it is 1 to {@link MAX_BADGE_TEXT_LENGTH} characters on one line. */
+/** One trimmed, visible badge text on one line, without control characters and at most {@link MAX_BADGE_TEXT_LENGTH} graphemes. */
 function badgeText(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined
   const text = value.trim()
   const length = Array.from(GRAPHEMES.segment(text)).length
-  return length > 0 && length <= MAX_BADGE_TEXT_LENGTH && !CONTROL_CHARACTER.test(text) ? text : undefined
+  return length <= MAX_BADGE_TEXT_LENGTH && VISIBLE_BADGE_CHARACTER.test(text) && !UNREADABLE_BADGE_CHARACTER.test(value)
+    ? text : undefined
 }
 
 /** A literal badge text, or translations keyed by lowercase language id that include English. */
