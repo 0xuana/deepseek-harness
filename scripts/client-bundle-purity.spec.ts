@@ -3,6 +3,7 @@
  * chaining, and physical watch dependencies hidden behind virtual CSS Modules.
  */
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { SourceMap } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -317,14 +318,31 @@ describe('production client bundle compression', () => {
         expect(loaded.describeScore(expected)).toBe(`score:${expected}`)
         expect(loaded.describeScore.name).toBe('describeScore')
 
-        for (const [chunk, source, notice] of [
-          [entry, entrySource, 'Fixture arithmetic license'],
-          [details, detailSource, 'Fixture detail license'],
+        for (const [chunk, source, notice, name] of [
+          [entry, entrySource, 'Fixture arithmetic license', 'calculateScore'],
+          [details, detailSource, 'Fixture detail license', 'describeScore'],
         ] as const) {
           expect(chunk.code).toContain(`@license ${notice}`)
           expect(chunk.code).toContain(`//! Fixture banner for ${chunk.fileName}\n${noticeBody}`)
           expect(chunk.map?.sourcesContent).toContain(source)
           expect(chunk.map?.mappings.length).toBeGreaterThan(0)
+          expect(chunk.code.trimEnd().endsWith(`//# sourceMappingURL=${chunk.fileName}.map`)).toBe(true)
+          if (chunk.map === null) throw new Error('client fixture source map missing')
+          const map = new SourceMap({
+            ...chunk.map, file: chunk.fileName, sourceRoot: '',
+            sourcesContent: chunk.map.sourcesContent.map(content => content ?? ''),
+          })
+          const marker = `function ${name}`
+          expect(chunk.code).toContain(marker)
+          // Rolldown maps a function declaration to the start of its export statement.
+          const generatedOffset = chunk.code.indexOf(marker)
+          const originalOffset = source.indexOf(`export ${marker}`)
+          const generatedLines = chunk.code.slice(0, generatedOffset).split('\n')
+          const originalLines = source.slice(0, originalOffset).split('\n')
+          expect(map.findEntry(generatedLines.length - 1, generatedLines.at(-1)!.length)).toMatchObject({
+            originalLine: originalLines.length - 1,
+            originalColumn: originalLines.at(-1)!.length,
+          })
         }
         if (mode === 'production') {
           // These ceilings include the executable factory, loader call, legal notices and source-map reference.

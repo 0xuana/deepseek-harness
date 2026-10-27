@@ -609,7 +609,7 @@ function clientEntriesOf(files: ImageFiles, packages: Iterable<string>): Set<str
 }
 
 /**
- * Page chunks requested only through `require.async`, in path order.
+ * Page chunks matched by {@link CHUNK_REQUEST}, in path order.
  * @param files - Image entries after the sweep.
  * @param eager - Eager Client entry paths, never lazy.
  * @returns Image paths to move into lazy archives.
@@ -664,7 +664,7 @@ function compressImage(archive: Uint8Array): Uint8Array {
  * The manifest's claim is all-or-nothing: it names the one contract every packed body
  * was emitted against. A module the transform cannot express therefore fails the pack
  * rather than downgrading the image, because a mostly-transformed image boots into
- * errors far from their cause. Page chunks requested through `require.async` leave
+ * errors far from their cause. Page chunks matched by {@link CHUNK_REQUEST} leave
  * the base image for deterministic archives named by their content digest, which the manifest registers.
  * @param options - Roster, installation, package index, and paths.
  * @returns The compressed image, its lazy archives, and what went into them.
