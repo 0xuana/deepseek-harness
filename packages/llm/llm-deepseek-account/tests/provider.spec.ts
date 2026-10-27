@@ -108,6 +108,34 @@ it('advertises the badges its listing declares', async () => {
   ])
 })
 
+it('publishes an account badge removal after the default idle refresh interval', async () => {
+  let badge: { text: string } | undefined = { text: 'New' }
+  const server = await listing((request, response) => {
+    json({ data: [{ ...FLASH, client_metadata: { 'deepseek-harness': { badge } } }] })(request, response)
+  })
+  const ctx = await host(server.origin)
+  const refreshed = Promise.withResolvers<undefined>()
+  const changes: string[] = []
+  ctx.on('llm/models-updated', (provider) => {
+    changes.push(provider)
+    if (changes.length === 2) refreshed.resolve(undefined)
+  })
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  try {
+    await ctx.plugin(Account, { baseURL: server.baseURL })
+    expect((await ctx.llm.listModels('deepseek-account'))[0]?.badge?.text).toBe('New')
+    badge = undefined
+    await vi.advanceTimersByTimeAsync(600_000)
+    await refreshed.promise
+    expect(changes).toEqual(['deepseek-account', 'deepseek-account'])
+    expect((await ctx.llm.listModels('deepseek-account'))[0]).not.toHaveProperty('badge')
+    expect(server.requests).toHaveLength(2)
+  } finally {
+    try { await ctx.fiber.dispose() }
+    finally { vi.useRealTimers() }
+  }
+})
+
 it('falls back to the bundled catalog when the listing fails', async () => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   const server = await listing((_request, response) => { response.writeHead(503).end('down') })
