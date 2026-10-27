@@ -821,15 +821,10 @@ export class Session implements SessionFace {
       const source = message.source
       if (source.kind !== 'user' || !('rpcId' in source)) continue
       const settlement = this.submissionSettlements.get(source.rpcId)
-      if (settlement === undefined || settlement.retiring) continue
-      // Either proof accepts a prompt; an Inbox row can reach the Client before the prompt receipt. A queued
-      // prompt's row is the queue dock's own row, so its acceptance there lets the composer clear the draft in
-      // the frame that shows the row; its retirement follows the Inbox projection, not a receipt position.
-      if (settlement.placement === 'queued') {
-        this.acceptPrompt(source.rpcId)
-        continue
-      }
-      if ((settlement.receipt?.seq ?? -1) > seq) continue
+      if (settlement === undefined || settlement.retiring || (settlement.receipt?.seq ?? -1) > seq) continue
+      // Either proof accepts a prompt; an Inbox row can reach the Client before the prompt receipt. Later splices
+      // move the recorded position, so a canceled splice that removes the row retires its echo, queued ones
+      // included; a queued echo otherwise leaves once the queue dock renders its row or its message is admitted.
       settlement.receipt = { target, seq, index: start + index, attachments: attachmentRefsIn(message.content) }
       this.acceptPrompt(source.rpcId)
     }

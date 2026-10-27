@@ -467,16 +467,21 @@ describe('observed retirement', () => {
     expect(onRetire).toHaveBeenCalledExactlyOnceWith({ reason: 'observed', attachments: refs })
   })
 
-  for (const target of ['next-step', 'next-turn'] as const) {
-    it(`retires canceled or unadmitted ${target} input without removing still-pending input`, async ({ mock, start }) => {
+  for (const { target, running, mode, placement } of [
+    { target: 'next-step', running: true, mode: 'steer', placement: 'steering' },
+    { target: 'next-turn', running: false, mode: 'steer', placement: 'transcript' },
+    { target: 'next-turn', running: true, mode: 'queue', placement: 'queued' },
+  ] as const) {
+    it(`retires canceled or unadmitted ${placement} input without removing still-pending input`, async ({ mock, start }) => {
       const session = await sessionBench(mock, start, SID)
       await session.open()
-      session.handleRunning(target === 'next-step')
+      session.handleRunning(running)
       const canceled = vi.fn()
       const rejected = vi.fn()
-      const first = await submitAccepted(session, { mode: 'steer', text: 'cancel', attachments: [], onRetire: canceled })
-      const second = await submitAccepted(session, { mode: 'steer', text: 'reject', attachments: [], onRetire: rejected })
-      const unclaimed = await submitAccepted(session, { mode: 'steer', text: 'later', attachments: [] })
+      const first = await submitAccepted(session, { mode, text: 'cancel', attachments: [], onRetire: canceled })
+      const second = await submitAccepted(session, { mode, text: 'reject', attachments: [], onRetire: rejected })
+      const unclaimed = await submitAccepted(session, { mode, text: 'later', attachments: [] })
+      expect(session.getSnapshot().pendingSubmissions.map(echo => echo.placement)).toEqual([placement, placement, placement])
       const foreign = createUserMessage({ source: { kind: 'user' }, content: [] })
       await pushEvent(mock, {
         type: 'agent/inbox/spliced', seq: SessionSeq(0), time: 1,
