@@ -1292,7 +1292,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     kind: 'single',
     scope: 'session',
     summary: 'Non-interactive inline model label; selection controls remain owner-managed.',
-    doc: 'Non-interactive inline model label; selection controls remain owner-managed.\nWithout a contribution, the composer displays the catalog name.',
+    doc: 'Non-interactive inline model label; selection controls remain owner-managed.\nWithout a contribution, the badge precedes the catalog name in the trigger\nand follows it in menus.',
     registerOptions: [],
     ownerProps: [
       '/** Catalog data for a model name inside the composer\'s existing controls. */\nexport interface ModelLabelOwner {\n  /** Provider identity and localized display name; contains no connection configuration. */\n  provider: Pick<ModelProviderGroup, \'id\' | \'name\'>\n  /** The exact provider\'s model catalog entry. */\n  model: ModelCatalogModel\n  /** Trigger caption, root-menu current value, or selectable model row. */\n  placement: \'trigger\' | \'menu\' | \'option\'\n  /** Whether this provider/model pair is the current selection. */\n  selected: boolean\n}',
@@ -1325,12 +1325,10 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     hookContext: '',
     slotInject: '',
     declaredBy: 'an entry in \'conversation.input.model\' (client-ui-model-selection), so it exists while that entry is mounted',
-    occupants: [
-      'client-ui-deepseek-model-label-1017 DeepSeekModelLabel',
-    ],
-    replaceRisk: 'shadows-shipped-ui',
+    occupants: [],
+    replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.model.label\', () => ctx.slots.register(\n      { name: \'conversation.input.model.label\' },\n      ({ provider, model }) => React.createElement(\'span\', { title: provider.name }, model.name),\n    ))\n  },\n}',
-    source: 'packages/client/ui-model-selection/src/client/slots.ts:36',
+    source: 'packages/client/ui-model-selection/src/client/slots.ts:37',
   },
   {
     key: 'conversation.input.overlay',
