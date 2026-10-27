@@ -959,6 +959,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     consumers: ['tool-cordis'],
     note: 'Registers host inspect providers, mirrors the client provider manifest, and routes client queries through the dynamic Cordis transport.',
   },
+  {
+    key: 'liveshareShares',
+    pkg: 'experimental-liveshare',
+    title: 'Owner share management Remote',
+    mode: 'service',
+    note: 'Publishes the owner share-management operations as one Typert Remote namespace that the owner client face calls; every method delegates to the same operations the same-origin routes used.',
+  },
 ]
 
 function generatedHeader(title: string): string[] {

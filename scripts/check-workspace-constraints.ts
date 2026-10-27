@@ -193,6 +193,16 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-cua': ['lib/remote-types.js', 'lib/api.js', 'lib/bridge.js', 'lib/native-client.js', 'lib/protocol.js'],
   '@deepseek-ai/dsh-experimental-cua-macos': ['native/bin', 'native/Package.swift', 'native/Sources', 'native/tests/swift', 'native/tests/test_swift.py', 'native/LICENSE.cua-driver', 'native/upstream.json', 'native/README.md', 'native/README.zh.md', 'native/protocol.schema.json'],
   '@deepseek-ai/dsh-webhook-github': ['examples/github-review/cordis.yml', 'examples/github-review/github-ready-review-rule.mjs'],
+  // Liveshare publishes its built Relay gateway entry and the shared runtime
+  // chunk that entry imports, plus the declaration-plane entry and its chunk.
+  // Its `./types` export is a type-only module, so the emitted tree contributes
+  // that one runtime file; the declarations still ship as the whole tree.
+  '@deepseek-ai/dsh-experimental-liveshare': [
+    'lib/owner-gateway/cli.js',
+    'lib/retry-backoff-*.js',
+    'lib/viewer-declarations.js',
+    'lib/viewer-declarations-*.js',
+  ],
   // Owned Worker bundles import this public bootstrap before their business entry.
   '@deepseek-ai/dsh-app-boot': ['lib/worker/profile-resolution-bootstrap.js'],
   // Statically linked client libraries keep their stylesheets next to the emitted
