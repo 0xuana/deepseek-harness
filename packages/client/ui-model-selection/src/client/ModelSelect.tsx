@@ -444,7 +444,9 @@ export function ModelSelect(
       }, {
         fallback: model.badge === undefined ? model.name : (
           <span className={css.badgedName}>
-            <span>{model.name}</span>{' '}<Tag tone={model.badge.tone}>{resolveText(model.badge.text)}</Tag>
+            {placement === 'trigger' ? <><Tag tone={model.badge.tone}>{resolveText(model.badge.text)}</Tag>{' '}</> : null}
+            <span>{model.name}</span>
+            {placement === 'trigger' ? null : <>{' '}<Tag tone={model.badge.tone}>{resolveText(model.badge.text)}</Tag></>}
           </span>
         ),
       })}

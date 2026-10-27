@@ -168,11 +168,11 @@ describe('ModelSelect catalog badges', () => {
   })
   const chinese: ComponentProps<typeof ModelSelect>['resolveText'] = text => typeof text === 'string' ? text : text.zh ?? text.en
 
-  it('follows the name with the resolved badge in the trigger, the current value, and its own option', () => {
+  it('places the badge before the trigger name and after names in the menus', () => {
     render(<ModelSelect renderSlot={renderLabel} locked={false} available directory={createSnapshotStore(badged())}
       load={vi.fn()} resolveText={chinese} select={vi.fn()} t={t} />)
     const trigger = screen.getByRole('button', { name: '选择模型，当前 DeepSeek-V4.1-Flash' })
-    expect(trigger.textContent).toBe('DeepSeek-V4.1-Flash 新')
+    expect(trigger.textContent).toBe('新 DeepSeek-V4.1-Flash')
     expect(screen.getByText('新').getAttribute('data-tone')).toBe('info')
     fireEvent.click(trigger)
     const current = screen.getByRole('menuitem', { name: /^模型/ })

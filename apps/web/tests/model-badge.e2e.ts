@@ -1,5 +1,6 @@
 /** Catalog badges reach every selector placement through the Host catalog without changing catalog identity. */
 import { fileURLToPath } from 'node:url'
+import { LlmAdapter, type LlmModelBadge, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
@@ -49,7 +50,7 @@ describe.skipIf(MODE === 'record')('web e2e: catalog model badges', () => {
   it('shows each catalog badge in all placements while preserving the chosen provider and model id', async () => {
     const trigger = page.getByRole('button', { name: /^选择模型/ })
     await trigger.getByText('新', { exact: true }).waitFor()
-    expect(await trigger.textContent()).toContain(`${NAME} 新`)
+    expect(await trigger.textContent()).toContain(`新 ${NAME}`)
     expect(await trigger.getAttribute('aria-label')).toBe(`选择模型，当前 ${NAME}`)
     expect(await trigger.getByText('新', { exact: true }).getAttribute('data-tone')).toBe('success')
     try {
@@ -64,12 +65,53 @@ describe.skipIf(MODE === 'record')('web e2e: catalog model badges', () => {
       expect(await account.getByText('1017', { exact: true }).getAttribute('data-tone')).toBe('info')
       await account.getByRole('menuitemradio', { name: `${NAME} 1017`, exact: true }).click()
       await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection()).toEqual({ provider: 'deepseek-account', model: 'deepseek-flash' })
-      await expect.poll(() => trigger.textContent()).toContain(`${NAME} 1017`)
+      await expect.poll(() => trigger.textContent()).toContain(`1017 ${NAME}`)
       const catalog = await scaffold.ctx.llm.listModels('deepseek-account')
       expect(catalog.map(model => ({ id: model.id, name: model.name }))).toEqual([{ id: 'deepseek-flash', name: NAME }])
     } finally {
       await page.keyboard.press('Escape')
       await page.keyboard.press('Escape')
+    }
+  })
+
+  it('updates and clears badges in an already-open page and model menu', async () => {
+    const provider = 'live-badge'
+    class CatalogAdapter extends LlmAdapter {
+      badge: LlmModelBadge | undefined = { text: 'New', tone: 'info' }
+      override async listModels(route: string) {
+        return [{ provider: route, id: 'live', name: 'Live model', ...(this.badge === undefined ? {} : { badge: this.badge }) }]
+      }
+      override async *stream(): AsyncIterable<StreamChunk> { throw new Error('catalog-only scenario') }
+    }
+    const adapter = new CatalogAdapter()
+    const unregister = scaffold.ctx.llm.registerAdapter([provider], adapter)
+    const trigger = page.getByRole('button', { name: /^选择模型/ })
+    try {
+      await trigger.click()
+      await page.getByRole('menuitem', { name: /^模型/ }).click()
+      await page.getByRole('menuitemradio', { name: 'Live model New', exact: true }).click()
+      await expect.poll(() => trigger.textContent()).toContain('New Live model')
+      await trigger.click()
+      await page.getByRole('menuitem', { name: /^模型/ }).click()
+      adapter.badge = { text: 'Updated', tone: 'success' }
+      scaffold.ctx.emit('llm/models-updated', provider)
+      await expect.poll(() => trigger.textContent()).toContain('Updated Live model')
+      const updated = page.getByRole('menuitemradio', { name: 'Live model Updated', exact: true })
+      await updated.waitFor()
+      expect(await updated.locator('[data-tone]').getAttribute('data-tone')).toBe('success')
+      adapter.badge = undefined
+      scaffold.ctx.emit('llm/models-updated', provider)
+      await expect.poll(() => trigger.textContent()).toBe('Live model')
+      const cleared = page.getByRole('menuitemradio', { name: 'Live model', exact: true })
+      await cleared.waitFor()
+      expect(await cleared.locator('[data-tone]').count()).toBe(0)
+    } finally {
+      await page.keyboard.press('Escape')
+      await page.keyboard.press('Escape')
+      await trigger.click()
+      await page.getByRole('menuitem', { name: /^模型/ }).click()
+      await page.getByRole('menuitemradio', { name: `${NAME} 1017`, exact: true }).click()
+      unregister()
     }
   })
 

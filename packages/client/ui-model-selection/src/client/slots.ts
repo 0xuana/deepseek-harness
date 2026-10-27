@@ -21,8 +21,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /**
      * Non-interactive inline model label; selection controls remain owner-managed.
-     * Without a contribution, the composer displays the catalog name followed
-     * by the catalog badge when the model declares one.
+     * Without a contribution, the badge precedes the catalog name in the trigger
+     * and follows it in menus.
      * @example
      * return {
      *   inject: ['slots'],

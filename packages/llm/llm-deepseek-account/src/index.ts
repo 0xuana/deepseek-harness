@@ -51,15 +51,17 @@ export function apply(ctx: Context, config: Config): void {
     }
   }
   const catalog = new ModelListingCache({
+    settings: () => settings().catalog,
     credential: async url => account()?.resolveToken(url),
     load: (url, token, signal) => requestModelListing(url, { [TOKEN_HEADER]: token }, signal),
     now: () => Date.now(),
     // ACP reserves stdout for protocol messages, including during successful catalog loads.
     info: (message) => { console.error(LOG_TAG, message) },
     warn: (message) => { console.warn(LOG_TAG, message) },
+    changed: () => { ctx.emit('llm/models-updated', PROVIDER) },
   })
   let loggedListing: ModelListing | undefined
-  /** Resolve the catalog for one view, logging the listing's hidden entries once per listing. */
+  /** Resolve the catalog, reporting each listing's hidden entries and dropped badges once. */
   const connectionOf = (view: ListingView): AccountConnection => {
     const resolved = settings()
     const result = resolveListedCatalog({
@@ -101,5 +103,5 @@ export function apply(ctx: Context, config: Config): void {
       return offered.map(model => catalogModelInfo(provider, model, badges.get(model.id)))
     },
   })
-  ctx.effect(() => () => { catalog.dispose() }, 'llm-deepseek-account: model catalog')
+  ctx.effect(() => () => catalog.dispose(), 'llm-deepseek-account: model catalog')
 }

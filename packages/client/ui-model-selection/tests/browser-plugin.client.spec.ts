@@ -392,6 +392,27 @@ describe('ui-model-selection dual entry', () => {
     })
   })
 
+  it('replaces and removes badges in an open directory on model catalog notifications', async () => {
+    const b = await bench()
+    try {
+      b.mint('s1')
+      const face = b.seat().inject!(sid('s1'))
+      for (const badge of [{ text: 'New', tone: 'info' as const }, { text: 'Updated', tone: 'success' as const }, undefined]) {
+        b.setGroups(GROUPS.map(group => ({
+          ...group, models: group.models.map(model => ({ ...model, ...(badge === undefined ? {} : { badge }) })),
+        })))
+        b.remote.emit('llm/models-updated', ['deepseek-official'])
+        await vi.waitFor(() => {
+          expect(face.directory.getSnapshot().status).toBe('ready')
+          expect(face.directory.getSnapshot().groups[0]?.models[0]?.badge).toEqual(badge)
+        })
+      }
+      expect(face.directory.getSnapshot().current?.model).toBe('deepseek-v4-flash')
+    } finally {
+      await b.ctx.fiber.dispose()
+    }
+  })
+
   it('retains the selected model while refreshing its catalog', async () => {
     const b = await bench()
     b.mint('s1')

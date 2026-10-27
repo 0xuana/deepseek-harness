@@ -284,7 +284,6 @@
   white-space: nowrap;
 }
 
-/* A catalog badge follows the name in every placement. */
 .badgedName {
   display: inline-flex;
   align-items: center;

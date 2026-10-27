@@ -22,6 +22,12 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'llm/adapters-updated'(): void
+    /**
+     * A provider's advertised models or display metadata changed; consumers reload `listModels()`.
+     * @mode emit
+     * @param provider - route whose model catalog changed.
+     */
+    'llm/models-updated'(provider: string): void
   }
 }
 

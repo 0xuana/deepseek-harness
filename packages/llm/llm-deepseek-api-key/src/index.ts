@@ -58,15 +58,17 @@ export function apply(ctx: Context, config: Config): void {
     }
   }
   const listings = new ModelListingCache({
+    settings: () => options().listing,
     credential: async () => presentApiKey(options()),
     load: (url, apiKey, signal) => requestModelListing(url, { 'x-api-key': apiKey }, signal),
     now: () => Date.now(),
     // ACP reserves stdout for protocol messages, including during successful catalog loads.
     info: (message) => { console.error(LOG_TAG, message) },
     warn: (message) => { console.warn(LOG_TAG, message) },
+    changed: () => { ctx.emit('llm/models-updated', PROVIDER) },
   })
   let reportedListing: ModelListing | undefined
-  /** Resolve the catalog of one operation, reporting each listing's hidden entries once. */
+  /** Resolve the catalog, reporting each listing's hidden entries and dropped badges once. */
   const connectionOf = (connection: ResolvedDeepSeekOptions, view: ListingView | undefined): OfficialConnection => {
     if (view === undefined) return { ...connection, offered: connection.models, refusals: new Map(), badges: new Map() }
     const catalog = resolveListedCatalog({
@@ -129,5 +131,5 @@ export function apply(ctx: Context, config: Config): void {
     if (next !== following) listings.invalidate()
     following = next
   })
-  ctx.effect(() => () => { listings.dispose() }, 'llm-deepseek-api-key: model listing')
+  ctx.effect(() => () => listings.dispose(), 'llm-deepseek-api-key: model listing')
 }
